@@ -18,6 +18,8 @@ type ReceiptRow = {
   total_cents: number | null;
   status: string;
   created_at: string;
+  tax_total_cents?: number | null;
+
 };
 
 export default function ReceiptsPage() {
@@ -50,7 +52,7 @@ export default function ReceiptsPage() {
   async function loadReceipts(fId: string) {
     const { data, error } = await supabase
       .from("receipts")
-      .select("id,client_id,vendor,receipt_date,total_cents,status,created_at")
+      .select("id,client_id,vendor,receipt_date,total_cents,tax_total_cents,status,created_at")
       .eq("firm_id", fId)
       .order("created_at", { ascending: false });
 
@@ -301,8 +303,9 @@ export default function ReceiptsPage() {
                     <div>
                       <div className="font-semibold">{r.vendor || "Unknown vendor"}</div>
                       <div className="text-xs text-gray-500">
-                        Date: {r.receipt_date || "—"} • Status: {r.status}
-                      </div>
+  Date: {r.receipt_date || "—"} • Status: {r.status}
+  {r.tax_total_cents != null ? ` • Tax: $${(r.tax_total_cents / 100).toFixed(2)}` : ""}
+</div>
                     </div>
 
                     <div className="text-sm font-mono">
