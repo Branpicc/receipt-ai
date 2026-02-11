@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
+import { categorizeReceipt } from "@/lib/categorizeReceipt";
 
 type Receipt = {
   id: string;
@@ -16,6 +17,10 @@ type Receipt = {
   purpose_updated_at?: string | null;
   firm_id: string;
   client_id: string;
+  suggested_category: string | null;
+  category_confidence: number | null;
+  approved_category: string | null;
+  category_reasoning: string | null;
 };
 
 type ReceiptFile = {
@@ -201,7 +206,7 @@ async function resolveFlag(flagId: string) {
       try {
         const { data: r, error: rErr } = await supabase
           .from("receipts")
-          .select(`
+.select(`
   id,
   firm_id,
   client_id,
@@ -212,7 +217,11 @@ async function resolveFlag(flagId: string) {
   created_at,
   purpose_text,
   purpose_source,
-  purpose_updated_at
+  purpose_updated_at,
+  suggested_category,
+  category_confidence,
+  approved_category,
+  category_reasoning
 `)
           .eq("id", receiptId)
           .single();
@@ -489,17 +498,330 @@ const subtotalText =
       <div className="font-medium">Total</div>
       <div className="text-right font-medium">{amountText}</div>
     </div>
+    
+{/* Category Section */}
+<div className="border-b pb-6">
+  <div className="text-sm font-medium text-gray-700 mb-3">Expense Category</div>
+  
+  {receipt.approved_category ? (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800">
+          ✓ Approved: {receipt.approved_category}
+        </span>
+      </div>
+      <button
+        onClick={async () => {
+          const { error } = await supabase
+            .from("receipts")
+            .update({ approved_category: null, category_approved_by: null, category_approved_at: null })
+            .eq("id", receiptId);
+          
+          if (error) {
+            setErr(error.message);
+          } else {
+            setReceipt((prev) => prev ? { ...prev, approved_category: null } : prev);
+          }
+        }}
+        className="text-sm text-gray-600 underline hover:text-gray-800"
+      >
+        Change category
+      </button>
+    </div>
+  ) : receipt.suggested_category && receipt.category_confidence ? (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${
+          receipt.category_confidence >= 80 
+            ? 'bg-blue-100 text-blue-800' 
+            : 'bg-yellow-100 text-yellow-800'
+        }`}>
+          {receipt.category_confidence >= 80 ? '→' : '⚠'} Suggested: {receipt.suggested_category}
+        </span>
+        <span className="text-xs text-gray-500">
+          {receipt.category_confidence}% confidence
+        </span>
+      </div>
+      
+      {receipt.category_reasoning && (
+        <div className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3">
+          <span className="font-medium">Reasoning:</span> {receipt.category_reasoning}
+        </div>
+      )}
+      
+      <div className="flex gap-2">
+        <button
+          onClick={async () => {
+            try {
+              const { error } = await supabase
+                .from("receipts")
+                .update({
+                  approved_category: receipt.suggested_category,
+                  category_approved_at: new Date().toISOString(),
+                })
+                .eq("id", receiptId);
+              
+              if (error) throw error;
+              
+              setReceipt((prev) => prev ? {
+                ...prev,
+                approved_category: receipt.suggested_category,
+              } : prev);
+            } catch (e: any) {
+              setErr(e.message || "Failed to approve category");
+            }
+          }}
+          className="rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-medium hover:bg-green-700"
+        >
+          ✓ Approve Category
+        </button>
+        
+        <button
+          onClick={() => {
+            const newCategory = prompt("Enter category name:");
+            if (!newCategory) return;
+            
+            supabase
+              .from("receipts")
+              .update({
+                approved_category: newCategory,
+                category_approved_at: new Date().toISOString(),
+              })
+              .eq("id", receiptId)
+              .then(({ error }) => {
+                if (error) {
+                  setErr(error.message);
+                } else {
+                  setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev);
+                }
+              });
+          }}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+        >
+          Change Category
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div className="space-y-3">
+      <div className="text-sm text-gray-500 bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+        ⚠ Unable to auto-categorize. Please add vendor and purpose information.
+      </div>
+      
+      <button
+        onClick={() => {
+          const newCategory = prompt("Enter category name:");
+          if (!newCategory) return;
+          
+          supabase
+            .from("receipts")
+            .update({
+              approved_category: newCategory,
+              category_approved_at: new Date().toISOString(),
+            })
+            .eq("id", receiptId)
+            .then(({ error }) => {
+              if (error) {
+                setErr(error.message);
+              } else {
+                setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev);
+              }
+            });
+        }}
+        className="rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800"
+      >
+        Manually Set Category
+      </button>
+      
+<button
+  onClick={async () => {
+    try {
+      const result = categorizeReceipt(
+        receipt.vendor || "", 
+        receipt.purpose_text || ""
+      );
+      
+      const { error } = await supabase
+        .from("receipts")
+        .update({
+          suggested_category: result.suggested_category,
+          category_confidence: result.category_confidence,
+          category_reasoning: result.category_reasoning,
+        })
+        .eq("id", receiptId);
+      
+      if (error) throw error;
+      
+      window.location.reload();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }}
+  className="mt-3 text-xs text-gray-500 underline"
+>
+  🔄 Re-run categorization (test)
+</button>
+    </div>
+  )}
+</div>
+
 
     {/* Line items */}
     <div className="pt-4 border-t">
-      <div className="text-xs font-medium text-gray-500 mb-2">
-        Line items
-      </div>
+  <div className="flex items-center justify-between mb-3">
+    <div className="text-xs font-medium text-gray-500">Line Items</div>
+    <button
+      onClick={() => {
+        const newItem = {
+          id: `temp-${Date.now()}`,
+          description: "",
+          quantity: 1,
+          unit_price_cents: 0,
+          total_cents: 0,
+        };
+        setItems([...items, newItem]);
+      }}
+      className="text-sm rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 font-medium"
+    >
+      + Add Item
+    </button>
+  </div>
 
-      <div className="text-xs text-gray-400">
-        Line items will appear here once the receipt is extracted.
-      </div>
+  {items.length === 0 ? (
+    <div className="text-sm text-gray-500 bg-gray-50 rounded-lg p-4 text-center">
+      No line items yet. Click "Add Item" to add one.
     </div>
+  ) : (
+    <div className="space-y-3">
+      <div className="overflow-x-auto border rounded-lg">
+<table className="w-full">
+  <thead className="bg-gray-100 border-b-2">
+    <tr>
+      <th className="text-left py-4 px-4 font-semibold text-gray-900 text-base">
+        Description
+      </th>
+      <th className="text-center py-4 px-4 font-semibold text-gray-900 text-base w-32">
+        Qty
+      </th>
+      <th className="text-right py-4 px-4 font-semibold text-gray-900 text-base w-40">
+        Unit Price
+      </th>
+      <th className="text-right py-4 px-4 font-semibold text-gray-900 text-base w-40">
+        Total
+      </th>
+      <th className="w-20"></th>
+    </tr>
+  </thead>
+  <tbody className="divide-y">
+    {items.map((item, idx) => (
+      <tr key={item.id}>
+        <td className="py-4 px-4">
+          <input
+            type="text"
+            className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-lg text-gray-900 font-medium"
+            defaultValue={item.description || ""}
+            onChange={(e) => {
+              const updated = [...items];
+              updated[idx].description = e.target.value;
+              setItems(updated);
+            }}
+            placeholder="Item description"
+          />
+        </td>
+        <td className="py-4 px-4">
+          <input
+            type="text"
+            className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-xl text-center text-gray-900 font-bold"
+            defaultValue={item.quantity ?? 1}
+            onChange={(e) => {
+              const updated = [...items];
+              const qty = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 1;
+              updated[idx].quantity = qty;
+              updated[idx].total_cents = qty * (updated[idx].unit_price_cents ?? 0);
+              setItems(updated);
+            }}
+            placeholder="1"
+          />
+        </td>
+        <td className="py-4 px-4">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-900 text-xl font-bold">$</span>
+            <input
+              type="text"
+              className="flex-1 rounded-lg border-2 border-gray-300 px-4 py-3 text-xl text-right text-gray-900 font-bold"
+              defaultValue={((item.unit_price_cents ?? 0) / 100).toFixed(2)}
+              onChange={(e) => {
+                const updated = [...items];
+                const value = e.target.value.replace(/[^0-9.]/g, '');
+                const cents = Math.round(parseFloat(value || "0") * 100);
+                updated[idx].unit_price_cents = cents;
+                updated[idx].total_cents = (updated[idx].quantity ?? 0) * cents;
+                setItems(updated);
+              }}
+              placeholder="0.00"
+            />
+          </div>
+        </td>
+        <td className="py-4 px-4 text-right">
+          <span className="text-2xl font-bold text-gray-900">
+            ${((item.total_cents ?? 0) / 100).toFixed(2)}
+          </span>
+        </td>
+        <td className="py-4 px-4 text-center">
+          <button
+            onClick={() => setItems(items.filter((_, i) => i !== idx))}
+            className="text-red-600 hover:text-red-800 font-bold text-2xl px-3"
+            title="Delete"
+          >
+            ✕
+          </button>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+</div>
+
+      <button
+        onClick={async () => {
+          try {
+            setErr("");
+            await supabase.from("receipt_items").delete().eq("receipt_id", receiptId);
+
+            const itemsToSave = items
+              .filter((it) => it.description?.trim())
+              .map((it) => ({
+                receipt_id: receiptId,
+                description: it.description,
+                quantity: it.quantity,
+                unit_price_cents: it.unit_price_cents,
+                total_cents: it.total_cents,
+              }));
+
+            if (itemsToSave.length > 0) {
+              const { error } = await supabase.from("receipt_items").insert(itemsToSave);
+              if (error) throw error;
+            }
+
+            const { data: reloaded } = await supabase
+              .from("receipt_items")
+              .select("id,description,quantity,unit_price_cents,total_cents")
+              .eq("receipt_id", receiptId)
+              .order("id", { ascending: true });
+
+            setItems((reloaded as ReceiptItem[]) || []);
+            alert("Line items saved!");
+          } catch (e: any) {
+            setErr(e.message || "Failed to save items");
+          }
+        }}
+        className="rounded-lg bg-black text-white px-6 py-2 font-medium text-sm hover:bg-gray-800"
+      >
+        Save Items
+      </button>
+    </div>
+  )}
+</div>
 
     {/* Purpose / notes */}
     <div className="pt-4 border-t">
@@ -554,7 +876,32 @@ const subtotalText =
           );
           
           await ensureMismatchFlag(purposeDraft.trim(), receipt.vendor || "");
+// Auto-categorize after saving purpose
+const categorization = categorizeReceipt(
+  receipt.vendor || "",
+  purposeDraft.trim() || ""
+);
 
+await supabase
+  .from("receipts")
+  .update({
+    suggested_category: categorization.suggested_category,
+    category_confidence: categorization.category_confidence,
+    category_reasoning: categorization.category_reasoning,
+  })
+  .eq("id", receipt.id);
+
+// Update local state to show new category immediately
+setReceipt((prev) =>
+  prev
+    ? {
+        ...prev,
+        suggested_category: categorization.suggested_category,
+        category_confidence: categorization.category_confidence,
+        category_reasoning: categorization.category_reasoning,
+      }
+    : prev
+);
         } catch (e: any) {
           setErr(e.message || "Failed to save purpose");
         } finally {

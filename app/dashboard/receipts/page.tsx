@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
+import { categorizeReceipt } from "@/lib/categorizeReceipt";
+import { extractReceiptData } from "@/lib/extractReceiptData";
 
 type ClientRow = {
   id: string;
@@ -19,7 +21,9 @@ type ReceiptRow = {
   status: string;
   created_at: string;
   tax_total_cents?: number | null;
-
+  suggested_category: string | null;
+  category_confidence: number | null;
+  approved_category: string | null;
 };
 
 export default function ReceiptsPage() {
@@ -52,8 +56,7 @@ export default function ReceiptsPage() {
   async function loadReceipts(fId: string) {
     const { data, error } = await supabase
       .from("receipts")
-      .select("id,client_id,vendor,receipt_date,total_cents,tax_total_cents,status,created_at")
-      .eq("firm_id", fId)
+      .select("id,client_id,vendor,receipt_date,total_cents,tax_total_cents,status,created_at,suggested_category,category_confidence,approved_category")      .eq("firm_id", fId)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -129,76 +132,133 @@ export default function ReceiptsPage() {
     }
   }
 
-  async function uploadReceiptFile(file: File) {
-    try {
-      setErr("");
+async function uploadReceiptFile(file: File) {
+  try {
+    setErr("");
+    if (!firmId) throw new Error("Missing firm id");
+    if (clients.length === 0) throw new Error("Create a client first.");
 
-      if (!firmId) throw new Error("Missing firm id");
-      if (clients.length === 0) throw new Error("Create a client first.");
+    const client = selectedClientId
+      ? clients.find((c) => c.id === selectedClientId) ?? clients[0]
+      : clients[0];
 
-      const client = selectedClientId
-        ? clients.find((c) => c.id === selectedClientId) ?? clients[0]
-        : clients[0];
+    setUploading(true);
 
-      setUploading(true);
-
-      // 1) Create receipt row first
-      const { data: receiptInsert, error: receiptErr } = await supabase
-        .from("receipts")
-        .insert([
-          {
-            firm_id: firmId,
-            client_id: client.id,
-            source: "upload",
-            status: "needs_review",
-            currency: "CAD",
-            extraction_status: "pending",
-          },
-        ])
-        .select("id")
-        .single();
-
-      if (receiptErr) throw receiptErr;
-      const receiptId = receiptInsert.id as string;
-
-      // 2) Storage path
-      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-      const storagePath = `${firmId}/${client.id}/${receiptId}/${Date.now()}_${safeName}`;
-
-      // 3) receipt_files row BEFORE uploading (required for storage policy)
-      const { error: rfErr } = await supabase.from("receipt_files").insert([
+    // 1) Create receipt row first
+    const { data: receiptInsert, error: receiptErr } = await supabase
+      .from("receipts")
+      .insert([
         {
-          receipt_id: receiptId,
           firm_id: firmId,
           client_id: client.id,
-          storage_bucket: "receipt-files",
-          storage_path: storagePath,
-          original_filename: file.name,
-          mime_type: file.type,
-          size_bytes: file.size,
+          source: "upload",
+          status: "needs_review",
+          currency: "CAD",
+          extraction_status: "pending",
         },
-      ]);
-      if (rfErr) throw rfErr;
+      ])
+      .select("id")
+      .single();
 
-      // 4) Upload to storage
-      const { error: upErr } = await supabase.storage
-        .from("receipt-files")
-        .upload(storagePath, file, {
-          upsert: false,
-          contentType: file.type || "application/octet-stream",
-        });
+    if (receiptErr) throw receiptErr;
+    const receiptId = receiptInsert.id as string;
 
-      if (upErr) throw upErr;
+    // 2) Create a storage path
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const storagePath = `${firmId}/${client.id}/${receiptId}/${Date.now()}_${safeName}`;
 
-      // 5) Refresh list
-      await loadReceipts(firmId);
-    } catch (e: any) {
-      setErr(e?.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    // 3) Create receipt_files row BEFORE uploading (required for storage policy)
+    const { error: rfErr } = await supabase.from("receipt_files").insert([
+      {
+        receipt_id: receiptId,
+        firm_id: firmId,
+        client_id: client.id,
+        storage_bucket: "receipt-files",
+        storage_path: storagePath,
+        original_filename: file.name,
+        mime_type: file.type,
+        size_bytes: file.size,
+      },
+    ]);
+    if (rfErr) throw rfErr;
+
+    // 4) Upload to storage
+    const { error: upErr } = await supabase.storage
+      .from("receipt-files")
+      .upload(storagePath, file, {
+        upsert: false,
+        contentType: file.type || "application/octet-stream",
+      });
+    if (upErr) throw upErr;
+
+// 5) Extract data from image using OCR
+try {
+  // Create signed URL to access the uploaded file
+  const { data: signedUrlData } = await supabase.storage
+    .from("receipt-files")
+    .createSignedUrl(storagePath, 60 * 60); // 1 hour expiry
+
+  if (signedUrlData?.signedUrl) {
+    // Extract data using Google Vision
+    const extracted = await extractReceiptData(signedUrlData.signedUrl);
+    
+    // Auto-categorize based on extracted vendor
+    const categorization = categorizeReceipt(extracted.vendor, null);
+    
+// Update receipt with extracted data + categorization
+await supabase
+  .from("receipts")
+  .update({
+    vendor: extracted.vendor,
+    receipt_date: extracted.date,
+    total_cents: extracted.total_cents,
+    ocr_raw_text: extracted.raw_text,
+    extraction_status: "completed",
+    suggested_category: categorization.suggested_category,
+    category_confidence: categorization.category_confidence,
+    category_reasoning: categorization.category_reasoning,
+  })
+  .eq("id", receiptId);
+      
+// If we found tax data, create tax records
+if (extracted.tax_cents && extracted.tax_cents > 0) {
+  console.log("💰 Tax extracted:", extracted.tax_cents, "cents");
+  
+  const { data: taxData, error: taxError } = await supabase
+    .from("receipt_taxes")
+    .insert([
+      {
+        receipt_id: receiptId,
+        tax_type: "HST",
+        rate: 0.13,
+        amount_cents: extracted.tax_cents,
+      },
+    ]);
+  
+  if (taxError) {
+    console.error("❌ Tax insert failed:", taxError.message, taxError);
+  } else {
+    console.log("✅ Tax saved successfully");
   }
+}
+  }
+} catch (ocrError: any) {
+  console.error("OCR extraction failed:", ocrError);
+  // Continue anyway - receipt is uploaded, just not extracted
+  await supabase
+    .from("receipts")
+    .update({ extraction_status: "failed" })
+    .eq("id", receiptId);
+}
 
+    // 6) Refresh list
+    await loadReceipts(firmId);
+  } catch (e: any) {
+    setErr(e.message || "Upload failed");
+  } finally {
+    setUploading(false);
+  }
+}
   // ---------- UI ----------
   if (loading) {
     return (
@@ -264,12 +324,19 @@ export default function ReceiptsPage() {
                 accept="image/*,application/pdf"
                 className="text-sm"
                 disabled={uploading}
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  await uploadReceiptFile(f);
-                  e.currentTarget.value = "";
-                }}
+onChange={async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  await uploadReceiptFile(f);
+  // Reset file input safely
+  if (e.target) {
+    try {
+      e.target.value = "";
+    } catch (err) {
+      // Ignore - some browsers block this
+    }
+  }
+}}
               />
 
               <button
@@ -302,9 +369,26 @@ export default function ReceiptsPage() {
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
                       <div className="font-semibold">{r.vendor || "Unknown vendor"}</div>
-                      <div className="text-xs text-gray-500">
-  Date: {r.receipt_date || "—"} • Status: {r.status}
-  {r.tax_total_cents != null ? ` • Tax: $${(r.tax_total_cents / 100).toFixed(2)}` : ""}
+<div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+  <span>Date: {r.receipt_date || "—"} • Status: {r.status}</span>
+  {r.tax_total_cents != null && (
+    <span>• Tax: ${(r.tax_total_cents / 100).toFixed(2)}</span>
+  )}
+  
+  {/* Category confidence badge */}
+  {r.approved_category ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+      ✓ {r.approved_category}
+    </span>
+  ) : r.suggested_category && r.category_confidence && r.category_confidence >= 80 ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+      → {r.suggested_category} ({r.category_confidence}%)
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+      ⚠ Needs categorization
+    </span>
+  )}
 </div>
                     </div>
 
