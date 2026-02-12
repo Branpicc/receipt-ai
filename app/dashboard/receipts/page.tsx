@@ -278,14 +278,21 @@ if (extracted.tax_cents && extracted.tax_cents > 0) {
           </a>
         </div>
 
-        <p className="text-sm text-gray-600 mt-2">
+<p className="text-sm text-gray-600 mt-2">
           This will show incoming receipts (email/upload) for your clients.
         </p>
+        
+<Link
+          href="/dashboard/email-inbox"
+          className="text-sm text-blue-600 underline hover:text-blue-800 mt-2 inline-block"
+        >
+          📧 Email Inbox
+        </Link>
 
         {err && <p className="text-sm text-red-600 mt-3">{err}</p>}
-
+        
         <div className="mt-6 rounded-2xl border p-6">
-          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                    <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
             <div className="text-sm text-gray-500">
               Firm: <span className="font-mono">{firmId}</span>
             </div>
