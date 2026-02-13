@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { extractReceiptData } from "@/lib/extractReceiptData";
+import { generateCSV, generateQuickBooksIIF, generatePDFReportHTML } from "@/lib/exportReceipts";
 
 type ClientRow = {
   id: string;
@@ -259,6 +260,89 @@ if (extracted.tax_cents && extracted.tax_cents > 0) {
     setUploading(false);
   }
 }
+
+async function exportReceipts(format: "csv" | "quickbooks" | "pdf") {
+  try {
+    const firmId = await getMyFirmId();
+    
+    // Fetch all receipts with client info
+    const { data: receiptsData, error: receiptsError } = await supabase
+      .from("receipts")
+      .select(`
+        id,
+        vendor,
+        receipt_date,
+        total_cents,
+        approved_category,
+        suggested_category,
+        purpose_text,
+        client_id,
+        clients(name)
+      `)
+      .eq("firm_id", firmId)
+      .order("receipt_date", { ascending: false });
+    
+    if (receiptsError) throw receiptsError;
+    
+    // Fetch taxes for all receipts
+    const receiptIds = receiptsData?.map(r => r.id) || [];
+    const { data: taxesData, error: taxesError } = await supabase
+      .from("receipt_taxes")
+      .select("receipt_id, tax_type, amount_cents")
+      .in("receipt_id", receiptIds);
+    
+    if (taxesError) throw taxesError;
+    
+    // Group taxes by receipt
+    const taxesByReceipt: Record<string, any[]> = {};
+    taxesData?.forEach(tax => {
+      if (!taxesByReceipt[tax.receipt_id]) {
+        taxesByReceipt[tax.receipt_id] = [];
+      }
+      taxesByReceipt[tax.receipt_id].push(tax);
+    });
+    
+    // Generate export
+    let content: string;
+    let filename: string;
+    let mimeType: string;
+    
+    if (format === "csv") {
+      content = generateCSV(receiptsData as any, taxesByReceipt);
+      filename = `receipts-export-${Date.now()}.csv`;
+      mimeType = "text/csv";
+    } else if (format === "quickbooks") {
+      content = generateQuickBooksIIF(receiptsData as any, taxesByReceipt);
+      filename = `quickbooks-import-${Date.now()}.iif`;
+      mimeType = "application/octet-stream";
+    } else {
+      content = generatePDFReportHTML(receiptsData as any, taxesByReceipt);
+      // Open in new window for PDF
+      const newWindow = window.open();
+      if (newWindow) {
+        newWindow.document.write(content);
+        newWindow.document.close();
+      }
+      return;
+    }
+    
+    // Download file
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert(`✅ ${format.toUpperCase()} export downloaded!`);
+  } catch (err: any) {
+    alert("Export failed: " + err.message);
+  }
+}
+
   // ---------- UI ----------
   if (loading) {
     return (
@@ -310,6 +394,27 @@ if (extracted.tax_cents && extracted.tax_cents > 0) {
               ))}
             </select>
 
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => exportReceipts("csv")}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+              >
+                📊 Export CSV
+              </button>
+              <button
+                onClick={() => exportReceipts("quickbooks")}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+              >
+                💼 QuickBooks
+              </button>
+              <button
+                onClick={() => exportReceipts("pdf")}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+              >
+                📄 PDF Report
+              </button>
+            </div>
+
             <div className="flex gap-3 items-center">
               <button
                 onClick={async () => {
@@ -331,6 +436,7 @@ if (extracted.tax_cents && extracted.tax_cents > 0) {
                 accept="image/*,application/pdf"
                 className="text-sm"
                 disabled={uploading}
+                
 onChange={async (e) => {
   const f = e.target.files?.[0];
   if (!f) return;
