@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { parseEmailBodyForReceipt } from "@/lib/parseEmailBody";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,76 +91,116 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Detection: Is this a receipt?
-    const isReceipt = detectIfReceipt(subject, text, attachmentCount);
+// Try to parse email body for receipt data first
+const parsedReceipt = parseEmailBodyForReceipt(subject, text, from);
+
+// Detection: Is this a receipt?
+// Either has attachment + receipt keywords, OR parsed successfully from email body
+const isReceipt = detectIfReceipt(subject, text, attachmentCount) || 
+                  (parsedReceipt && parsedReceipt.confidence >= 70);
+
+if (isReceipt) {
+  console.log("✅ Detected as receipt");
+  
+  // If we parsed data from email body, create receipt immediately
+  if (parsedReceipt && parsedReceipt.confidence >= 70) {
+    console.log("📧 Creating receipt from email body:", parsedReceipt);
     
-    if (isReceipt) {
-      console.log("✅ Detected as receipt - auto-processing");
-      
-      const { data: inboxEntry, error: inboxError } = await supabase
-        .from("email_inbox")
+    try {
+      const { data: receiptData, error: receiptError } = await supabase
+        .from("receipts")
         .insert([
           {
             firm_id: client.firm_id,
             client_id: client.id,
-            from_email: from,
-            subject,
-            body_text: text,
-            has_attachment: attachmentCount > 0,
-            attachment_count: attachmentCount,
-            attachment_urls: attachmentUrls,
-            status: "auto_processed",
-            processed_at: new Date().toISOString(),
+            vendor: parsedReceipt.vendor,
+            receipt_date: parsedReceipt.date,
+            total_cents: parsedReceipt.total ? Math.round(parsedReceipt.total * 100) : null,
+            source: "email",
+            status: "needs_review",
+            currency: "CAD",
+            purpose_text: parsedReceipt.description,
+            extraction_status: "completed",
           },
         ])
         .select()
         .single();
       
-      if (inboxError) {
-        console.error("❌ Failed to save:", inboxError);
+      if (receiptError) {
+        console.error("❌ Failed to create receipt:", receiptError);
       } else {
-        console.log("✅ Saved to inbox:", inboxEntry.id);
+        console.log("✅ Receipt created from email body:", receiptData?.id);
       }
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: "Receipt auto-processed",
-        attachments_saved: attachmentUrls.length
-      });
-      
-    } else {
-      console.log("⚠️ Not a receipt - saving for review");
-      
-      const { data: inboxEntry, error: inboxError } = await supabase
-        .from("email_inbox")
-        .insert([
-          {
-            firm_id: client.firm_id,
-            client_id: client.id,
-            from_email: from,
-            subject,
-            body_text: text,
-            has_attachment: attachmentCount > 0,
-            attachment_count: attachmentCount,
-            attachment_urls: attachmentUrls,
-            status: "pending",
-          },
-        ])
-        .select()
-        .single();
-      
-      if (inboxError) {
-        console.error("❌ Failed to save:", inboxError);
-      } else {
-        console.log("✅ Saved for review:", inboxEntry.id);
-      }
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: "Email saved for review",
-        attachments_saved: attachmentUrls.length
-      });
+    } catch (err) {
+      console.error("❌ Error creating receipt:", err);
     }
+  }
+  
+  const { data: inboxEntry, error: inboxError } = await supabase
+    .from("email_inbox")
+    .insert([
+      {
+        firm_id: client.firm_id,
+        client_id: client.id,
+        from_email: from,
+        subject,
+        body_text: text,
+        has_attachment: attachmentCount > 0,
+        attachment_count: attachmentCount,
+        attachment_urls: attachmentUrls,
+        status: "auto_processed",
+        processed_at: new Date().toISOString(),
+      },
+    ])
+    .select()
+    .single();
+  
+  if (inboxError) {
+    console.error("❌ Failed to save:", inboxError);
+  } else {
+    console.log("✅ Saved to inbox:", inboxEntry.id);
+  }
+  
+  return NextResponse.json({ 
+    success: true, 
+    message: "Receipt auto-processed",
+    attachments_saved: attachmentUrls.length,
+    parsed_from_email: !!parsedReceipt
+  });
+
+} else {
+  console.log("⚠️ Not a receipt - saving for review");
+  
+  const { data: inboxEntry, error: inboxError } = await supabase
+    .from("email_inbox")
+    .insert([
+      {
+        firm_id: client.firm_id,
+        client_id: client.id,
+        from_email: from,
+        subject,
+        body_text: text,
+        has_attachment: attachmentCount > 0,
+        attachment_count: attachmentCount,
+        attachment_urls: attachmentUrls,
+        status: "pending",
+      },
+    ])
+    .select()
+    .single();
+  
+  if (inboxError) {
+    console.error("❌ Failed to save:", inboxError);
+  } else {
+    console.log("✅ Saved for review:", inboxEntry.id);
+  }
+  
+  return NextResponse.json({ 
+    success: true, 
+    message: "Email saved for review",
+    attachments_saved: attachmentUrls.length
+  });
+}
     
   } catch (error: any) {
     console.error("❌ Webhook error:", error);
