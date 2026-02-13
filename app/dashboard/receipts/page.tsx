@@ -367,11 +367,25 @@ async function exportReceipts(format: "csv" | "quickbooks" | "pdf") {
         </p>
         
 <Link
-          href="/dashboard/email-inbox"
-          className="text-sm text-blue-600 underline hover:text-blue-800 mt-2 inline-block"
-        >
-          📧 Email Inbox
-        </Link>
+  href="/dashboard/email-inbox"
+  className="text-sm text-blue-600 underline hover:text-blue-800 mt-2 inline-block mr-4"
+>
+  📧 Email Inbox
+</Link>
+
+<Link
+  href="/dashboard/category-dashboard"
+  className="text-sm text-blue-600 underline hover:text-blue-800 mt-2 inline-block"
+>
+  📊 Category Dashboard
+</Link>
+
+<Link
+  href="/dashboard/tax-codes"
+  className="text-sm text-blue-600 underline hover:text-blue-800 mt-2 inline-block ml-4"
+>
+  🧾 Tax Codes (T2125)
+</Link>
 
         {err && <p className="text-sm text-red-600 mt-3">{err}</p>}
         
