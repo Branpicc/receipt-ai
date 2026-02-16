@@ -57,110 +57,75 @@ export default function DashboardHomePage() {
     }
   }
 
-  async function handleUpload(file: File) {
-    try {
-      setUploading(true);
-      const firmId = await getMyFirmId();
+async function handleUpload(file: File) {
+  try {
+    setUploading(true);
+    const firmId = await getMyFirmId();
 
-      const { data: clients } = await supabase
-        .from("clients")
-        .select("id, name")
-        .eq("firm_id", firmId)
-        .limit(1);
+    const { data: clients } = await supabase
+      .from("clients")
+      .select("id, name")
+      .eq("firm_id", firmId)
+      .limit(1);
 
-      if (!clients || clients.length === 0) {
-        alert("Please add a client first");
-        return;
-      }
-
-      const client = clients[0];
-
-      const { data: receiptInsert, error: receiptErr } = await supabase
-        .from("receipts")
-        .insert([
-          {
-            firm_id: firmId,
-            client_id: client.id,
-            source: "upload",
-            status: "needs_review",
-            currency: "CAD",
-            extraction_status: "pending",
-          },
-        ])
-        .select("id")
-        .single();
-
-      if (receiptErr) throw receiptErr;
-      const receiptId = receiptInsert.id;
-
-      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-      const storagePath = `${firmId}/${client.id}/${receiptId}/${Date.now()}_${safeName}`;
-
-      const { error: uploadErr } = await supabase.storage
-        .from("receipt-files")
-        .upload(storagePath, file);
-
-      if (uploadErr) throw uploadErr;
-
-      await supabase
-        .from("receipts")
-        .update({ file_path: storagePath })
-        .eq("id", receiptId);
-
-      const { data: signedData } = await supabase.storage
-        .from("receipt-files")
-        .createSignedUrl(storagePath, 3600);
-
-      if (signedData?.signedUrl) {
-        const extracted = await extractReceiptData(signedData.signedUrl);
-        
-await supabase
-  .from("receipts")
-  .update({
-    vendor: extracted.vendor,
-    receipt_date: extracted.date,
-    total_cents: extracted.total_cents,
-    extraction_status: "completed",
-    ocr_raw_text: extracted.raw_text,
-  })
-  .eq("id", receiptId);
-      
-        if (extracted.tax_cents && extracted.tax_cents > 0) {
-          await supabase.from("receipt_taxes").insert([
-            {
-              receipt_id: receiptId,
-              tax_type: "HST",
-              rate: 0.13,
-              amount_cents: extracted.tax_cents,
-            },
-          ]);
-        }
-      }
-
-      alert("✅ Receipt uploaded successfully!");
-      loadStats();
-    } catch (err: any) {
-      alert("Upload failed: " + err.message);
-    } finally {
-      setUploading(false);
+    if (!clients || clients.length === 0) {
+      alert("Please add a client first");
+      return;
     }
+
+    const client = clients[0];
+
+    // Use API route instead of direct Supabase
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("firmId", firmId);
+    formData.append("clientId", client.id);
+
+const response = await fetch("/api/upload-receipt", {
+  method: "POST",
+  body: formData,
+});
+
+if (!response.ok) {
+  const text = await response.text();
+  throw new Error(text || "Upload failed");
+}
+
+let result;
+try {
+  result = await response.json();
+} catch (e) {
+  // If JSON parsing fails but upload succeeded, consider it success
+  console.warn("Response was not JSON, but upload may have succeeded");
+  alert("✅ Receipt uploaded successfully!");
+  loadStats();
+  return;
+}
+
+alert("✅ Receipt uploaded successfully!");
+loadStats();
+  } catch (err: any) {
+    alert("Upload failed: " + err.message);
+  } finally {
+    setUploading(false);
   }
+}
 
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
       {/* Upload Hero Section */}
-      <div className="bg-gradient-to-br from-black to-gray-800 rounded-2xl p-8 mb-8 text-white">
-        <div className="max-w-2xl">
-          <h2 className="text-2xl font-bold mb-2">Upload Receipt</h2>
-          <p className="text-gray-300 mb-6">
+<div className="bg-gradient-to-br from-black to-gray-800 rounded-xl p-6 mb-8 text-white">
+  <div className="max-w-xl">
+    <h2 className="text-xl font-bold mb-2">Upload Receipt</h2>
+              <p className="text-gray-300 mb-6">
             Drag and drop a receipt image or PDF, and our AI will extract all the details automatically.
           </p>
           
           <label
             htmlFor="hero-upload"
-            className={`block border-2 border-dashed border-gray-400 rounded-xl p-8 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all ${
+            className={`block border-2 border-dashed border-gray-400 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all ${
               uploading ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
@@ -175,7 +140,7 @@ await supabase
                 if (file) handleUpload(file);
               }}
             />
-            <div className="text-6xl mb-4">{uploading ? "⏳" : "📸"}</div>
+            <div className="text-4xl mb-3">{uploading ? "⏳" : "📸"}</div>
             <div className="text-lg font-semibold mb-2">
               {uploading ? "Uploading..." : "Click to upload or drag here"}
             </div>

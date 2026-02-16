@@ -17,13 +17,10 @@ export async function extractReceiptData(
   }
 
   try {
-    // Fetch image and convert to base64
+    // Fetch image and convert to base64 (server-side compatible)
     const imageResponse = await fetch(imageUrl);
-    const imageBlob = await imageResponse.blob();
-    const base64 = await blobToBase64(imageBlob);
-    
-    // Remove data URL prefix if present
-    const base64Image = base64.split(',')[1] || base64;
+    const arrayBuffer = await imageResponse.arrayBuffer();
+    const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
     // Call Google Vision API
     const visionResponse = await fetch(
@@ -72,22 +69,12 @@ export async function extractReceiptData(
     return {
       ...extracted,
       raw_text: fullText,
-      confidence: 85, // Google Vision typically 85-90% for receipts
+      confidence: 85,
     };
   } catch (error: any) {
     console.error("OCR extraction failed:", error);
     throw new Error(error.message || "Failed to extract receipt data");
   }
-}
-
-// Helper: Convert blob to base64
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 // Helper: Parse text to extract structured data
@@ -204,11 +191,10 @@ function parseReceiptText(text: string): {
 
 // Helper: Normalize date to YYYY-MM-DD
 function normalizeDate(dateStr: string): string {
-  // Try parsing common formats
   const formats = [
-    /(\d{1,2})[-/](\d{1,2})[-/](\d{4})/, // MM/DD/YYYY or DD/MM/YYYY
-    /(\d{4})[-/](\d{1,2})[-/](\d{1,2})/, // YYYY/MM/DD
-    /(\d{1,2})[-/](\d{1,2})[-/](\d{2})/,  // MM/DD/YY or DD/MM/YY
+    /(\d{1,2})[-/](\d{1,2})[-/](\d{4})/,
+    /(\d{4})[-/](\d{1,2})[-/](\d{1,2})/,
+    /(\d{1,2})[-/](\d{1,2})[-/](\d{2})/,
   ];
 
   for (const format of formats) {
@@ -217,13 +203,10 @@ function normalizeDate(dateStr: string): string {
       let year, month, day;
       
       if (format === formats[1]) {
-        // YYYY/MM/DD
         [, year, month, day] = match;
       } else {
-        // Assume MM/DD/YYYY or MM/DD/YY (common in North America)
         [, month, day, year] = match;
         
-        // Handle 2-digit year
         if (year && year.length === 2) {
           const currentYear = new Date().getFullYear();
           const century = Math.floor(currentYear / 100) * 100;
@@ -231,7 +214,6 @@ function normalizeDate(dateStr: string): string {
         }
       }
       
-      // Pad month and day with leading zeros
       month = month?.padStart(2, "0");
       day = day?.padStart(2, "0");
       
@@ -239,5 +221,5 @@ function normalizeDate(dateStr: string): string {
     }
   }
   
-  return dateStr; // Return as-is if can't parse
+  return dateStr;
 }

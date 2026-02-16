@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
-import { extractReceiptData } from "@/lib/extractReceiptData";
 
 export default function UploadFab() {
   const [uploading, setUploading] = useState(false);
@@ -26,66 +25,29 @@ export default function UploadFab() {
 
       const client = clients[0];
 
-      const { data: receiptInsert, error: receiptErr } = await supabase
-        .from("receipts")
-        .insert([
-          {
-            firm_id: firmId,
-            client_id: client.id,
-            source: "upload",
-            status: "needs_review",
-            currency: "CAD",
-            extraction_status: "pending",
-          },
-        ])
-        .select("id")
-        .single();
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("firmId", firmId);
+      formData.append("clientId", client.id);
 
-      if (receiptErr) throw receiptErr;
-      const receiptId = receiptInsert.id;
+      const response = await fetch("/api/upload-receipt", {
+        method: "POST",
+        body: formData,
+      });
 
-      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-      const storagePath = `${firmId}/${client.id}/${receiptId}/${Date.now()}_${safeName}`;
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Upload failed");
+      }
 
-      const { error: uploadErr } = await supabase.storage
-        .from("receipt-files")
-        .upload(storagePath, file);
-
-      if (uploadErr) throw uploadErr;
-
-      await supabase
-        .from("receipts")
-        .update({ file_path: storagePath })
-        .eq("id", receiptId);
-
-      const { data: signedData } = await supabase.storage
-        .from("receipt-files")
-        .createSignedUrl(storagePath, 3600);
-
-      if (signedData?.signedUrl) {
-        const extracted = await extractReceiptData(signedData.signedUrl);
-
-        await supabase
-          .from("receipts")
-          .update({
-            vendor: extracted.vendor,
-            receipt_date: extracted.date,
-            total_cents: extracted.total_cents,
-            extraction_status: "completed",
-            ocr_raw_text: extracted.raw_text,
-          })
-          .eq("id", receiptId);
-
-        if (extracted.tax_cents && extracted.tax_cents > 0) {
-          await supabase.from("receipt_taxes").insert([
-            {
-              receipt_id: receiptId,
-              tax_type: "HST",
-              rate: 0.13,
-              amount_cents: extracted.tax_cents,
-            },
-          ]);
-        }
+      let result;
+      try {
+        result = await response.json();
+      } catch (e) {
+        console.warn("Response was not JSON, but upload may have succeeded");
+        alert("✅ Receipt uploaded successfully!");
+        window.location.reload();
+        return;
       }
 
       alert("✅ Receipt uploaded successfully!");

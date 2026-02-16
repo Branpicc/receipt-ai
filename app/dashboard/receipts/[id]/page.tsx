@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { JSX, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
@@ -21,6 +21,7 @@ type Receipt = {
   category_confidence: number | null;
   approved_category: string | null;
   category_reasoning: string | null;
+  file_path: string | null;
 };
 
 type ReceiptFile = {
@@ -53,7 +54,7 @@ type ReceiptFlag = {
   resolved_at: string | null;
 };
 
-export default function ReceiptDetailPage() {
+export default function ReceiptDetailPage(): JSX.Element {
   const params = useParams();
   const receiptId = (params?.id as string) || "";
 
@@ -195,137 +196,112 @@ async function resolveFlag(flagId: string) {
     return files.find((f) => f.id === activeFileId) ?? files[0];
   }, [files, activeFileId]);
 
-  // 1) Load receipt + attached files
-  useEffect(() => {
-    if (!receiptId) return;
+// Load receipt data AND image
+useEffect(() => {
+  if (!receiptId) return;
 
-    const load = async () => {
-      setLoading(true);
-      setErr("");
+  const load = async () => {
+    setLoading(true);
+    setErr("");
 
-      try {
-        const { data: r, error: rErr } = await supabase
-          .from("receipts")
-.select(`
-  id,
-  firm_id,
-  client_id,
-  vendor,
-  receipt_date,
-  total_cents,
-  status,
-  created_at,
-  purpose_text,
-  purpose_source,
-  purpose_updated_at,
-  suggested_category,
-  category_confidence,
-  approved_category,
-  category_reasoning
-`)
-          .eq("id", receiptId)
-          .single();
-          
+    try {
+      const { data: r, error: rErr } = await supabase
+        .from("receipts")
+        .select(`
+          id,
+          firm_id,
+          client_id,
+          vendor,
+          receipt_date,
+          total_cents,
+          status,
+          created_at,
+          purpose_text,
+          purpose_source,
+          purpose_updated_at,
+          suggested_category,
+          category_confidence,
+          approved_category,
+          category_reasoning,
+          file_path
+        `)
+        .eq("id", receiptId)
+        .single();
 
-        if (rErr) throw rErr;
-        setReceipt(r as Receipt);
-        setPurposeDraft(r?.purpose_text ?? "");
-        await loadFlags();
+      if (rErr) throw rErr;
+      console.log("📦 Receipt data:", r);
+      console.log("📁 file_path:", r?.file_path);
+      setReceipt(r as Receipt);
+      setPurposeDraft(r?.purpose_text ?? "");
+      await loadFlags();
 
-        setPurposeDraft((r as any)?.purpose_text ?? "");
+      // Load items
+      const { data: itemRows, error: itemErr } = await supabase
+        .from("receipt_items")
+        .select("id,description,quantity,unit_price_cents,total_cents")
+        .eq("receipt_id", receiptId)
+        .order("id", { ascending: true });
 
-        const { data: fRows, error: fErr } = await supabase
-          .from("receipt_files")
-          .select("id,storage_bucket,storage_path,original_filename,mime_type,created_at")
-          .eq("receipt_id", receiptId)
-          .order("created_at", { ascending: true });
+      if (itemErr) throw itemErr;
+      setItems((itemRows as ReceiptItem[]) || []);
 
-        if (fErr) throw fErr;
+      // Load taxes
+      const { data: taxRows, error: taxErr } = await supabase
+        .from("receipt_taxes")
+        .select("id,tax_type,rate,amount_cents")
+        .eq("receipt_id", receiptId)
+        .order("id", { ascending: true });
 
-        const safeFiles = (fRows || []) as ReceiptFile[];
-        setFiles(safeFiles);
-        setActiveFileId(safeFiles[0]?.id ?? null);
-        const { data: itemRows, error: itemErr } = await supabase
-  .from("receipt_items")
-  .select("id,description,quantity,unit_price_cents,total_cents")
-  .eq("receipt_id", receiptId)
-  .order("id", { ascending: true });
+      if (taxErr) throw taxErr;
+      setTaxes((taxRows as ReceiptTax[]) || []);
 
-if (itemErr) throw itemErr;
+      // Load receipt files (legacy)
+      const { data: fRows, error: fErr } = await supabase
+        .from("receipt_files")
+        .select("id,storage_bucket,storage_path,original_filename,mime_type,created_at")
+        .eq("receipt_id", receiptId)
+        .order("created_at", { ascending: true });
 
-setItems((itemRows as ReceiptItem[]) || []);
-const { data: taxRows, error: taxErr } = await supabase
-  .from("receipt_taxes")
-  .select("id,tax_type,rate,amount_cents")
-  .eq("receipt_id", receiptId)
-  .order("id", { ascending: true });
+      if (fErr) throw fErr;
+      const safeFiles = (fRows || []) as ReceiptFile[];
+      setFiles(safeFiles);
+      setActiveFileId(safeFiles[0]?.id ?? null);
 
-if (taxErr) throw taxErr;
+// 👇 LOAD IMAGE HERE (after receipt data is loaded)
+if (r?.file_path) {
+  console.log("🖼️ Loading image for file_path:", r.file_path);
+  setPreviewLoading(true);
+  try {
+    const { data: signedData, error: signedErr } = await supabase.storage
+      .from("receipt-files")
+      .createSignedUrl(r.file_path, 3600);
 
-setTaxes((taxRows as ReceiptTax[]) || []);
-{taxes.length > 0 && (
-  <div className="col-span-2">
-    <div className="mt-2 rounded-xl border bg-gray-50 p-3">
-      <div className="text-xs font-medium text-gray-500 mb-2">Tax breakdown</div>
+    console.log("📡 Signed URL response:", { signedData, signedErr });
 
-      <div className="space-y-1">
-        {taxes.map((t) => (
-          <div key={t.id} className="flex items-center justify-between text-xs">
-            <div className="text-gray-700">
-              {t.tax_type}
-              {t.rate != null ? ` (${Math.round(t.rate * 10000) / 100}%)` : ""}
-            </div>
-            <div className="font-mono">
-              {t.amount_cents != null
-                ? `$${(t.amount_cents / 100).toFixed(2)}`
-                : "—"}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-)}
+    if (signedErr) throw signedErr;
+    
+    console.log("✅ Setting fileUrl to:", signedData.signedUrl); // 👈 ADD THIS
+    setFileUrl(signedData.signedUrl);
+    
+  } catch (imgErr: any) {
+    console.error("❌ Failed to load image:", imgErr);
+    setErr(imgErr?.message || "Failed to load receipt preview");
+  } finally {
+    setPreviewLoading(false);
+  }
+}
+    } catch (e: any) {
+      setErr(e?.message || "Failed to load receipt");
+      setReceipt(null);
+      setFiles([]);
+      setActiveFileId(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      } catch (e: any) {
-        setErr(e?.message || "Failed to load receipt");
-        setReceipt(null);
-        setFiles([]);
-        setActiveFileId(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [receiptId]);
-
-  // 2) Create a signed preview URL for the active file
-  useEffect(() => {
-    const run = async () => {
-      setFileUrl(null);
-
-      if (!activeFile) return;
-
-      setPreviewLoading(true);
-      setErr("");
-
-      try {
-        const { data, error } = await supabase.storage
-          .from(activeFile.storage_bucket)
-          .createSignedUrl(activeFile.storage_path, 60 * 60); // 1 hour
-
-        if (error) throw error;
-        setFileUrl(data.signedUrl);
-      } catch (e: any) {
-        setErr(e?.message || "Failed to load receipt preview");
-      } finally {
-        setPreviewLoading(false);
-      }
-    };
-
-    run();
-  }, [activeFile?.id]); // only rerun when file changes
+  load();
+}, [receiptId]);
 
   if (!receiptId) {
     return <div className="p-8 text-red-600">Missing receipt id in URL.</div>;
@@ -375,11 +351,7 @@ const subtotalText =
             </div>
           </div>
 
-          <div className="text-xs text-gray-400">
-            Created: {new Date(receipt.created_at).toLocaleString()}
-            {/* receipt details section */}
-<div className="mt-4 rounded-2xl border p-6 space-y-2">
-  ...
+<div className="text-xs text-gray-400">
   Created: {new Date(receipt.created_at).toLocaleString()}
 </div>
 
@@ -415,7 +387,7 @@ const subtotalText =
         {/* Digital copy layout: left = preview, right = details */}
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Preview */}
-          <div className="lg:col-span-2 rounded-2xl border overflow-hidden">
+<div className="lg:col-span-2 rounded-2xl border overflow-hidden">
             <div className="p-4 border-b flex items-center justify-between">
               <div className="text-sm font-medium">Receipt preview</div>
 
@@ -440,45 +412,31 @@ const subtotalText =
                   No file attached yet (this can happen with sample rows).
                 </div>
               ) : previewLoading ? (
-                <div className="text-sm text-gray-600">Loading preview…</div>
-              ) : fileUrl && activeFile ? (
+                <div className="text-sm text-gray-600">Loading preview...</div>
+              ) : fileUrl ? (
                 <div>
-                  <div className="text-xs text-gray-500 mb-2">
-                    {activeFile.original_filename || "Receipt file"}{" "}
-                    {activeFile.mime_type ? `• ${activeFile.mime_type}` : ""}
-                  </div>
-
-                  {activeFile.mime_type?.startsWith("image/") ? (
-                    <img
-                      src={fileUrl}
-                      alt="Receipt"
-                      className="w-full max-h-[780px] object-contain rounded-lg"
-                    />
-                  ) : (
-                    <iframe
-                      src={fileUrl}
-                      className="w-full h-[780px] rounded-lg"
-                      title="Receipt preview"
-                    />
-                  )}
-
-                  <div className="mt-3">
-                    <a
-                      className="text-sm underline"
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open file in new tab
-                    </a>
-                  </div>
-                </div>
-              ) : (
+                  <img
+                    src={fileUrl}
+                    alt="Receipt"
+                    className="w-full max-h-[780px] object-contain rounded-lg"
+                  />
+<div className="mt-3">
+              
+                className="text-sm underline"
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+              <a>
+                Open in new tab
+              </a>
+            </div>
+          </div>                      
+        ) : (
                 <div className="text-sm text-gray-600">No preview available.</div>
               )}
             </div>
           </div>
-
+                    
           {/* Details panel */}
           <div className="rounded-2xl border overflow-hidden">
             <div className="p-4 border-b font-medium">Details</div>
@@ -957,7 +915,7 @@ setReceipt((prev) =>
               </div>
 
               <div className="pt-3 border-t">
-                <div className="text-xs text-gray-500 mb-2">
+<div className="text-xs text-gray-500 mb-2">
                   Digital receipt sections (next)
                 </div>
 
@@ -970,7 +928,7 @@ setReceipt((prev) =>
                 </ul>
 
                 <div className="mt-3 text-xs text-gray-500">
-                  We’ll populate these once we add extraction + tax logic.
+                  We'll populate these once we add extraction + tax logic.
                 </div>
               </div>
             </div>
