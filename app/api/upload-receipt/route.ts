@@ -21,11 +21,25 @@ export async function POST(request: NextRequest) {
     const firmId = formData.get("firmId") as string;
     const clientId = formData.get("clientId") as string;
 
-    console.log("📤 Upload started:", { fileName: file?.name, firmId, clientId });
+    console.log("📤 Upload started:", { 
+      fileName: file?.name, 
+      fileSize: file?.size,
+      firmId, 
+      clientId 
+    });
 
     if (!file || !firmId || !clientId) {
       return NextResponse.json(
         { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Check file size (limit to 10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 10MB." },
         { status: 400 }
       );
     }
@@ -54,26 +68,56 @@ export async function POST(request: NextRequest) {
     const receiptId = receiptData.id;
     console.log("✅ Receipt created:", receiptId);
 
-    // 2. Upload file to storage
+    // 2. Upload file to storage with retry logic
     const safeName = file.name.replace(/[^\w.\-]+/g, "_");
     const storagePath = `${firmId}/${clientId}/${receiptId}/${Date.now()}_${safeName}`;
 
+    // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const { error: uploadError } = await supabase.storage
-      .from("receipt-files")
-      .upload(storagePath, buffer, {
-        contentType: file.type,
-        upsert: false,
-      });
+    console.log("📤 Uploading to storage:", storagePath, "Size:", buffer.length);
 
-    if (uploadError) {
-      console.error("❌ Storage upload error:", uploadError);
-      throw uploadError;
+    let uploadAttempt = 0;
+    let uploadError = null;
+    const MAX_RETRIES = 3;
+
+    while (uploadAttempt < MAX_RETRIES) {
+      uploadAttempt++;
+      console.log(`Upload attempt ${uploadAttempt}/${MAX_RETRIES}`);
+
+      const { error } = await supabase.storage
+        .from("receipt-files")
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (!error) {
+        console.log("✅ File uploaded successfully");
+        uploadError = null;
+        break;
+      }
+
+      uploadError = error;
+      console.error(`❌ Upload attempt ${uploadAttempt} failed:`, error);
+
+      // Wait before retry (exponential backoff)
+      if (uploadAttempt < MAX_RETRIES) {
+        const waitTime = Math.pow(2, uploadAttempt) * 1000; // 2s, 4s, 8s
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
-    console.log("✅ File uploaded to storage:", storagePath);
+    if (uploadError) {
+      console.error("❌ All upload attempts failed:", uploadError);
+      
+      // Delete the receipt record since upload failed
+      await supabase.from("receipts").delete().eq("id", receiptId);
+      
+      throw new Error(`Storage upload failed after ${MAX_RETRIES} attempts: ${uploadError.message}`);
+    }
 
     // 3. Update receipt with file path
     await supabase
@@ -81,54 +125,62 @@ export async function POST(request: NextRequest) {
       .update({ file_path: storagePath })
       .eq("id", receiptId);
 
+    console.log("✅ Receipt updated with file_path");
+
     // 4. Get signed URL and run OCR
-    const { data: signedData } = await supabase.storage
+    const { data: signedData, error: signedError } = await supabase.storage
       .from("receipt-files")
       .createSignedUrl(storagePath, 3600);
 
-    if (signedData?.signedUrl) {
-      console.log("📸 Starting OCR extraction...");
-      console.log("🔗 Signed URL:", signedData.signedUrl);
-      
-      try {
-        const extracted = await extractReceiptData(signedData.signedUrl);
-        console.log("✅ OCR extracted:", extracted);
+    if (signedError || !signedData?.signedUrl) {
+      console.error("❌ Failed to create signed URL:", signedError);
+      // Don't fail the whole upload, OCR can be done later
+      return NextResponse.json({
+        success: true,
+        receiptId,
+        message: "Receipt uploaded (OCR will be processed later)",
+      });
+    }
 
-        // 5. Update receipt with extracted data
-        await supabase
-          .from("receipts")
-          .update({
-            vendor: extracted.vendor,
-            receipt_date: extracted.date,
-            total_cents: extracted.total_cents,
-            extraction_status: "completed",
-            ocr_raw_text: extracted.raw_text,
-          })
-          .eq("id", receiptId);
+    console.log("📸 Starting OCR extraction...");
+    
+    try {
+      const extracted = await extractReceiptData(signedData.signedUrl);
+      console.log("✅ OCR extracted:", extracted);
 
-        console.log("✅ Receipt updated with OCR data");
+      // 5. Update receipt with extracted data
+      await supabase
+        .from("receipts")
+        .update({
+          vendor: extracted.vendor,
+          receipt_date: extracted.date,
+          total_cents: extracted.total_cents,
+          extraction_status: "completed",
+          ocr_raw_text: extracted.raw_text,
+        })
+        .eq("id", receiptId);
 
-        // 6. Save tax if found
-        if (extracted.tax_cents && extracted.tax_cents > 0) {
-          await supabase.from("receipt_taxes").insert([
-            {
-              receipt_id: receiptId,
-              tax_type: "HST",
-              rate: 0.13,
-              amount_cents: extracted.tax_cents,
-            },
-          ]);
-          console.log("✅ Tax saved:", extracted.tax_cents);
-        }
-      } catch (ocrError) {
-        console.error("❌ OCR extraction failed:", ocrError);
-        await supabase
-          .from("receipts")
-          .update({ extraction_status: "failed" })
-          .eq("id", receiptId);
+      console.log("✅ Receipt updated with OCR data");
+
+      // 6. Save tax if found
+      if (extracted.tax_cents && extracted.tax_cents > 0) {
+        await supabase.from("receipt_taxes").insert([
+          {
+            receipt_id: receiptId,
+            firm_id: firmId,
+            tax_type: "HST",
+            rate: 0.13,
+            amount_cents: extracted.tax_cents,
+          },
+        ]);
+        console.log("✅ Tax saved:", extracted.tax_cents);
       }
-    } else {
-      console.error("❌ Failed to create signed URL");
+    } catch (ocrError: any) {
+      console.error("❌ OCR extraction failed:", ocrError);
+      await supabase
+        .from("receipts")
+        .update({ extraction_status: "failed" })
+        .eq("id", receiptId);
     }
 
     return NextResponse.json({
