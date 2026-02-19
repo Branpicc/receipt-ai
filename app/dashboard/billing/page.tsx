@@ -17,13 +17,26 @@ type Plan = {
 
 const plans: Plan[] = [
   {
+    name: "Free",
+    price: "$0",
+    priceId: "free",
+    features: [
+      "5 receipts per month",
+      "1 user",
+      "Manual categorization",
+      "CSV export",
+      "Basic receipt storage",
+    ],
+  },
+  {
     name: "Starter",
     price: "$29",
-    priceId: "starter", // We'll send plan name instead of price ID
+    priceId: "starter",
     features: [
       "100 receipts per month",
       "1 user",
-      "Basic categorization",
+      "AI-powered OCR",
+      "Auto-categorization",
       "CSV export",
       "Email support",
     ],
@@ -31,7 +44,7 @@ const plans: Plan[] = [
   {
     name: "Professional",
     price: "$79",
-    priceId: "professional", // We'll send plan name instead of price ID
+    priceId: "professional",
     recommended: true,
     features: [
       "500 receipts per month",
@@ -63,6 +76,15 @@ export default function BillingPage() {
 
   useEffect(() => {
     loadCurrentPlan();
+    
+    // Check if returning from successful checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      // Wait a moment for webhook to process, then reload
+      setTimeout(() => {
+        loadCurrentPlan();
+      }, 2000);
+    }
   }, []);
 
   const loadCurrentPlan = async () => {
@@ -74,17 +96,88 @@ export default function BillingPage() {
         .eq("id", firmId)
         .single();
 
-      if (firm?.subscription_plan && firm?.subscription_status === "active") {
+      // Set current plan (including 'free')
+      if (firm?.subscription_plan) {
         setCurrentPlan(firm.subscription_plan);
+      } else {
+        setCurrentPlan('free'); // Default to free if no plan set
       }
     } catch (error) {
       console.error("Failed to load current plan:", error);
+      setCurrentPlan('free'); // Default to free on error
     }
   };
 
   const handleSubscribe = async (planIdentifier: string, planName: string) => {
     if (planName === "Enterprise") {
       window.location.href = "mailto:sales@receiptai.com";
+      return;
+    }
+
+    // Handle free plan (no Stripe needed)
+    if (planName === "Free") {
+      // Show confirmation dialog
+      const confirmed = confirm(
+        "Switch to Free plan?\n\n" +
+        "• 5 receipts per month\n" +
+        "• Manual entry only (no OCR)\n" +
+        "• CSV export\n\n" +
+        "Your current paid subscription will be canceled."
+      );
+      
+      if (!confirmed) return;
+
+      try {
+        setLoading(planIdentifier);
+        const firmId = await getMyFirmId();
+
+        // Get current subscription to cancel it
+        const { data: firm } = await supabase
+          .from('firms')
+          .select('stripe_subscription_id, stripe_customer_id')
+          .eq('id', firmId)
+          .single();
+
+        // Cancel Stripe subscription if exists
+        if (firm?.stripe_subscription_id) {
+          const response = await fetch("/api/stripe/cancel-subscription", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subscriptionId: firm.stripe_subscription_id }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to cancel subscription");
+          }
+        }
+
+        // Update firm to free plan
+        const { error } = await supabase
+          .from('firms')
+          .update({ 
+            subscription_plan: 'free',
+            subscription_status: null,
+            stripe_subscription_id: null,
+            stripe_customer_id: firm?.stripe_customer_id || null, // Keep customer ID
+          })
+          .eq('id', firmId);
+
+        if (error) throw error;
+
+        alert("✅ Switched to Free plan! Your paid subscription has been canceled.");
+        loadCurrentPlan();
+      } catch (error: any) {
+        console.error("Free plan switch error:", error);
+        alert("Failed to switch to Free plan: " + error.message);
+      } finally {
+        setLoading(null);
+      }
+      return;
+    }
+
+    // Prevent subscribing to the same plan
+    if (currentPlan?.toLowerCase() === planName.toLowerCase()) {
+      alert("You already have this plan! To change plans, please select a different tier.");
       return;
     }
 

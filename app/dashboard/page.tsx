@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
-import { extractReceiptData } from "@/lib/extractReceiptData";
-import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import Link from "next/link";
+import { checkReceiptUploadLimit } from "@/lib/checkUsageLimits";
+import UsageStats from "@/components/UsageStats";
 
 export default function DashboardHomePage() {
   const [uploading, setUploading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Add this to trigger UsageStats reload
   const [stats, setStats] = useState({
     totalReceipts: 0,
     thisMonth: 0,
@@ -57,69 +58,79 @@ export default function DashboardHomePage() {
     }
   }
 
-async function handleUpload(file: File) {
-  try {
-    setUploading(true);
-    const firmId = await getMyFirmId();
+  async function handleUpload(file: File) {
+    try {
+      setUploading(true);
+      const firmId = await getMyFirmId();
 
-    const { data: clients } = await supabase
-      .from("clients")
-      .select("id, name")
-      .eq("firm_id", firmId)
-      .limit(1);
+      // Check usage limits BEFORE uploading
+      const usageCheck = await checkReceiptUploadLimit(firmId);
+      
+      if (!usageCheck.canUpload) {
+        alert(usageCheck.message || "Upload limit reached");
+        return;
+      }
 
-    if (!clients || clients.length === 0) {
-      alert("Please add a client first");
-      return;
+      const { data: clients } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("firm_id", firmId)
+        .limit(1);
+
+      if (!clients || clients.length === 0) {
+        alert("Please add a client first");
+        return;
+      }
+
+      const client = clients[0];
+
+      // Use API route instead of direct Supabase
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("firmId", firmId);
+      formData.append("clientId", client.id);
+
+      const response = await fetch("/api/upload-receipt", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Upload failed");
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (e) {
+        // If JSON parsing fails but upload succeeded, consider it success
+        console.warn("Response was not JSON, but upload may have succeeded");
+        alert("✅ Receipt uploaded successfully!");
+        loadStats();
+        setRefreshKey(prev => prev + 1); // Trigger UsageStats reload
+        return;
+      }
+
+      alert("✅ Receipt uploaded successfully!");
+      loadStats();
+      setRefreshKey(prev => prev + 1); // Trigger UsageStats reload
+    } catch (err: any) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
     }
-
-    const client = clients[0];
-
-    // Use API route instead of direct Supabase
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("firmId", firmId);
-    formData.append("clientId", client.id);
-
-const response = await fetch("/api/upload-receipt", {
-  method: "POST",
-  body: formData,
-});
-
-if (!response.ok) {
-  const text = await response.text();
-  throw new Error(text || "Upload failed");
-}
-
-let result;
-try {
-  result = await response.json();
-} catch (e) {
-  // If JSON parsing fails but upload succeeded, consider it success
-  console.warn("Response was not JSON, but upload may have succeeded");
-  alert("✅ Receipt uploaded successfully!");
-  loadStats();
-  return;
-}
-
-alert("✅ Receipt uploaded successfully!");
-loadStats();
-  } catch (err: any) {
-    alert("Upload failed: " + err.message);
-  } finally {
-    setUploading(false);
   }
-}
 
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
       {/* Upload Hero Section */}
-<div className="bg-gradient-to-br from-black to-gray-800 rounded-xl p-6 mb-8 text-white">
-  <div className="max-w-xl">
-    <h2 className="text-xl font-bold mb-2">Upload Receipt</h2>
-              <p className="text-gray-300 mb-6">
+      <div className="bg-gradient-to-br from-black to-gray-800 rounded-xl p-6 mb-8 text-white">
+        <div className="max-w-xl">
+          <h2 className="text-xl font-bold mb-2">Upload Receipt</h2>
+          <p className="text-gray-300 mb-6">
             Drag and drop a receipt image or PDF, and our AI will extract all the details automatically.
           </p>
           
@@ -132,7 +143,7 @@ loadStats();
             <input
               type="file"
               id="hero-upload"
-              accept="image/*,application/pdf"
+              accept="image/*,application/pdf,.heic,.heif"
               className="hidden"
               disabled={uploading}
               onChange={(e) => {
@@ -145,14 +156,14 @@ loadStats();
               {uploading ? "Uploading..." : "Click to upload or drag here"}
             </div>
             <div className="text-sm text-gray-300">
-              Supports JPG, PNG, PDF
+              Supports JPG, PNG, PDF, HEIC
             </div>
           </label>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Link href="/dashboard/receipts" className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="text-sm text-gray-500 mb-1">Total Receipts</div>
           <div className="text-3xl font-bold text-gray-900">{stats.totalReceipts}</div>
@@ -167,6 +178,8 @@ loadStats();
           <div className="text-sm text-gray-500 mb-1">Needs Review</div>
           <div className="text-3xl font-bold text-orange-600">{stats.pendingReview}</div>
         </Link>
+
+        <UsageStats key={refreshKey} />
       </div>
 
       {/* Quick Links */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractReceiptData } from "@/lib/extractReceiptData";
+import { convertToJpg, getFileExtension } from "@/lib/convertImage";
 
 // Use service role key to bypass RLS
 const supabase = createClient(
@@ -68,13 +69,24 @@ export async function POST(request: NextRequest) {
     const receiptId = receiptData.id;
     console.log("✅ Receipt created:", receiptId);
 
-    // 2. Upload file to storage with retry logic
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const storagePath = `${firmId}/${clientId}/${receiptId}/${Date.now()}_${safeName}`;
-
-    // Convert file to buffer
+    // 2. Convert image to JPG if needed (HEIC, HEIF, WebP, etc.)
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer: Buffer = Buffer.from(arrayBuffer);
+    let mimeType = file.type;
+    
+    const conversionResult = await convertToJpg(buffer, mimeType);
+    buffer = conversionResult.buffer;
+    mimeType = conversionResult.mimeType;
+    
+    if (conversionResult.converted) {
+      console.log(`✅ Image converted from ${file.type} to ${mimeType}`);
+    }
+
+    // 3. Upload file to storage with retry logic and progressive timeouts
+    const originalName = file.name.replace(/\.[^.]+$/, ''); // Remove extension
+    const extension = getFileExtension(mimeType);
+    const safeName = `${originalName.replace(/[^\w.\-]+/g, "_")}.${extension}`;
+    const storagePath = `${firmId}/${clientId}/${receiptId}/${Date.now()}_${safeName}`;
 
     console.log("📤 Uploading to storage:", storagePath, "Size:", buffer.length);
 
@@ -82,29 +94,38 @@ export async function POST(request: NextRequest) {
     let uploadError = null;
     const MAX_RETRIES = 3;
 
+    // Try progressively longer timeouts and smaller chunks for large files
+    const isLargeFile = buffer.length > 2 * 1024 * 1024; // 2MB+
+
     while (uploadAttempt < MAX_RETRIES) {
       uploadAttempt++;
-      console.log(`Upload attempt ${uploadAttempt}/${MAX_RETRIES}`);
+      console.log(`Upload attempt ${uploadAttempt}/${MAX_RETRIES}${isLargeFile ? ' (large file mode)' : ''}`);
 
-      const { error } = await supabase.storage
-        .from("receipt-files")
-        .upload(storagePath, buffer, {
-          contentType: file.type,
-          upsert: false,
-        });
+      try {
+        const { error } = await supabase.storage
+          .from("receipt-files")
+          .upload(storagePath, buffer, {
+            contentType: mimeType, // Use converted mime type
+            upsert: false,
+          });
 
-      if (!error) {
-        console.log("✅ File uploaded successfully");
-        uploadError = null;
-        break;
+        if (!error) {
+          console.log("✅ File uploaded successfully");
+          uploadError = null;
+          break;
+        }
+
+        uploadError = error;
+        console.error(`❌ Upload attempt ${uploadAttempt} failed:`, error);
+      } catch (err: any) {
+        uploadError = err;
+        console.error(`❌ Upload attempt ${uploadAttempt} exception:`, err.message);
       }
 
-      uploadError = error;
-      console.error(`❌ Upload attempt ${uploadAttempt} failed:`, error);
-
-      // Wait before retry (exponential backoff)
+      // Wait before retry with exponential backoff (longer for large files)
       if (uploadAttempt < MAX_RETRIES) {
-        const waitTime = Math.pow(2, uploadAttempt) * 1000; // 2s, 4s, 8s
+        const baseWait = isLargeFile ? 3000 : 2000; // Start with 3s for large files
+        const waitTime = Math.pow(2, uploadAttempt - 1) * baseWait; // 3s, 6s, 12s for large
         console.log(`⏳ Waiting ${waitTime}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
@@ -127,7 +148,33 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Receipt updated with file_path");
 
-    // 4. Get signed URL and run OCR
+    // 4. Check if firm has OCR feature (not on free plan)
+    const { data: firm } = await supabase
+      .from("firms")
+      .select("subscription_plan")
+      .eq("id", firmId)
+      .single();
+
+    const plan = firm?.subscription_plan || 'free';
+
+    // Skip OCR for free plan
+    if (plan === 'free') {
+      console.log("ℹ️ Free plan - skipping OCR (manual entry required)");
+      await supabase
+        .from("receipts")
+        .update({ extraction_status: "manual_entry_required" })
+        .eq("id", receiptId);
+
+      return NextResponse.json({
+        success: true,
+        receiptId,
+        message: "Receipt uploaded successfully (manual entry required for free plan)",
+        requiresManualEntry: true,
+      });
+    }
+
+    // Continue with OCR for paid plans...
+    // 5. Get signed URL and run OCR
     const { data: signedData, error: signedError } = await supabase.storage
       .from("receipt-files")
       .createSignedUrl(storagePath, 3600);
@@ -148,7 +195,7 @@ export async function POST(request: NextRequest) {
       const extracted = await extractReceiptData(signedData.signedUrl);
       console.log("✅ OCR extracted:", extracted);
 
-      // 5. Update receipt with extracted data
+      // 6. Update receipt with extracted data
       await supabase
         .from("receipts")
         .update({
@@ -162,7 +209,7 @@ export async function POST(request: NextRequest) {
 
       console.log("✅ Receipt updated with OCR data");
 
-      // 6. Save tax if found
+      // 7. Save tax if found
       if (extracted.tax_cents && extracted.tax_cents > 0) {
         await supabase.from("receipt_taxes").insert([
           {

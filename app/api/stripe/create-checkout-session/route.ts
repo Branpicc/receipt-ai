@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     // Get firm details
     const { data: firm, error: firmError } = await supabase
       .from('firms')
-      .select('id, name')
+      .select('id, name, stripe_customer_id, stripe_subscription_id')
       .eq('id', firmId)
       .single();
 
@@ -48,8 +48,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // If firm already has an active subscription, cancel it first
+    if (firm.stripe_subscription_id) {
+      try {
+        console.log('Canceling existing subscription:', firm.stripe_subscription_id);
+        await stripe.subscriptions.cancel(firm.stripe_subscription_id);
+        console.log('Previous subscription canceled');
+      } catch (cancelError: any) {
+        console.error('Failed to cancel existing subscription:', cancelError);
+        // Continue anyway - they might have already canceled it manually
+      }
+    }
+
     // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: any = {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
@@ -64,8 +76,14 @@ export async function POST(request: NextRequest) {
         firmId: firm.id,
       },
       client_reference_id: firm.id,
-      customer_email: undefined, // They'll enter email at checkout
-    });
+    };
+
+    // If customer already exists, use it; otherwise let Stripe create new one
+    if (firm.stripe_customer_id) {
+      sessionParams.customer = firm.stripe_customer_id;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return NextResponse.json({ sessionId: session.id, url: session.url });
   } catch (error: any) {
