@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import UploadFab from "@/components/UploadFab";
+import NotificationBell from "@/components/NotificationBell";  // ADD THIS
 
 export default function DashboardLayout({
   children,
@@ -89,7 +90,12 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto relative">
+        {/* Notification Bell - Top Right */}
+        <div className="absolute top-4 right-8 z-40">
+          <NotificationBell />
+        </div>
+        
         {children}
       </main>
             

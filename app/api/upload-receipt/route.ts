@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractReceiptData } from "@/lib/extractReceiptData";
-import { convertToJpg, getFileExtension } from "@/lib/convertImage";
 
 // Use service role key to bypass RLS
 const supabase = createClient(
@@ -21,12 +20,14 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const firmId = formData.get("firmId") as string;
     const clientId = formData.get("clientId") as string;
+    const userId = formData.get("userId") as string | null; // Get user ID
 
     console.log("📤 Upload started:", { 
       fileName: file?.name, 
       fileSize: file?.size,
       firmId, 
-      clientId 
+      clientId,
+      userId 
     });
 
     if (!file || !firmId || !clientId) {
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
         {
           firm_id: firmId,
           client_id: clientId,
+          uploaded_by: userId, // Track who uploaded
           source: "upload",
           status: "needs_review",
           currency: "CAD",
@@ -69,24 +71,13 @@ export async function POST(request: NextRequest) {
     const receiptId = receiptData.id;
     console.log("✅ Receipt created:", receiptId);
 
-    // 2. Convert image to JPG if needed (HEIC, HEIF, WebP, etc.)
-    const arrayBuffer = await file.arrayBuffer();
-    let buffer: Buffer = Buffer.from(arrayBuffer);
-    let mimeType = file.type;
-    
-    const conversionResult = await convertToJpg(buffer, mimeType);
-    buffer = conversionResult.buffer;
-    mimeType = conversionResult.mimeType;
-    
-    if (conversionResult.converted) {
-      console.log(`✅ Image converted from ${file.type} to ${mimeType}`);
-    }
-
-    // 3. Upload file to storage with retry logic and progressive timeouts
-    const originalName = file.name.replace(/\.[^.]+$/, ''); // Remove extension
-    const extension = getFileExtension(mimeType);
-    const safeName = `${originalName.replace(/[^\w.\-]+/g, "_")}.${extension}`;
+    // 2. Upload file to storage with retry logic and progressive timeouts
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
     const storagePath = `${firmId}/${clientId}/${receiptId}/${Date.now()}_${safeName}`;
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
     console.log("📤 Uploading to storage:", storagePath, "Size:", buffer.length);
 
@@ -105,7 +96,7 @@ export async function POST(request: NextRequest) {
         const { error } = await supabase.storage
           .from("receipt-files")
           .upload(storagePath, buffer, {
-            contentType: mimeType, // Use converted mime type
+            contentType: file.type,
             upsert: false,
           });
 
@@ -191,9 +182,13 @@ export async function POST(request: NextRequest) {
 
     console.log("📸 Starting OCR extraction...");
     
+    let vendorName = "Unknown vendor";
+    
     try {
       const extracted = await extractReceiptData(signedData.signedUrl);
       console.log("✅ OCR extracted:", extracted);
+
+      vendorName = extracted.vendor || "Unknown vendor";
 
       // 6. Update receipt with extracted data
       await supabase
@@ -222,12 +217,58 @@ export async function POST(request: NextRequest) {
         ]);
         console.log("✅ Tax saved:", extracted.tax_cents);
       }
+      
+      // 8. Save line items if extracted
+      if (extracted.line_items && extracted.line_items.length > 0) {
+        const lineItemsToInsert = extracted.line_items.map((item, index) => ({
+          receipt_id: receiptId,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price_cents: item.unit_price_cents,
+          total_cents: item.total_cents,
+          line_index: index + 1,
+        }));
+
+        await supabase.from("receipt_items").insert(lineItemsToInsert);
+        console.log(`✅ Line items saved: ${lineItemsToInsert.length} items`);
+      }
     } catch (ocrError: any) {
       console.error("❌ OCR extraction failed:", ocrError);
       await supabase
         .from("receipts")
         .update({ extraction_status: "failed" })
         .eq("id", receiptId);
+    }
+
+    // 9. Create notifications for OTHER users in the firm (not the uploader)
+    try {
+      // Get all users in this firm EXCEPT the uploader
+      const { data: firmUsers } = await supabase
+        .from("firm_users")
+        .select("auth_user_id")
+        .eq("firm_id", firmId)
+        .neq("auth_user_id", userId || ""); // Exclude uploader
+
+      if (firmUsers && firmUsers.length > 0) {
+        // Create notification for each other user
+        const notifications = firmUsers.map(user => ({
+          firm_id: firmId,
+          user_id: user.auth_user_id,
+          type: "receipt_uploaded",
+          title: "New receipt uploaded",
+          message: `Receipt from ${vendorName} needs review`,
+          receipt_id: receiptId,
+          read: false,
+        }));
+
+        await supabase.from("notifications").insert(notifications);
+        console.log(`✅ Created ${notifications.length} notifications for other users`);
+      } else {
+        console.log("ℹ️ No other users to notify");
+      }
+    } catch (notifError: any) {
+      console.error("❌ Failed to create notifications:", notifError);
+      // Don't fail the upload if notification fails
     }
 
     return NextResponse.json({

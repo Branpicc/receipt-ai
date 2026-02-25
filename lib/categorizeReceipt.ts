@@ -86,6 +86,7 @@ const VENDOR_PATTERNS = {
     "office depot",
     "grand & toy",
     "bureau en gros",
+    "amazon", // Often office supplies
   ],
   MEALS: [
     "tim hortons",
@@ -98,11 +99,23 @@ const VENDOR_PATTERNS = {
     "pizz",
     "burger",
     "food",
+    "keg", // The Keg Steakhouse
+    "canoe", // Canoe Restaurant
+    "grill",
+    "bistro",
+    "bar",
+    "pub",
+    "diner",
+    "steakhouse",
+    "tavern",
+    "eatery",
+    "kitchen",
   ],
   VEHICLE: [
     "shell",
     "esso",
     "petro-canada",
+    "petro canada",
     "chevron",
     "husky",
     "canadian tire gas",
@@ -126,6 +139,24 @@ const VENDOR_PATTERNS = {
     "shopify",
     "quickbooks",
     "google workspace",
+    "google ads",
+    "facebook",
+    "meta",
+    "linkedin",
+  ],
+  PROFESSIONAL_FEES: [
+    "deloitte",
+    "pwc",
+    "kpmg",
+    "ey",
+    "mccarthy",
+    "legal",
+    "law",
+  ],
+  RENT: [
+    "cadillac fairview",
+    "wework",
+    "regus",
   ],
 };
 
@@ -257,8 +288,8 @@ export function categorizeReceipt(
     }
   }
 
-  // Conservative threshold: only suggest if 80%+ confident
-  if (confidence < 80) {
+  // Lower threshold to 60% for better coverage
+  if (confidence < 60) {
     return {
       suggested_category: null,
       category_confidence: confidence,
@@ -277,6 +308,6 @@ export function categorizeReceipt(
     suggested_category: categoryInfo.name,
     category_confidence: Math.min(confidence, 95), // Cap at 95%
     category_reasoning: reasons.join("; "),
-    needs_review: false,
+    needs_review: confidence < 80, // Still flag for review if < 80%
   };
 }

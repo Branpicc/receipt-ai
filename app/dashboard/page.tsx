@@ -6,10 +6,11 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import Link from "next/link";
 import { checkReceiptUploadLimit } from "@/lib/checkUsageLimits";
 import UsageStats from "@/components/UsageStats";
+import { convertHeicToJpg } from "@/lib/convertHeicClient";
 
 export default function DashboardHomePage() {
   const [uploading, setUploading] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // Add this to trigger UsageStats reload
+  const [refreshKey, setRefreshKey] = useState(0);
   const [stats, setStats] = useState({
     totalReceipts: 0,
     thisMonth: 0,
@@ -18,19 +19,35 @@ export default function DashboardHomePage() {
 
   useEffect(() => {
     loadStats();
+    updateLastSeen(); // Track when user was last online
   }, []);
+
+  async function updateLastSeen() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const firmId = await getMyFirmId();
+
+      await supabase
+        .from("firm_users")
+        .update({ last_seen: new Date().toISOString() })
+        .eq("firm_id", firmId)
+        .eq("auth_user_id", user.id);
+    } catch (error) {
+      console.error("Failed to update last_seen:", error);
+    }
+  }
 
   async function loadStats() {
     try {
       const firmId = await getMyFirmId();
       
-      // Total receipts
       const { count: total } = await supabase
         .from("receipts")
         .select("*", { count: "exact", head: true })
         .eq("firm_id", firmId);
 
-      // This month
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
@@ -41,7 +58,6 @@ export default function DashboardHomePage() {
         .eq("firm_id", firmId)
         .gte("created_at", startOfMonth.toISOString());
 
-      // Pending review
       const { count: pending } = await supabase
         .from("receipts")
         .select("*", { count: "exact", head: true })
@@ -61,9 +77,18 @@ export default function DashboardHomePage() {
   async function handleUpload(file: File) {
     try {
       setUploading(true);
+      
+      let uploadFile = file;
+      try {
+        uploadFile = await convertHeicToJpg(file);
+      } catch (conversionError) {
+        console.error('HEIC conversion failed:', conversionError);
+        setUploading(false);
+        return;
+      }
+
       const firmId = await getMyFirmId();
 
-      // Check usage limits BEFORE uploading
       const usageCheck = await checkReceiptUploadLimit(firmId);
       
       if (!usageCheck.canUpload) {
@@ -82,13 +107,19 @@ export default function DashboardHomePage() {
         return;
       }
 
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+
       const client = clients[0];
 
-      // Use API route instead of direct Supabase
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
       formData.append("firmId", firmId);
       formData.append("clientId", client.id);
+      if (userId) {
+        formData.append("userId", userId); // Pass user ID to API
+      }
 
       const response = await fetch("/api/upload-receipt", {
         method: "POST",
@@ -104,17 +135,16 @@ export default function DashboardHomePage() {
       try {
         result = await response.json();
       } catch (e) {
-        // If JSON parsing fails but upload succeeded, consider it success
         console.warn("Response was not JSON, but upload may have succeeded");
         alert("✅ Receipt uploaded successfully!");
         loadStats();
-        setRefreshKey(prev => prev + 1); // Trigger UsageStats reload
+        setRefreshKey(prev => prev + 1);
         return;
       }
 
       alert("✅ Receipt uploaded successfully!");
       loadStats();
-      setRefreshKey(prev => prev + 1); // Trigger UsageStats reload
+      setRefreshKey(prev => prev + 1);
     } catch (err: any) {
       alert("Upload failed: " + err.message);
     } finally {
@@ -174,7 +204,7 @@ export default function DashboardHomePage() {
           <div className="text-3xl font-bold text-gray-900">{stats.thisMonth}</div>
         </div>
         
-        <Link href="/dashboard/receipts" className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+        <Link href="/dashboard/receipts?status=needs_review" className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
           <div className="text-sm text-gray-500 mb-1">Needs Review</div>
           <div className="text-3xl font-bold text-orange-600">{stats.pendingReview}</div>
         </Link>

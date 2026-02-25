@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { parseEmailBodyForReceipt } from "@/lib/parseEmailBody";
+// app/api/inbound-email/route.ts - Receive emails from SendGrid
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { extractReceiptData } from '@/lib/extractReceiptData';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,213 +10,213 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📧 Received inbound email webhook");
-
     const formData = await request.formData();
     
-    const from = formData.get("from") as string;
-    const to = formData.get("to") as string;
-    const subject = formData.get("subject") as string || "";
-    const text = formData.get("text") as string || "";
-    const attachmentCount = parseInt(formData.get("attachments") as string || "0");
+    // SendGrid sends data as form fields
+    const to = formData.get('to') as string;
+    const from = formData.get('from') as string;
+    const subject = formData.get('subject') as string;
+    const text = formData.get('text') as string;
+    const html = formData.get('html') as string;
     
-    console.log("From:", from);
-    console.log("To:", to);
-    console.log("Subject:", subject);
-    console.log("Attachments:", attachmentCount);
+    console.log('📧 Inbound email received:', { to, from, subject });
 
-    // Extract client_id from email
-    const clientIdMatch = to.match(/receipts-([a-f0-9-]+)@/);
-    
-    if (!clientIdMatch) {
-      console.log("❌ Invalid recipient format");
-      return NextResponse.json({ error: "Invalid recipient" }, { status: 400 });
+    // Extract firm ID from email address (firm-abc123@receipts.yourdomain.com)
+    const emailMatch = to?.match(/firm-([a-f0-9-]+)@/);
+    if (!emailMatch) {
+      console.error('❌ Could not extract firm ID from:', to);
+      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
     }
+
+    const firmIdPrefix = emailMatch[1];
     
-    const clientId = clientIdMatch[1];
-    
-    // Get client and firm
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .select("id, firm_id, name")
-      .eq("id", clientId)
+    // Find firm by email address prefix
+    const { data: firm, error: firmError } = await supabase
+      .from('firms')
+      .select('id')
+      .ilike('email_ingestion_address', `%${firmIdPrefix}%`)
       .single();
-    
-    if (clientError || !client) {
-      console.log("❌ Client not found:", clientId);
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
-    }
-    
-    console.log("✅ Client found:", client.name);
 
-    // Process attachments
-    const attachmentUrls: string[] = [];
-    
-    if (attachmentCount > 0) {
-      console.log(`📎 Processing ${attachmentCount} attachments...`);
-      
-      for (let i = 1; i <= attachmentCount; i++) {
-        const attachmentFile = formData.get(`attachment${i}`) as File | null;
-        const attachmentName = formData.get(`attachment-info${i}`) as string || `attachment${i}`;
-        
-        if (attachmentFile) {
-          try {
-            // Generate unique filename
-            const timestamp = Date.now();
-            const randomId = Math.random().toString(36).substring(7);
-            const extension = attachmentName.split('.').pop() || 'bin';
-            const filename = `${timestamp}-${randomId}.${extension}`;
-            const storagePath = `email-attachments/${client.firm_id}/${client.id}/${filename}`;
-            
-            // Upload to Supabase Storage
-            const arrayBuffer = await attachmentFile.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            
-            const { data: uploadData, error: uploadError } = await supabase.storage
-              .from("receipt-files")
-              .upload(storagePath, buffer, {
-                contentType: attachmentFile.type || "application/octet-stream",
-                upsert: false,
-              });
-            
-            if (uploadError) {
-              console.error(`❌ Failed to upload attachment ${i}:`, uploadError);
-            } else {
-              attachmentUrls.push(storagePath);
-              console.log(`✅ Uploaded attachment ${i}: ${storagePath}`);
-            }
-          } catch (err) {
-            console.error(`❌ Error processing attachment ${i}:`, err);
-          }
+    if (firmError || !firm) {
+      console.error('❌ Firm not found for:', to);
+      return NextResponse.json({ error: 'Firm not found' }, { status: 404 });
+    }
+
+    const firmId = firm.id;
+    console.log('✅ Matched firm:', firmId);
+
+    // Check for attachment
+    const attachment = formData.get('attachment1') as File | null;
+    let hasAttachment = false;
+    let attachmentUrl = null;
+    let attachmentFilename = null;
+
+    if (attachment && attachment.size > 0) {
+      console.log('📎 Attachment found:', attachment.name, attachment.size);
+      hasAttachment = true;
+      attachmentFilename = attachment.name;
+
+      // Upload attachment to storage
+      const safeName = attachment.name.replace(/[^\w.\-]+/g, '_');
+      const storagePath = `email-attachments/${firmId}/${Date.now()}_${safeName}`;
+
+      const arrayBuffer = await attachment.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { error: uploadError } = await supabase.storage
+        .from('receipt-files')
+        .upload(storagePath, buffer, {
+          contentType: attachment.type,
+          upsert: false,
+        });
+
+      if (!uploadError) {
+        attachmentUrl = storagePath;
+        console.log('✅ Attachment uploaded:', storagePath);
+      }
+    }
+
+    // Create email receipt record
+    const { data: emailReceipt, error: insertError } = await supabase
+      .from('email_receipts')
+      .insert([{
+        firm_id: firmId,
+        from_email: from,
+        subject: subject,
+        email_text: text,
+        email_html: html,
+        has_attachment: hasAttachment,
+        attachment_url: attachmentUrl,
+        attachment_filename: attachmentFilename,
+        status: 'pending',
+        extraction_status: 'pending',
+      }])
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('❌ Failed to insert email receipt:', insertError);
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    }
+
+    console.log('✅ Email receipt created:', emailReceipt.id);
+
+    // Try to extract receipt data from text or attachment
+    let extractedData = null;
+    let vendorName = 'Unknown vendor';
+
+    if (hasAttachment && attachmentUrl) {
+      // Run OCR on attachment
+      try {
+        const { data: signedData } = await supabase.storage
+          .from('receipt-files')
+          .createSignedUrl(attachmentUrl, 3600);
+
+        if (signedData?.signedUrl) {
+          extractedData = await extractReceiptData(signedData.signedUrl);
+          vendorName = extractedData.vendor || vendorName;
+          console.log('✅ OCR extracted from attachment:', extractedData);
         }
+      } catch (ocrError) {
+        console.error('❌ OCR failed:', ocrError);
+      }
+    } else if (text) {
+      // Try to parse receipt data from email text
+      try {
+        extractedData = parseEmailText(text);
+        vendorName = extractedData.vendor || vendorName;
+        console.log('✅ Parsed from email text:', extractedData);
+      } catch (parseError) {
+        console.error('❌ Text parsing failed:', parseError);
       }
     }
 
-// Try to parse email body for receipt data first
-const parsedReceipt = parseEmailBodyForReceipt(subject, text, from);
+    // Update email receipt with extracted data
+    if (extractedData) {
+      await supabase
+        .from('email_receipts')
+        .update({
+          vendor: extractedData.vendor,
+          receipt_date: extractedData.date,
+          total_cents: extractedData.total_cents,
+          extraction_status: 'completed',
+          ocr_raw_text: extractedData.raw_text,
+        })
+        .eq('id', emailReceipt.id);
+    }
 
-// Detection: Is this a receipt?
-// Either has attachment + receipt keywords, OR parsed successfully from email body
-const isReceipt = detectIfReceipt(subject, text, attachmentCount) || 
-                  (parsedReceipt && parsedReceipt.confidence >= 70);
-
-if (isReceipt) {
-  console.log("✅ Detected as receipt");
-  
-  // If we parsed data from email body, create receipt immediately
-  if (parsedReceipt && parsedReceipt.confidence >= 70) {
-    console.log("📧 Creating receipt from email body:", parsedReceipt);
-    
+    // Create notification for received email
     try {
-      const { data: receiptData, error: receiptError } = await supabase
-        .from("receipts")
-        .insert([
-          {
-            firm_id: client.firm_id,
-            client_id: client.id,
-            vendor: parsedReceipt.vendor,
-            receipt_date: parsedReceipt.date,
-            total_cents: parsedReceipt.total ? Math.round(parsedReceipt.total * 100) : null,
-            source: "email",
-            status: "needs_review",
-            currency: "CAD",
-            purpose_text: parsedReceipt.description,
-            extraction_status: "completed",
-          },
-        ])
-        .select()
-        .single();
-      
-      if (receiptError) {
-        console.error("❌ Failed to create receipt:", receiptError);
-      } else {
-        console.log("✅ Receipt created from email body:", receiptData?.id);
-      }
-    } catch (err) {
-      console.error("❌ Error creating receipt:", err);
+      await supabase.from('notifications').insert([
+        {
+          firm_id: firmId,
+          type: 'email_received',
+          title: 'New email receipt',
+          message: `Receipt from ${vendorName} received via email`,
+          email_id: emailReceipt.id,
+          read: false,
+        },
+      ]);
+      console.log('✅ Notification created');
+    } catch (notifError) {
+      console.error('❌ Failed to create notification:', notifError);
+      // Don't fail the email processing if notification fails
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      emailReceiptId: emailReceipt.id 
+    });
+
+  } catch (error: any) {
+    console.error('❌ Inbound email error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Processing failed' },
+      { status: 500 }
+    );
+  }
+}
+
+// Simple text parser for email receipts
+function parseEmailText(text: string): any {
+  const lines = text.split('\n').map(l => l.trim());
+  
+  let vendor = null;
+  let date = null;
+  let total = null;
+
+  // Try to find vendor (usually first few lines)
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    if (lines[i].length > 3 && lines[i].length < 50) {
+      vendor = lines[i];
+      break;
     }
   }
-  
-  const { data: inboxEntry, error: inboxError } = await supabase
-    .from("email_inbox")
-    .insert([
-      {
-        firm_id: client.firm_id,
-        client_id: client.id,
-        from_email: from,
-        subject,
-        body_text: text,
-        has_attachment: attachmentCount > 0,
-        attachment_count: attachmentCount,
-        attachment_urls: attachmentUrls,
-        status: "auto_processed",
-        processed_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-    .single();
-  
-  if (inboxError) {
-    console.error("❌ Failed to save:", inboxError);
-  } else {
-    console.log("✅ Saved to inbox:", inboxEntry.id);
-  }
-  
-  return NextResponse.json({ 
-    success: true, 
-    message: "Receipt auto-processed",
-    attachments_saved: attachmentUrls.length,
-    parsed_from_email: !!parsedReceipt
-  });
 
-} else {
-  console.log("⚠️ Not a receipt - saving for review");
-  
-  const { data: inboxEntry, error: inboxError } = await supabase
-    .from("email_inbox")
-    .insert([
-      {
-        firm_id: client.firm_id,
-        client_id: client.id,
-        from_email: from,
-        subject,
-        body_text: text,
-        has_attachment: attachmentCount > 0,
-        attachment_count: attachmentCount,
-        attachment_urls: attachmentUrls,
-        status: "pending",
-      },
-    ])
-    .select()
-    .single();
-  
-  if (inboxError) {
-    console.error("❌ Failed to save:", inboxError);
-  } else {
-    console.log("✅ Saved for review:", inboxEntry.id);
+  // Find total (look for $ amounts)
+  const totalRegex = /(?:total|amount|balance).*?\$?\s*(\d+\.?\d{0,2})/i;
+  for (const line of lines) {
+    const match = line.match(totalRegex);
+    if (match) {
+      total = Math.round(parseFloat(match[1]) * 100);
+      break;
+    }
   }
-  
-  return NextResponse.json({ 
-    success: true, 
-    message: "Email saved for review",
-    attachments_saved: attachmentUrls.length
-  });
-}
-    
-  } catch (error: any) {
-    console.error("❌ Webhook error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
 
-function detectIfReceipt(subject: string, body: string, attachmentCount: number): boolean {
-  if (attachmentCount === 0) return false;
-  
-  const combined = `${subject} ${body}`.toLowerCase();
-  
-  const receiptKeywords = ["receipt", "invoice", "purchase", "order", "payment", "transaction"];
-  const nonReceiptKeywords = ["newsletter", "unsubscribe", "promotion", "deal", "sale"];
-  
-  if (nonReceiptKeywords.some(k => combined.includes(k))) return false;
-  return receiptKeywords.some(k => combined.includes(k));
+  // Find date
+  const dateRegex = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})|(\w+ \d{1,2},? \d{4})/;
+  for (const line of lines) {
+    const match = line.match(dateRegex);
+    if (match) {
+      date = match[0];
+      break;
+    }
+  }
+
+  return {
+    vendor,
+    date,
+    total_cents: total,
+    raw_text: text.substring(0, 1000), // First 1000 chars
+  };
 }
