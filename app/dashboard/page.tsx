@@ -8,8 +8,17 @@ import { checkReceiptUploadLimit } from "@/lib/checkUsageLimits";
 import UsageStats from "@/components/UsageStats";
 import { convertHeicToJpg } from "@/lib/convertHeicClient";
 
+type UploadProgress = {
+  total: number;
+  current: number;
+  currentFile: string;
+  succeeded: number;
+  failed: number;
+};
+
 export default function DashboardHomePage() {
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [stats, setStats] = useState({
     totalReceipts: 0,
@@ -19,7 +28,7 @@ export default function DashboardHomePage() {
 
   useEffect(() => {
     loadStats();
-    updateLastSeen(); // Track when user was last online
+    updateLastSeen();
   }, []);
 
   async function updateLastSeen() {
@@ -74,25 +83,28 @@ export default function DashboardHomePage() {
     }
   }
 
-  async function handleUpload(file: File) {
+  async function handleMultipleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    
     try {
       setUploading(true);
-      
-      let uploadFile = file;
-      try {
-        uploadFile = await convertHeicToJpg(file);
-      } catch (conversionError) {
-        console.error('HEIC conversion failed:', conversionError);
-        setUploading(false);
-        return;
-      }
+      setUploadProgress({
+        total: fileArray.length,
+        current: 0,
+        currentFile: fileArray[0]?.name || "",
+        succeeded: 0,
+        failed: 0,
+      });
 
       const firmId = await getMyFirmId();
-
       const usageCheck = await checkReceiptUploadLimit(firmId);
       
       if (!usageCheck.canUpload) {
         alert(usageCheck.message || "Upload limit reached");
+        setUploading(false);
+        setUploadProgress(null);
         return;
       }
 
@@ -104,51 +116,82 @@ export default function DashboardHomePage() {
 
       if (!clients || clients.length === 0) {
         alert("Please add a client first");
+        setUploading(false);
+        setUploadProgress(null);
         return;
       }
 
-      // Get current user ID
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
-
       const client = clients[0];
 
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("firmId", firmId);
-      formData.append("clientId", client.id);
-      if (userId) {
-        formData.append("userId", userId); // Pass user ID to API
+      let succeeded = 0;
+      let failed = 0;
+
+      // Upload files sequentially
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        
+        setUploadProgress({
+          total: fileArray.length,
+          current: i + 1,
+          currentFile: file.name,
+          succeeded,
+          failed,
+        });
+
+        try {
+          // Convert HEIC if needed
+          let uploadFile = file;
+          try {
+            uploadFile = await convertHeicToJpg(file);
+          } catch (conversionError) {
+            console.error('HEIC conversion failed for', file.name, conversionError);
+            failed++;
+            continue; // Skip this file, continue with others
+          }
+
+          const formData = new FormData();
+          formData.append("file", uploadFile);
+          formData.append("firmId", firmId);
+          formData.append("clientId", client.id);
+          if (userId) {
+            formData.append("userId", userId);
+          }
+
+          const response = await fetch("/api/upload-receipt", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Upload failed for ${file.name}`);
+          }
+
+          succeeded++;
+        } catch (err: any) {
+          console.error(`Failed to upload ${file.name}:`, err);
+          failed++;
+          // Continue with next file instead of stopping
+        }
       }
 
-      const response = await fetch("/api/upload-receipt", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Upload failed");
+      // Show summary
+      if (failed === 0) {
+        alert(`✅ All ${succeeded} receipts uploaded successfully!`);
+      } else if (succeeded === 0) {
+        alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
+      } else {
+        alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
       }
 
-      let result;
-      try {
-        result = await response.json();
-      } catch (e) {
-        console.warn("Response was not JSON, but upload may have succeeded");
-        alert("✅ Receipt uploaded successfully!");
-        loadStats();
-        setRefreshKey(prev => prev + 1);
-        return;
-      }
-
-      alert("✅ Receipt uploaded successfully!");
       loadStats();
       setRefreshKey(prev => prev + 1);
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      alert("Upload process failed: " + err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -159,9 +202,9 @@ export default function DashboardHomePage() {
       {/* Upload Hero Section */}
       <div className="bg-gradient-to-br from-black to-gray-800 rounded-xl p-6 mb-8 text-white">
         <div className="max-w-xl">
-          <h2 className="text-xl font-bold mb-2">Upload Receipt</h2>
+          <h2 className="text-xl font-bold mb-2">Upload Receipts</h2>
           <p className="text-gray-300 mb-6">
-            Drag and drop a receipt image or PDF, and our AI will extract all the details automatically.
+            Select one or multiple receipts to upload. Our AI will extract all the details automatically.
           </p>
           
           <label
@@ -174,20 +217,46 @@ export default function DashboardHomePage() {
               type="file"
               id="hero-upload"
               accept="image/*,application/pdf,.heic,.heif"
+              multiple
               className="hidden"
               disabled={uploading}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUpload(file);
-              }}
+              onChange={(e) => handleMultipleFiles(e.target.files)}
             />
-            <div className="text-4xl mb-3">{uploading ? "⏳" : "📸"}</div>
-            <div className="text-lg font-semibold mb-2">
-              {uploading ? "Uploading..." : "Click to upload or drag here"}
-            </div>
-            <div className="text-sm text-gray-300">
-              Supports JPG, PNG, PDF, HEIC
-            </div>
+            
+            {uploading && uploadProgress ? (
+              // Progress indicator
+              <div className="space-y-3">
+                <div className="text-4xl mb-3">⏳</div>
+                <div className="text-lg font-semibold">
+                  Uploading {uploadProgress.current} of {uploadProgress.total}
+                </div>
+                <div className="text-sm text-gray-300">
+                  {uploadProgress.currentFile}
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
+                  <div
+                    className="bg-white h-2 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                    }}
+                  />
+                </div>
+                <div className="text-xs text-gray-400 mt-2">
+                  ✅ {uploadProgress.succeeded} succeeded • ❌ {uploadProgress.failed} failed
+                </div>
+              </div>
+            ) : (
+              // Default state
+              <>
+                <div className="text-4xl mb-3">📸</div>
+                <div className="text-lg font-semibold mb-2">
+                  Click to upload or drag here
+                </div>
+                <div className="text-sm text-gray-300">
+                  Supports JPG, PNG, PDF, HEIC • Select multiple files
+                </div>
+              </>
+            )}
           </label>
         </div>
       </div>
