@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import UploadFab from "@/components/UploadFab";
-import NotificationBell from "@/components/NotificationBell";  // ADD THIS
+import NotificationBell from "@/components/NotificationBell";
 
 export default function DashboardLayout({
   children,
@@ -23,25 +23,25 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
       {/* Sidebar */}
       <aside
-        className={`bg-white border-r border-gray-200 transition-all duration-300 ${
+        className={`bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border transition-all duration-300 ${
           sidebarOpen ? "w-64" : "w-20"
         }`}
       >
         <div className="h-full flex flex-col">
           {/* Logo/Brand */}
-          <div className="p-6 border-b border-gray-200">
+          <div className="p-6 border-b border-gray-200 dark:border-dark-border">
             <div className="flex items-center justify-between">
               {sidebarOpen ? (
-                <h1 className="text-xl font-bold text-gray-900">ReceiptAI</h1>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">ReceiptAI</h1>
               ) : (
                 <span className="text-2xl">📱</span>
               )}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               >
                 {sidebarOpen ? "←" : "→"}
               </button>
@@ -61,8 +61,8 @@ export default function DashboardLayout({
                       href={item.href}
                       className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                         isActive
-                          ? "bg-black text-white"
-                          : "text-gray-700 hover:bg-gray-100"
+                          ? "bg-accent-500 text-white"
+                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
                       }`}
                     >
                       <span className="text-xl">{item.icon}</span>
@@ -77,10 +77,10 @@ export default function DashboardLayout({
           </nav>
 
           {/* User Menu */}
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-gray-200 dark:border-dark-border">
             <Link
               href="/dashboard/settings"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
             >
               <span className="text-xl">⚙️</span>
               {sidebarOpen && <span className="font-medium">Settings</span>}

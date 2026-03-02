@@ -598,24 +598,24 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
     subtotalCents == null ? "—" : `$${(subtotalCents / 100).toFixed(2)} CAD`;
 
   return (
-    <main className="min-h-screen p-8">
+    <main className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-5xl mx-auto">
-        <a href="/dashboard/receipts" className="text-sm underline">
+        <a href="/dashboard/receipts" className="text-sm underline text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
           ← Back to receipts
         </a>
 
         <div className="mt-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               {receipt.vendor || "Unknown vendor"}
             </h1>
-            <div className="text-sm text-gray-500 mt-1">
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Date: {receipt.receipt_date || "—"} • Status: {receipt.status} • Amount:{" "}
-              <span className="font-medium text-gray-800">{amountText}</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{amountText}</span>
             </div>
           </div>
 
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 ">
             Created: {new Date(receipt.created_at).toLocaleString()}
           </div>
         </div>
@@ -635,11 +635,11 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900 mb-1">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
                       {flag.flag_type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                     </div>
-                    <p className="text-sm text-gray-700">{flag.message}</p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{flag.message}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {new Date(flag.created_at).toLocaleString()}
                     </p>
                   </div>
@@ -655,7 +655,7 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
                     <button
                       onClick={() => resolveFlag(flag.id)}
                       disabled={resolvingFlagId === flag.id}
-                      className="text-sm text-gray-600 hover:text-gray-800 underline"
+                      className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 underline"
                     >
                       {resolvingFlagId === flag.id ? "..." : "Resolve"}
                     </button>
@@ -667,8 +667,8 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
         )}
 
         {receipt.purpose_text && (
-          <div className="mt-4 rounded-2xl border p-6">
-            <div className="text-sm text-gray-500">Purpose</div>
+          <div className="mt-4 rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface p-6">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Purpose</div>
 
             <div className="mt-1 text-base">
               {receipt.purpose_text}
@@ -695,9 +695,9 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
 <div className="lg:col-span-2 rounded-2xl border overflow-hidden">
-  <div className="p-4 border-b">
+  <div className="p-4 border-b border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface">
     <div className="flex items-center justify-between mb-3">
-      <div className="text-sm font-medium">Receipt preview</div>
+      <div className="text-sm font-medium text-gray-900 dark:text-white">Receipt preview</div>
       
       <button
         onClick={() => {
@@ -721,10 +721,10 @@ link.download = activePreviewType === 'pdf'
     <div className="flex gap-2">
       <button
         onClick={() => setActivePreviewType('image')}
-        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        className={`px-4 py-2 rounded-lg text-sm font-medium text-gray-900 dark:text-white transition-colors ${
           activePreviewType === 'image'
             ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            : 'bg-gray-100 dark:bg-dark-border text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
         }`}
       >
         Receipt Image
@@ -733,10 +733,10 @@ link.download = activePreviewType === 'pdf'
       {splitPdfUrl && (
         <button
           onClick={() => setActivePreviewType('pdf')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg text-sm font-medium text-gray-900 dark:text-white transition-colors ${
             activePreviewType === 'pdf'
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-gray-100 dark:bg-dark-border text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover'
           }`}
         >
           📄 Split Documentation
@@ -761,7 +761,7 @@ link.download = activePreviewType === 'pdf'
 
   <div className="p-4">
     {previewLoading ? (
-      <div className="text-sm text-gray-600">Loading preview...</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">Loading preview...</div>
     ) : activePreviewType === 'pdf' && splitPdfUrl ? (
       <div className="w-full">
         <iframe
@@ -801,59 +801,59 @@ link.download = activePreviewType === 'pdf'
         </div>
       </div>
     ) : !receipt.file_path && !files.length && !splitPdfUrl ? (
-      <div className="text-sm text-gray-600">
+      <div className="text-sm text-gray-600 dark:text-gray-400">
         No file attached yet (this can happen with sample rows).
       </div>
     ) : (
-      <div className="text-sm text-gray-600">No preview available.</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">No preview available.</div>
     )}
   </div>
 </div>
 
           <div className="space-y-6">
-            <div className="rounded-2xl border overflow-hidden">
-              <div className="p-4 border-b font-medium">Details</div>
+            <div className="rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface overflow-hidden">
+              <div className="p-4 border-b border-gray-200 dark:border-dark-border font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-surface">Details</div>
 
               <div className="p-4 space-y-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Vendor</span>
-                  <span className="font-medium">{receipt.vendor || "—"}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Vendor</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{receipt.vendor || "—"}</span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Receipt date</span>
-                  <span className="font-medium">{receipt.receipt_date || "—"}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Receipt date</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{receipt.receipt_date || "—"}</span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Total</span>
-                  <span className="font-medium">{amountText}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Total</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{amountText}</span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-500">Status</span>
-                  <span className="font-medium">{receipt.status}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Status</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{receipt.status}</span>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border overflow-hidden">
-              <div className="p-4 border-b font-medium">Digital receipt</div>
+            <div className="rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface overflow-hidden">
+              <div className="p-4 border-b border-gray-200 dark:border-dark-border font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-surface">Digital receipt</div>
 
               <div className="p-4 space-y-4 text-sm">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="text-gray-500">Subtotal</div>
-                  <div className="text-right">{subtotalText}</div>
+                  <div className="text-gray-500 dark:text-gray-400">Subtotal</div>
+                  <div className="text-right text-gray-900 dark:text-white">{subtotalText}</div>
 
-                  <div className="text-gray-500">Taxes</div>
-                  <div className="text-right">{taxText}</div>
+                  <div className="text-gray-500 dark:text-gray-400">Taxes</div>
+                  <div className="text-right text-gray-900 dark:text-white">{taxText}</div>
 
-                  <div className="font-medium">Total</div>
-                  <div className="text-right font-medium">{amountText}</div>
+                  <div className="font-medium text-gray-900 dark:text-white">Total</div>
+                  <div className="text-right font-medium text-gray-900 dark:text-white">{amountText}</div>
                 </div>
 
                 <div className="border-b pb-6">
-                  <div className="text-sm font-medium text-gray-700 mb-3">Expense Category</div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Expense Category</div>
 
                   {receipt.approved_category ? (
                     <div className="space-y-3">
@@ -875,7 +875,7 @@ link.download = activePreviewType === 'pdf'
                             setReceipt((prev) => prev ? { ...prev, approved_category: null } : prev);
                           }
                         }}
-                        className="text-sm text-gray-600 underline hover:text-gray-800"
+                        className="text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800"
                       >
                         Change category
                       </button>
@@ -883,21 +883,21 @@ link.download = activePreviewType === 'pdf'
                   ) : receipt.suggested_category && receipt.category_confidence ? (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium text-gray-900 dark:text-white ${
                           receipt.category_confidence >= 80
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {receipt.category_confidence >= 80 ? '→' : '⚠'} Suggested: {receipt.suggested_category}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {receipt.category_confidence}% confidence
                         </span>
                       </div>
 
                       {receipt.category_reasoning && (
-                        <div className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3">
-                          <span className="font-medium">Reasoning:</span> {receipt.category_reasoning}
+                        <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-dark-hover rounded-lg p-3">
+                          <span className="font-medium text-gray-900 dark:text-white">Reasoning:</span> {receipt.category_reasoning}
                         </div>
                       )}
 
@@ -948,7 +948,7 @@ link.download = activePreviewType === 'pdf'
                                 }
                               });
                           }}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                          className="rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover"
                         >
                           Change Category
                         </button>
@@ -956,7 +956,7 @@ link.download = activePreviewType === 'pdf'
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="text-sm text-gray-500 bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 bg-yellow-50 rounded-lg p-3 border border-yellow-200">
                         ⚠ Unable to auto-categorize. Please add vendor and purpose information.
                       </div>
 
@@ -980,7 +980,7 @@ link.download = activePreviewType === 'pdf'
                               }
                             });
                         }}
-                        className="rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800"
+                        className="rounded-lg bg-accent-500 text-white px-4 py-2 text-sm font-medium hover:bg-accent-600"
                       >
                         Manually Set Category
                       </button>
@@ -1009,7 +1009,7 @@ link.download = activePreviewType === 'pdf'
                             setErr(e.message);
                           }
                         }}
-                        className="mt-3 text-xs text-gray-500 underline"
+                        className="mt-3 text-xs text-gray-500 dark:text-gray-400 underline"
                       >
                         🔄 Re-run categorization (test)
                       </button>
@@ -1019,28 +1019,28 @@ link.download = activePreviewType === 'pdf'
 
 <div className="pt-4 border-t">
   <div className="flex items-center justify-between mb-3">
-    <div className="text-xs font-medium text-gray-500">Line Items</div>
+    <div className="text-xs font-medium text-gray-900 dark:text-white">Line Items</div>
     
     <div className="flex gap-2">
       {/* View Toggle */}
       {items.length > 0 && (
-        <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+        <div className="flex rounded-lg border border-gray-300 dark:border-dark-border overflow-hidden">
           <button
             onClick={() => setLineItemsView('table')}
-            className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-white transition-colors ${
               lineItemsView === 'table'
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-accent-500 text-white'
+                : 'bg-white dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-dark-hover'
             }`}
           >
             📋 Table
           </button>
           <button
             onClick={() => setLineItemsView('card')}
-            className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-white transition-colors ${
               lineItemsView === 'card'
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
+                ? 'bg-accent-500 text-white'
+                : 'bg-white dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-dark-hover'
             }`}
           >
             📄 Cards
@@ -1060,7 +1060,7 @@ link.download = activePreviewType === 'pdf'
           setItems([...items, newItem]);
           setLineItemsView('table'); // Switch to table when adding
         }}
-        className="text-sm rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 font-medium"
+        className="text-sm rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 hover:bg-gray-50 dark:bg-dark-hover font-medium"
       >
         + Add Item
       </button>
@@ -1068,7 +1068,7 @@ link.download = activePreviewType === 'pdf'
   </div>
 
   {items.length === 0 ? (
-    <div className="text-sm text-gray-500 bg-gray-50 rounded-lg p-4 text-center">
+    <div className="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-hover rounded-lg p-4 text-center">
       No line items yet. Click "Add Item" to add one.
     </div>
   ) : lineItemsView === 'card' ? (
@@ -1078,19 +1078,19 @@ link.download = activePreviewType === 'pdf'
         {items.map((item, idx) => (
           <div
             key={`${item.id}-${idx}`}
-            className="border rounded-lg p-4 bg-white hover:bg-gray-50 transition-colors"
+            className="border rounded-lg p-4 bg-white dark:bg-dark-surface hover:bg-gray-50 dark:bg-dark-hover transition-colors"
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <div className="font-medium text-gray-900 mb-1">
+                <div className="font-medium text-gray-900 dark:text-white mb-1">
                   {item.description || "Untitled Item"}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   Qty: {item.quantity || 1} × ${((item.unit_price_cents || 0) / 100).toFixed(2)}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xl font-bold text-gray-900">
+                <div className="text-xl font-bold text-gray-900 dark:text-white">
                   ${((item.total_cents || 0) / 100).toFixed(2)}
                 </div>
               </div>
@@ -1102,8 +1102,8 @@ link.download = activePreviewType === 'pdf'
       {/* Summary in card view */}
       <div className="border-t pt-3 mt-3">
         <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-gray-700">Items Subtotal:</span>
-          <span className="text-lg font-bold text-gray-900">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Items Subtotal:</span>
+          <span className="text-lg font-bold text-gray-900 dark:text-white">
             ${(items.reduce((sum, item) => sum + (item.total_cents || 0), 0) / 100).toFixed(2)}
           </span>
         </div>
@@ -1111,7 +1111,7 @@ link.download = activePreviewType === 'pdf'
 
       <button
         onClick={() => setLineItemsView('table')}
-        className="w-full mt-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+        className="w-full mt-2 rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover"
       >
         ✏️ Edit Items
       </button>
@@ -1121,30 +1121,30 @@ link.download = activePreviewType === 'pdf'
     <div className="space-y-3">
       <div className="overflow-x-auto border rounded-lg">
         <table className="w-full">
-          <thead className="bg-gray-100 border-b-2">
+          <thead className="bg-gray-100 dark:bg-dark-border border-b-2">
             <tr>
-              <th className="text-left py-4 px-4 font-semibold text-gray-900 text-base">
+              <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-white text-base">
                 Description
               </th>
-              <th className="text-center py-4 px-4 font-semibold text-gray-900 text-base w-32">
+              <th className="text-center py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-32">
                 Qty
               </th>
-              <th className="text-right py-4 px-4 font-semibold text-gray-900 text-base w-40">
+              <th className="text-right py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-40">
                 Unit Price
               </th>
-              <th className="text-right py-4 px-4 font-semibold text-gray-900 text-base w-40">
+              <th className="text-right py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-40">
                 Total
               </th>
               <th className="w-20"></th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-gray-200 dark:divide-dark-border">
             {items.map((item, idx) => (
               <tr key={`${item.id}-${idx}`}>
                 <td className="py-4 px-4">
                   <input
                     type="text"
-                    className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-lg text-gray-900 font-medium"
+                    className="w-full rounded-lg border-2 border-gray-300 dark:border-dark-border bg-white dark:bg-dark-surface text-gray-900 dark:text-whitedark:border-dark-border px-4 py-3 text-lg text-gray-900 dark:text-white font-medium"
                     value={item.description || ""}
                     onChange={(e) => {
                       const updated = [...items];
@@ -1164,11 +1164,11 @@ link.download = activePreviewType === 'pdf'
                         updated[idx].total_cents = newQty * (updated[idx].unit_price_cents ?? 0);
                         setItems(updated);
                       }}
-                      className="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center font-bold text-gray-700"
+                      className="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center font-bold text-gray-700 dark:text-gray-300"
                     >
                       −
                     </button>
-                    <span className="text-xl font-bold text-gray-900 w-12 text-center">
+                    <span className="text-xl font-bold text-gray-900 dark:text-white w-12 text-center">
                       {item.quantity ?? 1}
                     </span>
                     <button
@@ -1179,7 +1179,7 @@ link.download = activePreviewType === 'pdf'
                         updated[idx].total_cents = newQty * (updated[idx].unit_price_cents ?? 0);
                         setItems(updated);
                       }}
-                      className="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center font-bold text-gray-700"
+                      className="w-8 h-8 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center font-bold text-gray-700 dark:text-gray-300"
                     >
                       +
                     </button>
@@ -1187,10 +1187,10 @@ link.download = activePreviewType === 'pdf'
                 </td>
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-900 text-xl font-bold">$</span>
+                    <span className="text-gray-900 dark:text-white text-xl font-bold">$</span>
                     <input
                       type="text"
-                      className="flex-1 rounded-lg border-2 border-gray-300 px-4 py-3 text-xl text-right text-gray-900 font-bold"
+                      className="flex-1 rounded-lg border-2 border-gray-300 dark:border-dark-border px-4 py-3 text-xl text-right text-gray-900 dark:text-white font-bold"
                       defaultValue={((item.unit_price_cents ?? 0) / 100).toFixed(2)}
                       onBlur={(e) => {
                         const updated = [...items];
@@ -1205,7 +1205,7 @@ link.download = activePreviewType === 'pdf'
                   </div>
                 </td>
                 <td className="py-4 px-4 text-right">
-                  <span className="text-2xl font-bold text-gray-900">
+                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
                     ${((item.total_cents ?? 0) / 100).toFixed(2)}
                   </span>
                 </td>
@@ -1261,7 +1261,7 @@ link.download = activePreviewType === 'pdf'
             setErr(e.message || "Failed to save items");
           }
         }}
-        className="rounded-lg bg-black text-white px-6 py-2 font-medium text-sm hover:bg-gray-800"
+        className="rounded-lg bg-accent-500 text-white px-6 py-2 font-medium text-sm hover:bg-accent-600"
       >
         Save Items
       </button>
@@ -1271,14 +1271,14 @@ link.download = activePreviewType === 'pdf'
 
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-medium text-gray-500">Purpose of expense</div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400">Purpose of expense</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400">
                       Source: {receipt.purpose_source || "—"}
                     </div>
                   </div>
 
                   <textarea
-                    className="w-full rounded-xl border p-3 text-sm"
+                    className="w-full rounded-xl border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-surface text-gray-900 dark:text-white p-3 text-sm"
                     rows={3}
                     placeholder="Example: Lunch meeting with client to discuss project scope."
                     value={purposeDraft}
@@ -1288,7 +1288,7 @@ link.download = activePreviewType === 'pdf'
                   <div className="mt-2 flex gap-2">
                     <button
                       disabled={savingPurpose}
-                      className="rounded-xl bg-black text-white px-4 py-2 text-sm disabled:opacity-60"
+                      className="rounded-xl bg-accent-500 text-white px-4 py-2 text-sm disabled:opacity-60"
                       onClick={async () => {
                         try {
                           setSavingPurpose(true);
@@ -1373,22 +1373,22 @@ link.download = activePreviewType === 'pdf'
 
         {files.length > 0 && (
           <div className="mt-6 rounded-2xl border overflow-hidden">
-            <div className="p-4 border-b font-medium">
+            <div className="p-4 border-b border-gray-200 dark:border-dark-border font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-surface">
               Attached files ({files.length})
             </div>
-            <div className="divide-y">
+            <div className="divide-y divide-gray-200 dark:divide-dark-border">
               {files.map((f) => (
                 <button
                   key={f.id}
                   onClick={() => setActiveFileId(f.id)}
-                  className={`w-full text-left p-4 text-sm hover:bg-gray-50 ${
-                    activeFile?.id === f.id ? "bg-gray-50" : ""
+                  className={`w-full text-left p-4 text-sm hover:bg-gray-50 dark:hover:bg-dark-hover ${
+                    activeFile?.id === f.id ? "bg-gray-50 dark:bg-dark-hover" : ""
                   }`}
                 >
                   <div className="font-medium">
                     {f.original_filename || "file"}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     {f.mime_type || "unknown type"}
                     {f.created_at ? ` • ${new Date(f.created_at).toLocaleString()}` : ""}
                   </div>

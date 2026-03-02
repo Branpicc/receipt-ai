@@ -37,7 +37,6 @@ export default function UsageStats() {
     try {
       const firmId = await getMyFirmId();
       
-      // Get firm subscription info
       const { data: firm, error } = await supabase
         .from('firms')
         .select('subscription_plan, subscription_status')
@@ -50,9 +49,7 @@ export default function UsageStats() {
         return;
       }
 
-      // If no active PAID subscription, use free plan
       if (!firm?.subscription_plan || (firm.subscription_plan !== 'free' && firm?.subscription_status !== 'active')) {
-        // Check current usage for free plan
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
@@ -82,7 +79,6 @@ export default function UsageStats() {
       const plan = firm.subscription_plan;
       const planLimits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
 
-      // Get current month's receipt count
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
@@ -121,17 +117,17 @@ export default function UsageStats() {
     <div
       className={`rounded-2xl border p-6 ${
         stats.isOverLimit
-          ? "border-red-200 bg-red-50"
+          ? "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20"
           : stats.isNearLimit
-          ? "border-yellow-200 bg-yellow-50"
-          : "border-gray-200 bg-white"
+          ? "border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-900/20"
+          : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"
       }`}
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Monthly Usage</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Monthly Usage</h3>
         <Link
           href="/dashboard/billing"
-          className="text-sm text-gray-600 hover:text-gray-900 underline"
+          className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline"
         >
           View Plans
         </Link>
@@ -139,30 +135,30 @@ export default function UsageStats() {
 
       <div className="space-y-3">
         <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-gray-900">
+          <span className="text-3xl font-bold text-gray-900 dark:text-white">
             {stats.currentCount}
           </span>
-          <span className="text-gray-500">
+          <span className="text-gray-500 dark:text-gray-400">
             / {stats.limit === -1 ? "∞" : stats.limit} receipts
           </span>
         </div>
 
         {stats.limit !== -1 && (
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2">
             <div
               className={`h-2 rounded-full transition-all ${
                 stats.isOverLimit
-                  ? "bg-red-600"
+                  ? "bg-red-600 dark:bg-red-500"
                   : stats.isNearLimit
-                  ? "bg-yellow-500"
-                  : "bg-green-600"
+                  ? "bg-yellow-500 dark:bg-yellow-400"
+                  : "bg-green-600 dark:bg-green-500"
               }`}
               style={{ width: `${Math.min(stats.percentage, 100)}%` }}
             />
           </div>
         )}
 
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           <span className="capitalize">{stats.plan === 'free' ? 'Free' : stats.plan}</span> plan •{" "}
           {stats.limit === -1
             ? "Unlimited receipts"
@@ -170,13 +166,13 @@ export default function UsageStats() {
         </p>
 
         {stats.isOverLimit && stats.plan === 'free' && (
-          <div className="pt-3 border-t border-red-200">
-            <p className="text-sm text-red-800 font-medium mb-2">
+          <div className="pt-3 border-t border-red-200 dark:border-red-900">
+            <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">
               ⚠️ You've used all your free receipts this month
             </p>
             <Link
               href="/dashboard/billing"
-              className="inline-block px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+              className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
             >
               Upgrade to Continue
             </Link>
@@ -184,13 +180,13 @@ export default function UsageStats() {
         )}
 
         {stats.isOverLimit && (
-          <div className="pt-3 border-t border-red-200">
-            <p className="text-sm text-red-800 font-medium mb-2">
+          <div className="pt-3 border-t border-red-200 dark:border-red-900">
+            <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">
               ⚠️ You've reached your monthly limit
             </p>
             <Link
               href="/dashboard/billing"
-              className="inline-block px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+              className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
             >
               Upgrade Plan
             </Link>
@@ -198,8 +194,8 @@ export default function UsageStats() {
         )}
 
         {stats.isNearLimit && !stats.isOverLimit && (
-          <div className="pt-3 border-t border-yellow-200">
-            <p className="text-sm text-yellow-800">
+          <div className="pt-3 border-t border-yellow-200 dark:border-yellow-900">
+            <p className="text-sm text-yellow-800 dark:text-yellow-300">
               You're at {stats.percentage}% of your monthly limit
             </p>
           </div>

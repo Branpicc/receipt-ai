@@ -128,7 +128,6 @@ export default function DashboardHomePage() {
       let succeeded = 0;
       let failed = 0;
 
-      // Upload files sequentially
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
         
@@ -141,14 +140,13 @@ export default function DashboardHomePage() {
         });
 
         try {
-          // Convert HEIC if needed
           let uploadFile = file;
           try {
             uploadFile = await convertHeicToJpg(file);
           } catch (conversionError) {
             console.error('HEIC conversion failed for', file.name, conversionError);
             failed++;
-            continue; // Skip this file, continue with others
+            continue;
           }
 
           const formData = new FormData();
@@ -172,11 +170,9 @@ export default function DashboardHomePage() {
         } catch (err: any) {
           console.error(`Failed to upload ${file.name}:`, err);
           failed++;
-          // Continue with next file instead of stopping
         }
       }
 
-      // Show summary
       if (failed === 0) {
         alert(`✅ All ${succeeded} receipts uploaded successfully!`);
       } else if (succeeded === 0) {
@@ -197,19 +193,19 @@ export default function DashboardHomePage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Dashboard</h1>
 
       {/* Upload Hero Section */}
-      <div className="bg-gradient-to-br from-black to-gray-800 rounded-xl p-6 mb-8 text-white">
+      <div className="bg-gradient-to-br from-accent-600 to-accent-800 dark:from-accent-500 dark:to-accent-700 rounded-xl p-6 mb-8 text-white shadow-lg">
         <div className="max-w-xl">
           <h2 className="text-xl font-bold mb-2">Upload Receipts</h2>
-          <p className="text-gray-300 mb-6">
+          <p className="text-accent-50 mb-6">
             Select one or multiple receipts to upload. Our AI will extract all the details automatically.
           </p>
           
           <label
             htmlFor="hero-upload"
-            className={`block border-2 border-dashed border-gray-400 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all ${
+            className={`block border-2 border-dashed border-accent-200 dark:border-accent-300 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all ${
               uploading ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
@@ -224,16 +220,15 @@ export default function DashboardHomePage() {
             />
             
             {uploading && uploadProgress ? (
-              // Progress indicator
               <div className="space-y-3">
                 <div className="text-4xl mb-3">⏳</div>
                 <div className="text-lg font-semibold">
                   Uploading {uploadProgress.current} of {uploadProgress.total}
                 </div>
-                <div className="text-sm text-gray-300">
+                <div className="text-sm text-accent-100">
                   {uploadProgress.currentFile}
                 </div>
-                <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
+                <div className="w-full bg-accent-700 rounded-full h-2 mt-3">
                   <div
                     className="bg-white h-2 rounded-full transition-all duration-300"
                     style={{
@@ -241,18 +236,17 @@ export default function DashboardHomePage() {
                     }}
                   />
                 </div>
-                <div className="text-xs text-gray-400 mt-2">
+                <div className="text-xs text-accent-100 mt-2">
                   ✅ {uploadProgress.succeeded} succeeded • ❌ {uploadProgress.failed} failed
                 </div>
               </div>
             ) : (
-              // Default state
               <>
                 <div className="text-4xl mb-3">📸</div>
                 <div className="text-lg font-semibold mb-2">
                   Click to upload or drag here
                 </div>
-                <div className="text-sm text-gray-300">
+                <div className="text-sm text-accent-100">
                   Supports JPG, PNG, PDF, HEIC • Select multiple files
                 </div>
               </>
@@ -263,69 +257,69 @@ export default function DashboardHomePage() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Link href="/dashboard/receipts" className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
-          <div className="text-sm text-gray-500 mb-1">Total Receipts</div>
-          <div className="text-3xl font-bold text-gray-900">{stats.totalReceipts}</div>
+        <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Receipts</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalReceipts}</div>
         </Link>
         
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="text-sm text-gray-500 mb-1">This Month</div>
-          <div className="text-3xl font-bold text-gray-900">{stats.thisMonth}</div>
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">This Month</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.thisMonth}</div>
         </div>
         
-        <Link href="/dashboard/receipts?status=needs_review" className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
-          <div className="text-sm text-gray-500 mb-1">Needs Review</div>
-          <div className="text-3xl font-bold text-orange-600">{stats.pendingReview}</div>
+        <Link href="/dashboard/receipts?status=needs_review" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Needs Review</div>
+          <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">{stats.pendingReview}</div>
         </Link>
 
         <UsageStats key={refreshKey} />
       </div>
 
       {/* Quick Links */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+      <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/dashboard/receipts"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
           >
             <span className="text-2xl">📁</span>
             <div>
-              <div className="font-medium text-gray-900">View All Receipts</div>
-              <div className="text-sm text-gray-500">Manage and categorize</div>
+              <div className="font-medium text-gray-900 dark:text-white">View All Receipts</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Manage and categorize</div>
             </div>
           </Link>
           
           <Link
             href="/dashboard/email-inbox"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
           >
             <span className="text-2xl">📧</span>
             <div>
-              <div className="font-medium text-gray-900">Email Inbox</div>
-              <div className="text-sm text-gray-500">Review emailed receipts</div>
+              <div className="font-medium text-gray-900 dark:text-white">Email Inbox</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Review emailed receipts</div>
             </div>
           </Link>
           
           <Link
             href="/dashboard/category-dashboard"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
           >
             <span className="text-2xl">📊</span>
             <div>
-              <div className="font-medium text-gray-900">Categories</div>
-              <div className="text-sm text-gray-500">View by expense type</div>
+              <div className="font-medium text-gray-900 dark:text-white">Categories</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">View by expense type</div>
             </div>
           </Link>
           
           <Link
             href="/dashboard/tax-codes"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
           >
             <span className="text-2xl">🧾</span>
             <div>
-              <div className="font-medium text-gray-900">Tax Codes</div>
-              <div className="text-sm text-gray-500">T2125 summary</div>
+              <div className="font-medium text-gray-900 dark:text-white">Tax Codes</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">T2125 summary</div>
             </div>
           </Link>
         </div>
