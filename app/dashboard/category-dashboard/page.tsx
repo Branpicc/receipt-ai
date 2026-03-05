@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import Link from "next/link";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
 type CategorySummary = {
   category: string;
@@ -22,9 +23,40 @@ type Receipt = {
   purpose_text: string | null;
 };
 
+type CategoryBudget = {
+  id: string;
+  category: string;
+  monthly_budget_cents: number;
+};
+
+type BudgetComparison = {
+  category: string;
+  budget_cents: number;
+  spent_cents: number;
+  remaining_cents: number;
+  percentage: number;
+  isOverBudget: boolean;
+  color: string;
+};
+
+const CHART_COLORS = [
+  "#3b82f6", // blue
+  "#10b981", // green
+  "#f59e0b", // amber
+  "#8b5cf6", // purple
+  "#ec4899", // pink
+  "#14b8a6", // teal
+  "#f97316", // orange
+  "#06b6d4", // cyan
+  "#84cc16", // lime
+  "#a855f7", // violet
+  "#ef4444", // red - only used if you have 11+ categories
+];
+
 export default function CategoryDashboardPage() {
   const [summaries, setSummaries] = useState<CategorySummary[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [budgets, setBudgets] = useState<CategoryBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<"all" | "month" | "quarter" | "year">("month");
@@ -49,6 +81,14 @@ export default function CategoryDashboardPage() {
       } else if (dateRange === "year") {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
+
+      // Load budgets
+      const { data: budgetsData } = await supabase
+        .from("category_budgets")
+        .select("*")
+        .eq("firm_id", firmId);
+      
+      setBudgets(budgetsData || []);
 
       let query = supabase
         .from("receipts")
@@ -118,11 +158,46 @@ export default function CategoryDashboardPage() {
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
   const totalCount = summaries.reduce((sum, s) => sum + s.count, 0);
 
+  // Calculate budget comparisons (only for current month)
+  const budgetComparisons: BudgetComparison[] = budgets
+    .map((budget, index) => {
+      const summary = summaries.find(s => s.category === budget.category);
+      const spent_cents = summary?.total_cents || 0;
+      const remaining_cents = budget.monthly_budget_cents - spent_cents;
+      const percentage = budget.monthly_budget_cents > 0 
+        ? Math.round((spent_cents / budget.monthly_budget_cents) * 100)
+        : 0;
+      const isOverBudget = spent_cents > budget.monthly_budget_cents;
+
+      return {
+        category: budget.category,
+        budget_cents: budget.monthly_budget_cents,
+        spent_cents,
+        remaining_cents,
+        percentage,
+        isOverBudget,
+        color: CHART_COLORS[index % CHART_COLORS.length],
+      };
+    })
+    .filter(bc => bc.budget_cents > 0)
+    .sort((a, b) => b.percentage - a.percentage);
+
+  // Prepare pie chart data
+  const pieData = budgetComparisons.map(bc => ({
+    name: bc.category,
+    value: bc.spent_cents / 100,
+    budget: bc.budget_cents / 100,
+    percentage: bc.percentage,
+    isOverBudget: bc.isOverBudget,
+  }));
+
   const filteredReceipts = selectedCategory
     ? receipts.filter(r => 
         (r.approved_category || r.suggested_category || "Uncategorized") === selectedCategory
       )
     : [];
+
+  const showBudgetSection = dateRange === "month" && budgetComparisons.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
@@ -187,6 +262,147 @@ export default function CategoryDashboardPage() {
           </div>
         </div>
 
+        {/* Budget Pie Chart Section - Only show for "This Month" */}
+        {showBudgetSection && (
+          <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                💰 Monthly Budget vs Actual Spending
+              </h2>
+              <Link
+                href="/dashboard/budget-settings"
+                className="text-sm text-accent-600 dark:text-accent-400 hover:text-accent-700 dark:hover:text-accent-300 underline"
+              >
+                Edit Budgets →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Pie Chart */}
+              <div className="flex items-center justify-center">
+<ResponsiveContainer width="100%" height={300}>
+  <PieChart>
+<Pie
+  data={budgetComparisons.flatMap(bc => [
+    // Spent portion (bold category color)
+    {
+      name: bc.category,
+      value: Math.min(bc.spent_cents, bc.budget_cents) / 100,
+      color: bc.color,
+      isSpent: true,
+      fullData: bc,
+    },
+    // Remaining portion (grey with category-colored border)
+    {
+      name: `${bc.category} (remaining)`,
+      value: Math.max(0, bc.budget_cents - bc.spent_cents) / 100,
+      color: bc.color,
+      isSpent: false,
+      fullData: bc,
+    },
+  ])}
+  cx="50%"
+  cy="50%"
+  innerRadius={60}
+  outerRadius={100}
+  paddingAngle={0}
+  dataKey="value"
+>
+  {budgetComparisons.flatMap((bc, index) => [
+    <Cell 
+      key={`spent-${index}`}
+      fill={bc.color}
+      opacity={1}
+      stroke={bc.isOverBudget ? '#ef4444' : 'none'}
+      strokeWidth={bc.isOverBudget ? 3 : 0}
+    />,
+    <Cell 
+      key={`remaining-${index}`}
+      fill="#d1d5db" // Grey fill
+      opacity={0.8}
+      stroke={bc.color} // Category-colored border
+      strokeWidth={2}
+    />,
+  ])}
+</Pie>
+    
+    <Tooltip
+      content={({ active, payload }: { active?: boolean; payload?: readonly any[] }) => {
+        if (active && payload && payload.length) {
+          const data = payload[0].payload;
+          const bc = data.fullData;
+          
+          return (
+            <div className="bg-white dark:bg-dark-surface p-3 rounded-lg shadow-lg border border-gray-200 dark:border-dark-border">
+              <p className="font-semibold text-gray-900 dark:text-white">{bc.category}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Spent: ${(bc.spent_cents / 100).toFixed(2)}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Budget: ${(bc.budget_cents / 100).toFixed(2)}
+              </p>
+              <p className={`text-sm font-semibold ${bc.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                {bc.percentage}% {bc.isOverBudget ? 'over' : 'used'}
+              </p>
+            </div>
+          );
+        }
+        return null;
+      }}
+    />
+  </PieChart>
+</ResponsiveContainer>
+              </div>
+
+              {/* Budget List */}
+              <div className="space-y-3">
+                {budgetComparisons.map((bc) => (
+                  <div
+                    key={bc.category}
+                    className="p-3 rounded-lg bg-gray-50 dark:bg-dark-hover border border-gray-200 dark:border-dark-border"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: bc.isOverBudget ? '#ef4444' : bc.color }}
+                        />
+                        <span className="font-medium text-gray-900 dark:text-white text-sm">
+                          {bc.category}
+                        </span>
+                        {bc.isOverBudget && (
+                          <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded">
+                            ⚠️ Over
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        {bc.percentage}%
+                      </span>
+                    </div>
+                    
+                    <div className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                      <div
+                        className={`absolute top-0 left-0 h-2 rounded-full transition-all ${
+                          bc.isOverBudget 
+                            ? 'bg-red-600 dark:bg-red-500' 
+                            : 'bg-green-600 dark:bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(bc.percentage, 100)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                      <span>${(bc.spent_cents / 100).toFixed(2)} spent</span>
+                      <span>${(bc.budget_cents / 100).toFixed(2)} budget</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
@@ -227,36 +443,50 @@ export default function CategoryDashboardPage() {
                 Categories ({summaries.length})
               </h2>
               <div className="space-y-3">
-                {summaries.map((summary) => (
-                  <button
-                    key={summary.category}
-                    onClick={() => setSelectedCategory(
-                      selectedCategory === summary.category ? null : summary.category
-                    )}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                      selectedCategory === summary.category
-                        ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
-                        : "border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {summary.category}
-                      </span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {summary.count} receipt{summary.count !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Total: ${(summary.total_cents / 100).toFixed(2)}
-                      </span>
-                      <span className="text-gray-500 dark:text-gray-400">
-                        Tax: ${(summary.tax_cents / 100).toFixed(2)}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                {summaries.map((summary) => {
+                  const budgetComparison = budgetComparisons.find(bc => bc.category === summary.category);
+                  const isOverBudget = budgetComparison?.isOverBudget || false;
+
+                  return (
+                    <button
+                      key={summary.category}
+                      onClick={() => setSelectedCategory(
+                        selectedCategory === summary.category ? null : summary.category
+                      )}
+                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                        selectedCategory === summary.category
+                          ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
+                          : isOverBudget
+                          ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/10"
+                          : "border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {summary.category}
+                          </span>
+                          {isOverBudget && showBudgetSection && (
+                            <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded font-medium">
+                              ⚠️ Over Budget
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {summary.count} receipt{summary.count !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          Total: ${(summary.total_cents / 100).toFixed(2)}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Tax: ${(summary.tax_cents / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

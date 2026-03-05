@@ -36,7 +36,6 @@ export default function NotificationBell() {
   useEffect(() => {
     loadNotifications();
 
-    // Click outside to close
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -51,7 +50,6 @@ export default function NotificationBell() {
     try {
       const firmId = await getMyFirmId();
 
-      // Get recent notifications (last 50, unread first)
       const { data: notifs, error } = await supabase
         .from("notifications")
         .select("*")
@@ -65,7 +63,6 @@ export default function NotificationBell() {
       setNotifications((notifs as Notification[]) || []);
       setUnreadCount(notifs?.filter(n => !n.read).length || 0);
 
-      // Calculate summary
       const emailsCount = notifs?.filter(n => n.type === 'email_received' && !n.read).length || 0;
       const needsReviewCount = notifs?.filter(n => n.type === 'receipt_needs_review' && !n.read).length || 0;
       const flaggedCount = notifs?.filter(n => n.type === 'receipt_flagged' && !n.read).length || 0;
@@ -150,11 +147,11 @@ export default function NotificationBell() {
       {/* Bell Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
+        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
       >
         <span className="text-2xl">🔔</span>
         {hasUnread && (
-          <span className="absolute top-1 right-1 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="absolute top-1 right-1 bg-red-600 dark:bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -162,13 +159,13 @@ export default function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border z-50 max-h-[600px] overflow-hidden flex flex-col">
+        <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-dark-surface rounded-lg shadow-xl border border-gray-200 dark:border-dark-border z-50 max-h-[600px] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="p-4 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+          <div className="p-4 border-b border-gray-200 dark:border-dark-border flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               ✕
             </button>
@@ -176,9 +173,9 @@ export default function NotificationBell() {
 
           {/* Summary */}
           {hasSummary && (
-            <div className="p-4 bg-blue-50 border-b">
-              <div className="text-sm font-medium text-gray-900 mb-2">Since your last visit:</div>
-              <div className="space-y-1 text-sm text-gray-700">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
+              <div className="text-sm font-medium text-gray-900 dark:text-white mb-2">Since your last visit:</div>
+              <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                 {summary.emailsCount > 0 && (
                   <div>📧 {summary.emailsCount} emailed receipt{summary.emailsCount !== 1 ? 's' : ''} pending</div>
                 )}
@@ -195,11 +192,11 @@ export default function NotificationBell() {
           {/* Notifications List */}
           <div className="flex-1 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 text-sm">
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">
                 No notifications yet
               </div>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-gray-200 dark:divide-dark-border">
                 {notifications.map((notification) => (
                   <Link
                     key={notification.id}
@@ -208,27 +205,27 @@ export default function NotificationBell() {
                       markAsRead(notification.id);
                       setIsOpen(false);
                     }}
-                    className={`block p-4 hover:bg-gray-50 transition-colors ${
-                      !notification.read ? 'bg-blue-50' : ''
+                    className={`block p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors ${
+                      !notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">{getNotificationIcon(notification.type)}</span>
                       <div className="flex-1 min-w-0">
-                        <div className={`text-sm ${!notification.read ? 'font-semibold' : 'font-medium'} text-gray-900`}>
+                        <div className={`text-sm ${!notification.read ? 'font-semibold' : 'font-medium'} text-gray-900 dark:text-white`}>
                           {notification.title}
                         </div>
                         {notification.message && (
-                          <div className="text-sm text-gray-600 mt-1">
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             {notification.message}
                           </div>
                         )}
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                           {formatTimeAgo(notification.created_at)}
                         </div>
                       </div>
                       {!notification.read && (
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-1"></div>
+                        <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full mt-1"></div>
                       )}
                     </div>
                   </Link>
@@ -239,10 +236,10 @@ export default function NotificationBell() {
 
           {/* Footer */}
           {hasUnread && (
-            <div className="p-3 border-t bg-gray-50">
+            <div className="p-3 border-t border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-hover">
               <button
                 onClick={markAllAsRead}
-                className="w-full text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="w-full text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
               >
                 Mark all as read
               </button>

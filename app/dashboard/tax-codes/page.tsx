@@ -23,10 +23,22 @@ type TaxCodeSummary = {
   deductible_cents: number;
 };
 
+type CategoryBreakdown = {
+  category: string;
+  total_cents: number;
+  tax_cents: number;
+  deductible_cents: number;
+  deductible_percent: number;
+  receipt_count: number;
+  receipts: Receipt[];
+};
+
 export default function TaxCodesPage() {
   const [summaries, setSummaries] = useState<TaxCodeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<"all" | "month" | "quarter" | "year">("year");
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
 
   useEffect(() => {
     loadTaxCodes();
@@ -54,7 +66,6 @@ export default function TaxCodesPage() {
         .select("id, vendor, receipt_date, total_cents, approved_category, suggested_category")
         .eq("firm_id", firmId)
         .not("approved_category", "is", null)
-        .not("suggested_category", "is", null);
       
       if (startDate) {
         query = query.gte("receipt_date", startDate);
@@ -134,6 +145,33 @@ export default function TaxCodesPage() {
   const totalDeductible = summaries.reduce((sum, s) => sum + s.deductible_cents, 0);
   const totalAmount = summaries.reduce((sum, s) => sum + s.total_cents, 0);
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
+
+  // Group by category for breakdown
+  const categoryBreakdown: CategoryBreakdown[] = summaries.flatMap(summary => 
+    summary.taxCode.categories.map(category => {
+      const categoryReceipts = summary.receipts.filter(r => 
+        (r.approved_category || r.suggested_category) === category
+      );
+      
+      const categoryTotal = categoryReceipts.reduce((sum, r) => sum + (r.total_cents || 0), 0);
+      const categoryTax = categoryReceipts.reduce((sum, r) => {
+        // Get tax for this receipt from summary
+        const receiptTax = (summary.tax_cents / summary.receipts.length); // Approximate
+        return sum + receiptTax;
+      }, 0);
+      
+      return {
+        category,
+        total_cents: categoryTotal,
+        tax_cents: categoryTax,
+        deductible_cents: Math.round((categoryTotal - categoryTax) * (summary.taxCode.deductible_percent / 100)),
+        deductible_percent: summary.taxCode.deductible_percent,
+        receipt_count: categoryReceipts.length,
+        receipts: categoryReceipts,
+      };
+    })
+  ).filter(cb => cb.receipt_count > 0)
+    .sort((a, b) => b.deductible_cents - a.deductible_cents);
 
   function exportT2125() {
     let csv = "CRA Tax Code,Line Number,Description,Amount,Deductible Amount\n";
@@ -237,9 +275,6 @@ export default function TaxCodesPage() {
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
               ${(totalDeductible / 100).toFixed(2)}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              After 50% meal deduction
-            </div>
           </div>
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">GST/HST Paid</div>
@@ -251,6 +286,88 @@ export default function TaxCodesPage() {
             </div>
           </div>
         </div>
+
+        {/* Deduction Breakdown Section */}
+        {!loading && categoryBreakdown.length > 0 && (
+          <div className="mb-8 bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden">
+            <button
+              onClick={() => setBreakdownOpen(!breakdownOpen)}
+              className="w-full p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+            >
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                📊 Deduction Breakdown by Category
+              </h2>
+              <span className="text-2xl text-gray-400 dark:text-gray-500">
+                {breakdownOpen ? '▼' : '▶'}
+              </span>
+            </button>
+
+            {breakdownOpen && (
+              <div className="border-t border-gray-200 dark:border-dark-border">
+                {categoryBreakdown.map((breakdown) => (
+                  <div key={breakdown.category} className="border-b border-gray-200 dark:border-dark-border last:border-b-0">
+                    <button
+                      onClick={() => setSelectedBreakdown(
+                        selectedBreakdown === breakdown.category ? null : breakdown.category
+                      )}
+                      className="w-full p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                              {breakdown.category}
+                            </h3>
+                            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs font-medium rounded">
+                              {breakdown.deductible_percent}% deductible
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            Expenses: ${(breakdown.total_cents / 100).toFixed(2)} → Deductible: ${(breakdown.deductible_cents / 100).toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="text-right ml-4">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {breakdown.receipt_count} receipt{breakdown.receipt_count !== 1 ? 's' : ''}
+                          </div>
+                          <span className="text-xs text-accent-600 dark:text-accent-400">
+                            {selectedBreakdown === breakdown.category ? 'Hide' : 'View'} receipts →
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+
+                    {selectedBreakdown === breakdown.category && (
+                      <div className="px-4 pb-4 bg-gray-50 dark:bg-dark-bg">
+                        <div className="space-y-2">
+                          {breakdown.receipts.map(receipt => (
+                            <Link
+                              key={receipt.id}
+                              href={`/dashboard/receipts/${receipt.id}`}
+                              className="block p-3 rounded-lg bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 transition-all"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {receipt.vendor || "Unknown"}
+                                </span>
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                  ${((receipt.total_cents || 0) / 100).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {receipt.receipt_date || "No date"}
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Loading State */}
         {loading ? (

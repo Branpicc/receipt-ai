@@ -27,7 +27,6 @@ export default function ReceiptsPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   useEffect(() => {
-    // Get filter from URL
     const status = searchParams.get('status');
     if (status === 'needs_review') {
       setActiveFilter('needs_review');
@@ -50,7 +49,7 @@ export default function ReceiptsPage() {
       const { data: profile } = await supabase
         .from('firm_users')
         .select('firm_id')
-        .eq('auth_user_id', user.id)  // FIXED: Changed from user_id to auth_user_id
+        .eq('auth_user_id', user.id)
         .single();
 
       if (!profile?.firm_id) {
@@ -58,7 +57,6 @@ export default function ReceiptsPage() {
         return;
       }
 
-      // Base query
       let query = supabase
         .from('receipts')
         .select('id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category')
@@ -77,7 +75,6 @@ export default function ReceiptsPage() {
       
       if (error) throw error;
 
-      // Get flags for all receipts
       const { data: flagsData } = await supabase
         .from('receipt_flags')
         .select('receipt_id')
@@ -86,13 +83,11 @@ export default function ReceiptsPage() {
 
       const flaggedReceiptIds = new Set(flagsData?.map(f => f.receipt_id) || []);
 
-      // Add flag indicator
       const receiptsWithFlags = (receiptsData || []).map(r => ({
         ...r,
         has_flags: flaggedReceiptIds.has(r.id)
       }));
 
-      // Apply client-side filtering
       let filtered = receiptsWithFlags;
       
       switch (activeFilter) {
@@ -132,19 +127,19 @@ export default function ReceiptsPage() {
   ];
 
   return (
-    <main className="min-h-screen p-8">
+    <main className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold">Receipts</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Receipts</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {receipts.length} {activeFilter === 'all' ? 'total' : activeFilter.replace('_', ' ')} receipt{receipts.length !== 1 ? 's' : ''}
             </p>
           </div>
           
           <Link
             href="/dashboard"
-            className="text-sm text-gray-600 hover:text-gray-800 underline"
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
           >
             ← Back to Dashboard
           </Link>
@@ -158,8 +153,8 @@ export default function ReceiptsPage() {
               onClick={() => setActiveFilter(filter.value)}
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 activeFilter === filter.value
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-accent-500 text-white'
+                  : 'bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border'
               }`}
             >
               {filter.icon} {filter.label}
@@ -169,10 +164,10 @@ export default function ReceiptsPage() {
 
         {/* Receipts List */}
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading receipts...</div>
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading receipts...</div>
         ) : receipts.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed">
-            <p className="text-gray-500">
+          <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
+            <p className="text-gray-500 dark:text-gray-400">
               {activeFilter === 'all' 
                 ? 'No receipts yet. Upload your first receipt to get started!'
                 : `No ${activeFilter.replace('_', ' ')} receipts found.`}
@@ -184,40 +179,40 @@ export default function ReceiptsPage() {
               <Link
                 key={receipt.id}
                 href={`/dashboard/receipts/${receipt.id}`}
-                className="block p-4 rounded-xl border hover:shadow-md transition-shadow bg-white"
+                className="block p-4 rounded-xl border border-gray-200 dark:border-dark-border hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 dark:text-white">
                       {receipt.vendor || 'Unknown vendor'}
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       {receipt.receipt_date || 'No date'}
                     </div>
                   </div>
                   
                   {receipt.has_flags && (
-                    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
+                    <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-xs rounded-full font-medium">
                       🚩 Flagged
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="text-lg font-semibold text-gray-900">
+                  <div className="text-lg font-semibold text-gray-900 dark:text-white">
                     ${((receipt.total_cents || 0) / 100).toFixed(2)}
                   </div>
                   
                   {receipt.approved_category ? (
-                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                    <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs rounded-full font-medium">
                       ✓ {receipt.approved_category}
                     </span>
                   ) : receipt.suggested_category ? (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                    <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded-full font-medium">
                       → {receipt.suggested_category}
                     </span>
                   ) : (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">
+                    <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full font-medium">
                       Uncategorized
                     </span>
                   )}

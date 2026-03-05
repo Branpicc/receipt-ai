@@ -48,7 +48,7 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* Navigation */}
+{/* Navigation */}
           <nav className="flex-1 p-4">
             <ul className="space-y-2">
               {navItems.map((item) => {
@@ -73,10 +73,25 @@ export default function DashboardLayout({
                   </li>
                 );
               })}
+              
+              {/* Budget Settings */}
+              <li>
+                <Link
+                  href="/dashboard/budget-settings"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    pathname === '/dashboard/budget-settings'
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <span className="text-xl">💰</span>
+                  {sidebarOpen && (
+                  <span className="font-medium">Spending Budget</span>                  )}
+                </Link>
+              </li>
             </ul>
           </nav>
-
-          {/* User Menu */}
+                    {/* User Menu */}
           <div className="p-4 border-t border-gray-200 dark:border-dark-border">
             <Link
               href="/dashboard/settings"

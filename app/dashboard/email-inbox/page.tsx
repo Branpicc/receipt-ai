@@ -76,7 +76,6 @@ export default function EmailInboxPage() {
     try {
       const firmId = await getMyFirmId();
       
-      // Get the email receipt data
       const { data: emailReceipt } = await supabase
         .from("email_receipts")
         .select("*")
@@ -88,7 +87,6 @@ export default function EmailInboxPage() {
         return;
       }
 
-      // Check for duplicates
       if (emailReceipt.vendor && emailReceipt.total_cents && emailReceipt.receipt_date) {
         const { data: duplicates } = await supabase
           .from("receipts")
@@ -114,7 +112,6 @@ export default function EmailInboxPage() {
         }
       }
 
-      // Get first client (for now)
       const { data: clients } = await supabase
         .from("clients")
         .select("id")
@@ -126,7 +123,6 @@ export default function EmailInboxPage() {
         return;
       }
 
-      // Run categorization
       const categorization = categorizeReceipt(
         emailReceipt.vendor || "",
         emailReceipt.email_text || ""
@@ -134,7 +130,6 @@ export default function EmailInboxPage() {
 
       console.log("📊 Categorization result:", categorization);
 
-      // Create regular receipt from email receipt
       const { data: receipt, error: receiptError } = await supabase
         .from("receipts")
         .insert([{
@@ -149,7 +144,6 @@ export default function EmailInboxPage() {
           extraction_status: emailReceipt.extraction_status,
           ocr_raw_text: emailReceipt.ocr_raw_text,
           file_path: emailReceipt.attachment_url,
-          // Add categorization
           suggested_category: categorization.suggested_category,
           category_confidence: categorization.category_confidence,
           category_reasoning: categorization.category_reasoning,
@@ -163,7 +157,6 @@ export default function EmailInboxPage() {
         return;
       }
 
-      // Update email receipt status
       await supabase
         .from("email_receipts")
         .update({
@@ -172,7 +165,6 @@ export default function EmailInboxPage() {
         })
         .eq("id", emailReceiptId);
 
-      // Create notification for approved email receipt
       try {
         await supabase.from("notifications").insert([
           {
@@ -261,27 +253,27 @@ export default function EmailInboxPage() {
   };
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Email Inbox</h1>
-      <p className="text-gray-600 mb-6">
+    <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Email Inbox</h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
         Review receipts received via email
       </p>
 
       {/* Email Address Display */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-        <h3 className="font-semibold text-gray-900 mb-2">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
           📧 Your Receipt Email Address
         </h3>
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
           Forward receipts to this address and they'll appear here for review
         </p>
         <div className="flex items-center gap-3">
-          <code className="flex-1 bg-white px-4 py-3 rounded border border-blue-300 font-mono text-sm">
+          <code className="flex-1 bg-white dark:bg-dark-surface px-4 py-3 rounded border border-blue-300 dark:border-blue-700 font-mono text-sm text-gray-900 dark:text-white">
             {emailAddress || "Loading..."}
           </code>
           <button
             onClick={copyEmail}
-            className="px-4 py-3 bg-blue-600 text-white rounded font-medium hover:bg-blue-700"
+            className="px-4 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
           >
             Copy
           </button>
@@ -289,15 +281,15 @@ export default function EmailInboxPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 dark:border-dark-border mb-6">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab("pending")}
             className={`
-              py-4 px-1 border-b-2 font-medium text-sm
+              py-4 px-1 border-b-2 font-medium text-sm transition-colors
               ${activeTab === "pending"
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
               }
             `}
           >
@@ -306,10 +298,10 @@ export default function EmailInboxPage() {
           <button
             onClick={() => setActiveTab("approved")}
             className={`
-              py-4 px-1 border-b-2 font-medium text-sm
+              py-4 px-1 border-b-2 font-medium text-sm transition-colors
               ${activeTab === "approved"
-                ? "border-green-500 text-green-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "border-green-500 dark:border-green-400 text-green-600 dark:text-green-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
               }
             `}
           >
@@ -318,10 +310,10 @@ export default function EmailInboxPage() {
           <button
             onClick={() => setActiveTab("rejected")}
             className={`
-              py-4 px-1 border-b-2 font-medium text-sm
+              py-4 px-1 border-b-2 font-medium text-sm transition-colors
               ${activeTab === "rejected"
-                ? "border-red-500 text-red-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "border-red-500 dark:border-red-400 text-red-600 dark:text-red-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
               }
             `}
           >
@@ -332,16 +324,16 @@ export default function EmailInboxPage() {
 
       {/* Email Receipts List */}
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>
       ) : emailReceipts.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+        <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-lg border-2 border-dashed border-gray-300 dark:border-dark-border">
           <div className="text-4xl mb-3">
             {activeTab === "pending" ? "📭" : activeTab === "approved" ? "✅" : "❌"}
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             {getEmptyStateMessage()}
           </h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-400">
             {getEmptyStateDescription()}
           </p>
         </div>
@@ -350,47 +342,49 @@ export default function EmailInboxPage() {
           {emailReceipts.map((email) => (
             <div
               key={email.id}
-              className={`bg-white rounded-lg border p-6 ${
-                activeTab === "approved" ? "border-green-200 bg-green-50" :
-                activeTab === "rejected" ? "border-red-200 bg-red-50" :
-                "border-gray-200"
+              className={`rounded-lg border p-6 ${
+                activeTab === "approved" 
+                  ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20" :
+                activeTab === "rejected" 
+                  ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20" :
+                "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"
               }`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-gray-900">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
                       {email.vendor || "Unknown Vendor"}
                     </h3>
                     {email.has_attachment && (
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded">
                         📎 Attachment
                       </span>
                     )}
                     {activeTab === "approved" && email.converted_receipt_id && (
                       <Link 
                         href={`/dashboard/receipts/${email.converted_receipt_id}`}
-                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                        className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
                       >
                         View Receipt →
                       </Link>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     From: {email.from_email}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {email.subject || "No subject"}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                     Received: {new Date(email.received_at).toLocaleString()}
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-xl font-bold text-gray-900">
+                  <div className="text-xl font-bold text-gray-900 dark:text-white">
                     ${((email.total_cents || 0) / 100).toFixed(2)}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     {email.receipt_date
                       ? new Date(email.receipt_date).toLocaleDateString()
                       : "No date"}
@@ -399,8 +393,8 @@ export default function EmailInboxPage() {
               </div>
 
               {/* Email Preview */}
-              <div className="bg-white rounded p-3 mb-4 border border-gray-200">
-                <p className="text-xs text-gray-600 line-clamp-3">
+              <div className="bg-white dark:bg-dark-hover rounded p-3 mb-4 border border-gray-200 dark:border-dark-border">
+                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3">
                   {email.email_text?.substring(0, 200)}...
                 </p>
               </div>
@@ -410,13 +404,13 @@ export default function EmailInboxPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => approveReceipt(email.id)}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700"
+                    className="flex-1 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded font-medium hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
                   >
                     ✓ Approve & Categorize
                   </button>
                   <button
                     onClick={() => rejectReceipt(email.id)}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300"
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   >
                     ✗ Reject
                   </button>
@@ -424,12 +418,12 @@ export default function EmailInboxPage() {
               )}
 
               {activeTab === "approved" && (
-                <div className="flex items-center gap-3 text-sm text-green-700">
+                <div className="flex items-center gap-3 text-sm text-green-700 dark:text-green-400">
                   <span className="font-medium">✓ Approved</span>
                   {email.converted_receipt_id && (
                     <Link
                       href={`/dashboard/receipts/${email.converted_receipt_id}`}
-                      className="text-blue-600 hover:text-blue-800 underline"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
                     >
                       View receipt details →
                     </Link>
@@ -441,11 +435,11 @@ export default function EmailInboxPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => restoreReceipt(email.id)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
                   >
                     ↺ Restore to Pending
                   </button>
-                  <span className="flex items-center text-sm text-red-700">
+                  <span className="flex items-center text-sm text-red-700 dark:text-red-400">
                     ✗ Rejected
                   </span>
                 </div>
