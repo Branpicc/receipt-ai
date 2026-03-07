@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
+import { getUserRole } from "@/lib/getUserRole";
 
 type CategoryBudget = {
   id: string;
@@ -35,10 +36,17 @@ export default function BudgetSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [editingBudgets, setEditingBudgets] = useState<{ [key: string]: number }>({});
   const [editingValues, setEditingValues] = useState<{ [key: string]: string }>({});
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     loadBudgets();
+    checkRole();
   }, []);
+
+  async function checkRole() {
+    const role = await getUserRole();
+    setUserRole(role);
+  }
 
   async function loadBudgets() {
     try {
@@ -111,6 +119,8 @@ export default function BudgetSettingsPage() {
   }
 
   const totalBudget = Object.values(editingBudgets).reduce((sum, val) => sum + val, 0);
+  const isFirmAdmin = userRole === "firm_admin";
+  const canEdit = userRole === "accountant" || userRole === "owner" || userRole === "client";
 
   if (loading) {
     return (
@@ -129,9 +139,15 @@ export default function BudgetSettingsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Monthly Spending Budget
+            {isFirmAdmin && (
+              <span className="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">(View Only)</span>
+            )}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Set monthly spending budgets for each expense category. You'll see warnings when you exceed them.
+            {isFirmAdmin 
+              ? "View monthly spending budgets for each expense category."
+              : "Set monthly spending budgets for each expense category. You'll see warnings when you exceed them."
+            }
           </p>
         </div>
 
@@ -175,31 +191,34 @@ export default function BudgetSettingsPage() {
                     <input
                       type="text"
                       value={editingValues[category] || ""}
-                      onFocus={(e) => e.target.select()}
-onChange={(e) => {
-  const value = e.target.value;
-  // Allow empty string or valid number format
-  if (/^\d*\.?\d{0,2}$/.test(value)) {
-    setEditingValues(prev => ({
-      ...prev,
-      [category]: value === '' ? '' : value,  // Keep empty string as is
-    }));
-  }
-}}
+                      onFocus={(e) => !isFirmAdmin && e.target.select()}
+                      onChange={(e) => {
+                        if (isFirmAdmin) return; // Prevent editing
+                        const value = e.target.value;
+                        if (/^\d*\.?\d{0,2}$/.test(value)) {
+                          setEditingValues(prev => ({
+                            ...prev,
+                            [category]: value === '' ? '' : value,
+                          }));
+                        }
+                      }}
                       onBlur={(e) => {
+                        if (isFirmAdmin) return; // Prevent editing
                         const value = e.target.value;
                         const cents = Math.round(parseFloat(value || "0") * 100);
                         setEditingBudgets(prev => ({
                           ...prev,
                           [category]: cents,
                         }));
-                        // Format on blur
                         setEditingValues(prev => ({
                           ...prev,
                           [category]: (cents / 100).toFixed(2),
                         }));
                       }}
-                      className="w-32 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-right text-gray-900 dark:text-white bg-white dark:bg-dark-bg focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
+                      disabled={isFirmAdmin}
+                      className={`w-32 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-right text-gray-900 dark:text-white bg-white dark:bg-dark-bg focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors ${
+                        isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                       placeholder="0.00"
                     />
                   </div>
@@ -212,14 +231,19 @@ onChange={(e) => {
           <div className="p-6 bg-gray-50 dark:bg-dark-bg border-t border-gray-200 dark:border-dark-border">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                💡 Set to $0 to disable budget tracking for a category
+{isFirmAdmin 
+  ? "🔒 Only accountants and clients can edit budgets"
+  : "💡 Set to $0 to disable budget tracking for a category"
+}
               </p>
               <button
                 onClick={saveBudgets}
-                disabled={saving}
-                className="px-6 py-2 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={saving || isFirmAdmin}
+                className={`px-6 py-2 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  isFirmAdmin ? 'bg-gray-400' : ''
+                }`}
               >
-                {saving ? "Saving..." : "Save Budgets"}
+                {isFirmAdmin ? "View Only" : saving ? "Saving..." : "Save Budgets"}
               </button>
             </div>
           </div>

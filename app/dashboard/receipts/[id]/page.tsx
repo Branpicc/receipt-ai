@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
+import { getUserRole } from "@/lib/getUserRole";
 
 type Receipt = {
   id: string;
@@ -77,6 +78,7 @@ export default function ReceiptDetailPage(): JSX.Element {
   const [activePreviewType, setActivePreviewType] = useState<'image' | 'pdf'>('image');
   const [splitPdfUrl, setSplitPdfUrl] = useState<string | null>(null);
   const [lineItemsView, setLineItemsView] = useState<'table' | 'card'>('card');
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   function purposeLooksLikeMeal(purpose: string) {
     const p = purpose.toLowerCase();
@@ -172,6 +174,11 @@ export default function ReceiptDetailPage(): JSX.Element {
 
     await loadFlags();
   }
+
+  async function checkRole() {
+  const role = await getUserRole();
+  setUserRole(role);
+}
 
 async function checkLineItemMismatches() {
   if (!receipt?.approved_category || items.length === 0) return;
@@ -452,10 +459,9 @@ async function splitMismatchedItems(flagId: string) {
     return files.find((f) => f.id === activeFileId) ?? files[0];
   }, [files, activeFileId]);
 
-  // FIXED: Only load once when component mounts or receiptId changes
+// FIXED: Only load once when component mounts or receiptId changes
   useEffect(() => {
     if (!receiptId || hasLoadedRef.current) return;
-
     const load = async () => {
       setLoading(true);
       setErr("");
@@ -537,6 +543,7 @@ async function splitMismatchedItems(flagId: string) {
         }
 
         hasLoadedRef.current = true; // Mark as loaded
+        await checkRole(); // MOVED HERE - inside try block, after loading data
       } catch (e: any) {
         setErr(e?.message || "Failed to load receipt");
         setReceipt(null);
@@ -550,8 +557,12 @@ async function splitMismatchedItems(flagId: string) {
     load();
   }, [receiptId]);
 
+  // ADD PERMISSION CHECKS HERE - outside useEffect
+  const isFirmAdmin = userRole === "firm_admin";
+  const canEdit = userRole === "accountant" || userRole === "owner" || userRole === "client";
+
   useEffect(() => {
-  if (!receipt?.purpose_text) return;
+      if (!receipt?.purpose_text) return;
   
 const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentation): ([^\]]+)\]/);
   if (pdfMatch && pdfMatch[1]) {
@@ -606,9 +617,12 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
 
         <div className="mt-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {receipt.vendor || "Unknown vendor"}
-            </h1>
+<h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+  {receipt.vendor || "Unknown vendor"}
+  {isFirmAdmin && (
+    <span className="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">(View Only)</span>
+  )}
+</h1>
             <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Date: {receipt.receipt_date || "—"} • Status: {receipt.status} • Amount:{" "}
               <span className="font-medium text-gray-800 dark:text-gray-200">{amountText}</span>
@@ -862,23 +876,30 @@ link.download = activePreviewType === 'pdf'
                           ✓ Approved: {receipt.approved_category}
                         </span>
                       </div>
-                      <button
-                        onClick={async () => {
-                          const { error } = await supabase
-                            .from("receipts")
-                            .update({ approved_category: null, category_approved_by: null, category_approved_at: null })
-                            .eq("id", receiptId);
+<button
+  onClick={async () => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot edit categories. Only accountants and clients can make changes.");
+      return;
+    }
+    const { error } = await supabase
+      .from("receipts")
+      .update({ approved_category: null, category_approved_by: null, category_approved_at: null })
+      .eq("id", receiptId);
 
-                          if (error) {
-                            setErr(error.message);
-                          } else {
-                            setReceipt((prev) => prev ? { ...prev, approved_category: null } : prev);
-                          }
-                        }}
-                        className="text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800"
-                      >
-                        Change category
-                      </button>
+    if (error) {
+      setErr(error.message);
+    } else {
+      setReceipt((prev) => prev ? { ...prev, approved_category: null } : prev);
+    }
+  }}
+  disabled={isFirmAdmin}
+  className={`text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800 ${
+    isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  Change category
+</button>
                     </div>
                   ) : receipt.suggested_category && receipt.category_confidence ? (
                     <div className="space-y-3">
@@ -902,56 +923,69 @@ link.download = activePreviewType === 'pdf'
                       )}
 
                       <div className="flex gap-2">
-                        <button
-                          onClick={async () => {
-                            try {
-                              const { error } = await supabase
-                                .from("receipts")
-                                .update({
-                                  approved_category: receipt.suggested_category,
-                                  category_approved_at: new Date().toISOString(),
-                                })
-                                .eq("id", receiptId);
+<button
+  onClick={async () => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot approve categories.");
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("receipts")
+        .update({
+          approved_category: receipt.suggested_category,
+          category_approved_at: new Date().toISOString(),
+        })
+        .eq("id", receiptId);
 
-                              if (error) throw error;
+      if (error) throw error;
 
-                              setReceipt((prev) => prev ? {
-                                ...prev,
-                                approved_category: receipt.suggested_category,
-                              } : prev);
-                            } catch (e: any) {
-                              setErr(e.message || "Failed to approve category");
-                            }
-                          }}
-                          className="rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-medium hover:bg-green-700"
-                        >
-                          ✓ Approve Category
-                        </button>
+      setReceipt((prev) => prev ? {
+        ...prev,
+        approved_category: receipt.suggested_category,
+      } : prev);
+    } catch (e: any) {
+      setErr(e.message || "Failed to approve category");
+    }
+  }}
+  disabled={isFirmAdmin}
+  className={`rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-medium hover:bg-green-700 ${
+    isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  ✓ Approve Category
+</button>
+<button
+  onClick={() => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot change categories.");
+      return;
+    }
+    const newCategory = prompt("Enter category name:");
+    if (!newCategory) return;
 
-                        <button
-                          onClick={() => {
-                            const newCategory = prompt("Enter category name:");
-                            if (!newCategory) return;
-
-                            supabase
-                              .from("receipts")
-                              .update({
-                                approved_category: newCategory,
-                                category_approved_at: new Date().toISOString(),
-                              })
-                              .eq("id", receiptId)
-                              .then(({ error }) => {
-                                if (error) {
-                                  setErr(error.message);
-                                } else {
-                                  setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev);
-                                }
-                              });
-                          }}
-                          className="rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover"
-                        >
-                          Change Category
-                        </button>
+    supabase
+      .from("receipts")
+      .update({
+        approved_category: newCategory,
+        category_approved_at: new Date().toISOString(),
+      })
+      .eq("id", receiptId)
+      .then(({ error }) => {
+        if (error) {
+          setErr(error.message);
+        } else {
+          setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev);
+        }
+      });
+  }}
+  disabled={isFirmAdmin}
+  className={`rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover ${
+    isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  Change Category
+</button>
                       </div>
                     </div>
                   ) : (
@@ -960,30 +994,37 @@ link.download = activePreviewType === 'pdf'
                         ⚠ Unable to auto-categorize. Please add vendor and purpose information.
                       </div>
 
-                      <button
-                        onClick={() => {
-                          const newCategory = prompt("Enter category name:");
-                          if (!newCategory) return;
+<button
+  onClick={() => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot set categories.");
+      return;
+    }
+    const newCategory = prompt("Enter category name:");
+    if (!newCategory) return;
 
-                          supabase
-                            .from("receipts")
-                            .update({
-                              approved_category: newCategory,
-                              category_approved_at: new Date().toISOString(),
-                            })
-                            .eq("id", receiptId)
-                            .then(({ error }) => {
-                              if (error) {
-                                setErr(error.message);
-                              } else {
-                                setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev);
-                              }
-                            });
-                        }}
-                        className="rounded-lg bg-accent-500 text-white px-4 py-2 text-sm font-medium hover:bg-accent-600"
-                      >
-                        Manually Set Category
-                      </button>
+    supabase
+      .from("receipts")
+      .update({
+        approved_category: newCategory,
+        category_approved_at: new Date().toISOString(),
+      })
+      .eq("id", receiptId)
+      .then(({ error }) => {
+        if (error) {
+          setErr(error.message);
+        } else {
+          setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev);
+        }
+      });
+  }}
+  disabled={isFirmAdmin}
+  className={`rounded-lg bg-accent-500 text-white px-4 py-2 text-sm font-medium hover:bg-accent-600 ${
+    isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  Manually Set Category
+</button>
 
                       <button
                         onClick={async () => {
@@ -1048,22 +1089,29 @@ link.download = activePreviewType === 'pdf'
         </div>
       )}
       
-      <button
-        onClick={() => {
-          const newItem = {
-            id: `temp-${Date.now()}`,
-            description: "",
-            quantity: 1,
-            unit_price_cents: 0,
-            total_cents: 0,
-          };
-          setItems([...items, newItem]);
-          setLineItemsView('table'); // Switch to table when adding
-        }}
-        className="text-sm rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 hover:bg-gray-50 dark:bg-dark-hover font-medium"
-      >
-        + Add Item
-      </button>
+<button
+  onClick={() => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot edit line items.");
+      return;
+    }
+    const newItem = {
+      id: `temp-${Date.now()}`,
+      description: "",
+      quantity: 1,
+      unit_price_cents: 0,
+      total_cents: 0,
+    };
+    setItems([...items, newItem]);
+    setLineItemsView('table'); // Switch to table when adding
+  }}
+  disabled={isFirmAdmin}
+  className={`text-sm rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 hover:bg-gray-50 dark:bg-dark-hover font-medium ${
+    isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  + Add Item
+</button>
     </div>
   </div>
 
@@ -1224,47 +1272,54 @@ link.download = activePreviewType === 'pdf'
         </table>
       </div>
 
-      <button
-        onClick={async () => {
-          try {
-            setErr("");
-            await supabase.from("receipt_items").delete().eq("receipt_id", receiptId);
+<button
+  onClick={async () => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot save line items.");
+      return;
+    }
+    try {
+      setErr("");
+      await supabase.from("receipt_items").delete().eq("receipt_id", receiptId);
 
-            const itemsToSave = items
-              .filter((it) => it.description?.trim())
-              .map((it, index) => ({
-                receipt_id: receiptId,
-                description: it.description,
-                quantity: it.quantity,
-                unit_price_cents: it.unit_price_cents,
-                total_cents: it.total_cents,
-                line_index: index + 1,
-              }));
+      const itemsToSave = items
+        .filter((it) => it.description?.trim())
+        .map((it, index) => ({
+          receipt_id: receiptId,
+          description: it.description,
+          quantity: it.quantity,
+          unit_price_cents: it.unit_price_cents,
+          total_cents: it.total_cents,
+          line_index: index + 1,
+        }));
 
-            if (itemsToSave.length > 0) {
-              const { error } = await supabase.from("receipt_items").insert(itemsToSave);
-              if (error) throw error;
-            }
+      if (itemsToSave.length > 0) {
+        const { error } = await supabase.from("receipt_items").insert(itemsToSave);
+        if (error) throw error;
+      }
 
-            const { data: reloaded } = await supabase
-              .from("receipt_items")
-              .select("id,description,quantity,unit_price_cents,total_cents")
-              .eq("receipt_id", receiptId)
-              .order("id", { ascending: true });
+      const { data: reloaded } = await supabase
+        .from("receipt_items")
+        .select("id,description,quantity,unit_price_cents,total_cents")
+        .eq("receipt_id", receiptId)
+        .order("id", { ascending: true });
 
-            setItems((reloaded as ReceiptItem[]) || []);
-            
-            await checkLineItemMismatches();
-            
-            alert("Line items saved!");
-          } catch (e: any) {
-            setErr(e.message || "Failed to save items");
-          }
-        }}
-        className="rounded-lg bg-accent-500 text-white px-6 py-2 font-medium text-sm hover:bg-accent-600"
-      >
-        Save Items
-      </button>
+      setItems((reloaded as ReceiptItem[]) || []);
+      
+      await checkLineItemMismatches();
+      
+      alert("Line items saved!");
+    } catch (e: any) {
+      setErr(e.message || "Failed to save items");
+    }
+  }}
+  disabled={isFirmAdmin}
+  className={`rounded-lg bg-accent-500 text-white px-6 py-2 font-medium text-sm hover:bg-accent-600 ${
+    isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  Save Items
+</button>
     </div>
   )}
 </div>
@@ -1277,80 +1332,87 @@ link.download = activePreviewType === 'pdf'
                     </div>
                   </div>
 
-                  <textarea
-                    className="w-full rounded-xl border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-surface text-gray-900 dark:text-white p-3 text-sm"
-                    rows={3}
-                    placeholder="Example: Lunch meeting with client to discuss project scope."
-                    value={purposeDraft}
-                    onChange={(e) => setPurposeDraft(e.target.value)}
-                  />
+<textarea
+  className="w-full rounded-xl border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-surface text-gray-900 dark:text-white p-3 text-sm"
+  rows={3}
+  placeholder="Example: Lunch meeting with client to discuss project scope."
+  value={purposeDraft}
+  onChange={(e) => !isFirmAdmin && setPurposeDraft(e.target.value)}
+  disabled={isFirmAdmin}
+/>
 
                   <div className="mt-2 flex gap-2">
-                    <button
-                      disabled={savingPurpose}
-                      className="rounded-xl bg-accent-500 text-white px-4 py-2 text-sm disabled:opacity-60"
-                      onClick={async () => {
-                        try {
-                          setSavingPurpose(true);
-                          setErr("");
+<button
+  disabled={savingPurpose || isFirmAdmin}
+  className={`rounded-xl bg-accent-500 text-white px-4 py-2 text-sm disabled:opacity-60 ${
+    isFirmAdmin ? 'cursor-not-allowed' : ''
+  }`}
+  onClick={async () => {
+    if (isFirmAdmin) {
+      alert("🔒 Firm admins cannot edit purpose.");
+      return;
+    }
+    try {
+      setSavingPurpose(true);
+      setErr("");
 
-                          const { error } = await supabase
-                            .from("receipts")
-                            .update({
-                              purpose_text: purposeDraft.trim() || null,
-                              purpose_source: "accountant",
-                              purpose_updated_at: new Date().toISOString(),
-                            })
-                            .eq("id", receipt.id);
+      const { error } = await supabase
+        .from("receipts")
+        .update({
+          purpose_text: purposeDraft.trim() || null,
+          purpose_source: "accountant",
+          purpose_updated_at: new Date().toISOString(),
+        })
+        .eq("id", receipt.id);
 
-                          if (error) throw error;
+      if (error) throw error;
 
-                          setReceipt((prev) =>
-                            prev
-                              ? {
-                                  ...prev,
-                                  purpose_text: purposeDraft.trim() || null,
-                                  purpose_source: "accountant",
-                                  purpose_updated_at: new Date().toISOString(),
-                                }
-                              : prev
-                          );
+      setReceipt((prev) =>
+        prev
+          ? {
+              ...prev,
+              purpose_text: purposeDraft.trim() || null,
+              purpose_source: "accountant",
+              purpose_updated_at: new Date().toISOString(),
+            }
+          : prev
+      );
 
-                          await ensureMismatchFlag(purposeDraft.trim(), receipt.vendor || "");
+      await ensureMismatchFlag(purposeDraft.trim(), receipt.vendor || "");
 
-                          const categorization = categorizeReceipt(
-                            receipt.vendor || "",
-                            purposeDraft.trim() || ""
-                          );
+      const categorization = categorizeReceipt(
+        receipt.vendor || "",
+        purposeDraft.trim() || ""
+      );
 
-                          await supabase
-                            .from("receipts")
-                            .update({
-                              suggested_category: categorization.suggested_category,
-                              category_confidence: categorization.category_confidence,
-                              category_reasoning: categorization.category_reasoning,
-                            })
-                            .eq("id", receipt.id);
+      await supabase
+        .from("receipts")
+        .update({
+          suggested_category: categorization.suggested_category,
+          category_confidence: categorization.category_confidence,
+          category_reasoning: categorization.category_reasoning,
+        })
+        .eq("id", receipt.id);
 
-                          setReceipt((prev) =>
-                            prev
-                              ? {
-                                  ...prev,
-                                  suggested_category: categorization.suggested_category,
-                                  category_confidence: categorization.category_confidence,
-                                  category_reasoning: categorization.category_reasoning,
-                                }
-                              : prev
-                          );
-                        } catch (e: any) {
-                          setErr(e.message || "Failed to save purpose");
-                        } finally {
-                          setSavingPurpose(false);
-                        }
-                      }}
-                    >
-                      Save purpose
-                    </button>
+      setReceipt((prev) =>
+        prev
+          ? {
+              ...prev,
+              suggested_category: categorization.suggested_category,
+              category_confidence: categorization.category_confidence,
+              category_reasoning: categorization.category_reasoning,
+            }
+          : prev
+      );
+    } catch (e: any) {
+      setErr(e.message || "Failed to save purpose");
+    } finally {
+      setSavingPurpose(false);
+    }
+  }}
+>
+  {isFirmAdmin ? "View Only" : "Save purpose"}
+</button>
 
                     <button
                       className="rounded-xl border px-4 py-2 text-sm"
