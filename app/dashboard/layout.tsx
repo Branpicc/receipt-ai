@@ -35,12 +35,13 @@ const isClient = userRole === "client";
     { href: "/dashboard/receipts", label: "Receipts", icon: "📁" },
   ];
 
-  // Accountant-only navigation items
-  const accountantNavItems = [
-    { href: "/dashboard/email-inbox", label: "Email Inbox", icon: "📧" },
-    { href: "/dashboard/category-dashboard", label: "Categories", icon: "📊" },
-    { href: "/dashboard/tax-codes", label: "Tax Codes", icon: "🧾" },
-  ];
+// Accountant-only navigation items
+const accountantNavItems = [
+  { href: "/dashboard/email-inbox", label: "Email Inbox", icon: "📧" },
+  { href: "/dashboard/category-dashboard", label: "Categories", icon: "📊" },
+  { href: "/dashboard/tax-codes", label: "Tax Codes", icon: "🧾" },
+  { href: "/dashboard/clients", label: "Clients", icon: "👥" },
+];
 
 // Show full nav to firm_admin and accountants
 const navItems = (isAccountant || isFirmAdmin)
