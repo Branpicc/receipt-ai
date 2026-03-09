@@ -46,12 +46,12 @@ export default function ReceiptsPage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('firm_users')
-        .select('firm_id')
-        .eq('auth_user_id', user.id)
-        .single();
-
+const { data: profile } = await supabase
+  .from('firm_users')
+  .select('firm_id, client_id, role')
+  .eq('auth_user_id', user.id)
+  .single();
+  
       if (!profile?.firm_id) {
         setLoading(false);
         return;
@@ -62,7 +62,10 @@ export default function ReceiptsPage() {
         .select('id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category')
         .eq('firm_id', profile.firm_id)
         .order('created_at', { ascending: false });
-
+// Filter by client_id if user is a client
+if (profile.role === 'client' && profile.client_id) {
+  query = query.eq('client_id', profile.client_id);
+}
       const { data: receiptsData, error } = await query;
       
       console.log('🔍 Debug info:', {
