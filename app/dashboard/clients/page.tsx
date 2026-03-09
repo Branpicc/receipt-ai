@@ -9,6 +9,7 @@ type ClientRow = {
   id: string;
   name: string;
   client_code: string;
+  email_alias: string | null;
   timezone: string;
   province: string;
   is_active: boolean;
@@ -45,6 +46,7 @@ const PROVINCE_DEFAULT_TZ: Record<string, string> = {
 };
 
 export default function ClientsPage() {
+  console.log("🔍 Clients page component mounted");
   const inboxDomain = "receipts.example.com"; // change later
 
   const [firmId, setFirmId] = useState<string>("");
@@ -54,6 +56,9 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string>("");
   const [assigningSaving, setAssigningSaving] = useState<string | null>(null);
+  const [editingAlias, setEditingAlias] = useState<string | null>(null);
+  const [aliasValue, setAliasValue] = useState<string>("");
+  const [aliasSaving, setAliasSaving] = useState(false);
 
   const [newName, setNewName] = useState("");
   const [newTimezone, setNewTimezone] = useState("America/Toronto");
@@ -70,7 +75,7 @@ export default function ClientsPage() {
     setErr("");
     const { data, error } = await supabase
       .from("clients")
-      .select("id,name,client_code,timezone,province,is_active,created_at,assigned_accountant_id,assigned_at")
+      .select("id,name,client_code,email_alias,timezone,province,is_active,created_at,assigned_accountant_id,assigned_at")
       .eq("firm_id", fId);
 
     if (error) {
@@ -133,21 +138,82 @@ export default function ClientsPage() {
     }
   }
 
+  async function saveEmailAlias(clientId: string) {
+    try {
+      setAliasSaving(true);
+      
+      // Validate format
+      const alias = aliasValue.trim().toLowerCase();
+      if (!alias) {
+        // Allow clearing the alias
+        const { error } = await supabase
+          .from("clients")
+          .update({ email_alias: null })
+          .eq("id", clientId);
+
+        if (error) throw error;
+        
+        await loadClients(firmId);
+        setEditingAlias(null);
+        setAliasValue("");
+        return;
+      }
+
+      // Validate format: 3-30 chars, lowercase alphanumeric, hyphens, underscores
+      const validFormat = /^[a-z0-9_-]{3,30}$/.test(alias);
+      if (!validFormat) {
+        alert("Email alias must be 3-30 characters and contain only lowercase letters, numbers, hyphens, and underscores.");
+        setAliasSaving(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("clients")
+        .update({ email_alias: alias })
+        .eq("id", clientId);
+
+      if (error) {
+        if (error.code === "23505") { // Unique constraint violation
+          alert("This email alias is already taken. Please choose another.");
+        } else {
+          throw error;
+        }
+        setAliasSaving(false);
+        return;
+      }
+
+      await loadClients(firmId);
+      setEditingAlias(null);
+      setAliasValue("");
+    } catch (error: any) {
+      console.error("Failed to save email alias:", error);
+      alert("Failed to save email alias: " + error.message);
+    } finally {
+      setAliasSaving(false);
+    }
+  }
+
   useEffect(() => {
     const init = async () => {
       try {
+        console.log("🔍 Starting init...");
         const role = await getUserRole();
+        console.log("🔍 User role:", role);
         setUserRole(role);
 
         const fId = await getMyFirmId();
+        console.log("🔍 Firm ID:", fId);
         setFirmId(fId);
         await loadClients(fId);
         
         // Only load accountants if firm admin
         if (role === "firm_admin" || role === "owner") {
+          console.log("🔍 Loading accountants...");
           await loadAccountants(fId);
         }
+        console.log("🔍 Init complete");
       } catch (e: any) {
+        console.error("🔍 Init error:", e);
         setErr(e.message || "Failed to load firm/clients");
       } finally {
         setLoading(false);
@@ -302,6 +368,8 @@ export default function ClientsPage() {
             <div className="divide-y divide-gray-200 dark:divide-dark-border">
               {sortedClients.map((c) => {
                 const assignedAccountant = accountants.find(a => a.id === c.assigned_accountant_id);
+                const isEditing = editingAlias === c.id;
+                const displayEmail = c.email_alias || c.client_code;
                 
                 return (
                   <div
@@ -311,9 +379,59 @@ export default function ClientsPage() {
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                       <div className="flex-1">
                         <div className="font-semibold text-gray-900 dark:text-white mb-1">{c.name}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <span className="font-mono">{c.client_code}@{inboxDomain}</span>
-                        </div>
+                        
+                        {/* Email Alias Editor */}
+                        {isEditing ? (
+                          <div className="flex items-center gap-2 mb-1">
+                            <input
+                              type="text"
+                              value={aliasValue}
+                              onChange={(e) => setAliasValue(e.target.value.toLowerCase())}
+                              placeholder="custom-alias"
+                              className="text-sm font-mono px-2 py-1 border border-gray-300 dark:border-dark-border rounded bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                              disabled={aliasSaving}
+                            />
+                            <span className="text-sm text-gray-500 dark:text-gray-400">@{inboxDomain}</span>
+                            <button
+                              onClick={() => saveEmailAlias(c.id)}
+                              disabled={aliasSaving}
+                              className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                            >
+                              {aliasSaving ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingAlias(null);
+                                setAliasValue("");
+                              }}
+                              disabled={aliasSaving}
+                              className="text-sm px-3 py-1 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-white rounded hover:bg-gray-400 dark:hover:bg-gray-700 disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
+                              {displayEmail}@{inboxDomain}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditingAlias(c.id);
+                                setAliasValue(c.email_alias || "");
+                              }}
+                              className="text-sm text-accent-600 dark:text-accent-400 hover:underline"
+                            >
+                              ✏️ Edit
+                            </button>
+                            {c.email_alias && (
+                              <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                Custom
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                           <span>Province: {c.province}</span>
                           <span>•</span>

@@ -94,14 +94,20 @@ export async function middleware(request: NextRequest) {
         .eq('auth_user_id', session.user.id)
         .single()
 
+      console.log('🔍 Middleware - Path:', path)
+      console.log('🔍 Middleware - User role:', firmUser?.role)
+      console.log('🔍 Middleware - Client ID:', firmUser?.client_id)
+
       if (firmUser) {
         // Client users should be redirected to client portal
-        if (firmUser.role === 'client' && !path.startsWith('/dashboard/client')) {
+        if (firmUser.role === 'client' && path !== '/dashboard/client' && !path.startsWith('/dashboard/client/')) {
+          console.log('🔍 Middleware - Redirecting client to /dashboard/client')
           return NextResponse.redirect(new URL('/dashboard/client', request.url))
         }
 
-        // Non-client users should not access client portal
-        if (firmUser.role !== 'client' && path.startsWith('/dashboard/client')) {
+        // Non-client users should not access client portal (exact match or subpaths)
+        if (firmUser.role !== 'client' && (path === '/dashboard/client' || path.startsWith('/dashboard/client/'))) {
+          console.log('🔍 Middleware - Redirecting non-client from /dashboard/client')
           return NextResponse.redirect(new URL('/dashboard', request.url))
         }
       }
