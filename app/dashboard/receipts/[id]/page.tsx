@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
+import RequestChangesModal from "@/components/RequestChangesModal";
 
 type Receipt = {
   id: string;
@@ -79,6 +80,7 @@ export default function ReceiptDetailPage(): JSX.Element {
   const [splitPdfUrl, setSplitPdfUrl] = useState<string | null>(null);
   const [lineItemsView, setLineItemsView] = useState<'table' | 'card'>('card');
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   function purposeLooksLikeMeal(purpose: string) {
     const p = purpose.toLowerCase();
@@ -679,7 +681,18 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
             ))}
           </div>
         )}
-
+{/* Request Changes Button - Firm Admin Only */}
+        {isFirmAdmin && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowRequestModal(true)}
+              className="px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 font-medium transition-colors"
+            >
+              📝 Request Changes
+            </button>
+          </div>
+        )}
+        
         {receipt.purpose_text && (
           <div className="mt-4 rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface p-6">
             <div className="text-sm text-gray-500 dark:text-gray-400">Purpose</div>
@@ -1095,6 +1108,7 @@ link.download = activePreviewType === 'pdf'
       alert("🔒 Firm admins cannot edit line items.");
       return;
     }
+    
     const newItem = {
       id: `temp-${Date.now()}`,
       description: "",
@@ -1460,6 +1474,17 @@ link.download = activePreviewType === 'pdf'
           </div>
         )}
       </div>
+      {/* Request Changes Modal */}
+      {showRequestModal && (
+        <RequestChangesModal
+          receiptId={receiptId}
+          onClose={() => setShowRequestModal(false)}
+          onSuccess={() => {
+            setShowRequestModal(false);
+            alert("✅ Change request sent to accountant!");
+          }}
+        />
+      )}
     </main>
   );
 }

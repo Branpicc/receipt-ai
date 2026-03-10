@@ -42,6 +42,7 @@ const accountantNavItems = [
   { href: "/dashboard/category-dashboard", label: "Categories", icon: "📊" },
   { href: "/dashboard/tax-codes", label: "Tax Codes", icon: "🧾" },
   { href: "/dashboard/clients", label: "Clients", icon: "👥" },
+  { href: "/dashboard/approval-requests", label: "Requests", icon: "📋" },
 ];
 
 // Show full nav to firm_admin and accountants
