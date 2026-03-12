@@ -23,6 +23,8 @@ export default function TeamManagementPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"accountant" | "client">("client");
   const [inviting, setInviting] = useState(false);
+  const [showInviteUrl, setShowInviteUrl] = useState(false);
+  const [inviteUrlData, setInviteUrlData] = useState<{ email: string; url: string } | null>(null);
 
   useEffect(() => {
     checkAccess();
@@ -143,27 +145,62 @@ if (role !== "firm_admin" && role !== "owner") {
     }
   }
 
-  async function inviteUser() {
-    try {
-      setInviting(true);
-      
-      // This is a placeholder - in production, you'd need:
-      // 1. Send invite email with signup link
-      // 2. Create pending invitation in database
-      // 3. User signs up and gets added to firm
-      
-      alert("Invite functionality coming soon! For now, users can sign up and you can assign their role.");
-      setInviteEmail("");
-    } catch (error: any) {
-      console.error("Failed to invite user:", error);
-      alert("Failed to send invite: " + error.message);
-    } finally {
-      setInviting(false);
-    }
+async function inviteUser() {
+  if (!inviteEmail.trim()) {
+    alert("Please enter an email address");
+    return;
   }
 
-  if (loading || userRole !== "accountant") {
-    return (
+  try {
+    setInviting(true);
+    const firmId = await getMyFirmId();
+    
+    // Get auth token
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      alert("Not authenticated");
+      return;
+    }
+
+    // Call the invite API
+    const response = await fetch("/api/invite-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        firmId: firmId,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to send invitation");
+    }
+
+    // Show success with invite URL in modal
+    setInviteUrlData({
+      email: inviteEmail,
+      url: result.invitation.inviteUrl,
+    });
+    setShowInviteUrl(true);
+    
+    setInviteEmail("");
+    await loadUsers();
+  } catch (error: any) {
+    console.error("Failed to invite user:", error);
+    alert("Failed to send invite: " + error.message);
+  } finally {
+    setInviting(false);
+  }
+}
+
+if (loading || (userRole !== "firm_admin" && userRole !== "owner")) {
+      return (
       <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
         <div className="max-w-4xl mx-auto">
           <p className="text-gray-500 dark:text-gray-400">
@@ -220,9 +257,9 @@ if (role !== "firm_admin" && role !== "owner") {
             </button>
           </div>
           
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-            💡 Invite functionality coming soon. For now, have users sign up and you can assign their role below.
-          </p>
+<p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
+  The invited user will receive an email with a signup link. They'll be automatically added to your firm with the selected role.
+</p>
         </div>
 
         {/* Team Members List */}
@@ -282,6 +319,54 @@ if (role !== "firm_admin" && role !== "owner") {
             <div><strong>Client:</strong> Limited access - view own receipts, upload receipts, basic reporting</div>
           </div>
         </div>
+
+        {/* Invite URL Modal */}
+        {showInviteUrl && inviteUrlData && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-dark-surface rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-transparent dark:border-dark-border">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                ✅ Invitation Sent!
+              </h3>
+              <p className="text-gray-700 dark:text-gray-300 mb-4">
+                Invitation sent to <strong>{inviteUrlData.email}</strong>
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Invitation Link (for testing):
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={inviteUrlData.url}
+                    readOnly
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-white font-mono text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteUrlData.url);
+                      alert("Copied to clipboard!");
+                    }}
+                    className="px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 font-medium"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                💡 An email has been sent automatically if SendGrid is configured. Otherwise, share this link manually.
+              </p>
+              <button
+                onClick={() => {
+                  setShowInviteUrl(false);
+                  setInviteUrlData(null);
+                }}
+                className="w-full px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
