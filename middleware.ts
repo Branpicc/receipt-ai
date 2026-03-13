@@ -62,14 +62,14 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Public routes that don't require authentication
-  const publicRoutes = [
-    '/login',
-    '/signup',
-    '/accept-invitation',
-    '/forgot-password',
-    '/reset-password',
-    '/magic-link',
-  ]
+const publicRoutes = [
+  '/login',
+  '/signup',
+  '/accept-invite',
+  '/forgot-password',
+  '/reset-password',
+  '/magic-link',
+]
 
   const isPublicRoute = publicRoutes.some((route) => path.startsWith(route))
 
@@ -81,8 +81,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // If authenticated and trying to access auth pages, redirect to dashboard
-  if (session && isPublicRoute && path !== '/accept-invitation') {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+      if (session && isPublicRoute && path !== '/accept-invite') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   // Get user role for role-based routing
