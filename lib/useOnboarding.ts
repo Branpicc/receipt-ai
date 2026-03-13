@@ -122,3 +122,26 @@ export function useOnboarding() {
     restartOnboarding,
   };
 }
+
+// Standalone function for restarting onboarding from Settings
+export async function restartOnboarding() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const firmId = await getMyFirmId();
+
+    await supabase
+      .from("firm_users")
+      .update({
+        onboarding_completed: false,
+        onboarding_skipped: false,
+        onboarding_step: 0,
+      })
+      .eq("auth_user_id", user.id)
+      .eq("firm_id", firmId);
+  } catch (error) {
+    console.error("Failed to restart onboarding:", error);
+    throw error;
+  }
+}
