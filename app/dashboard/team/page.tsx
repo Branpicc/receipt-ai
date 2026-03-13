@@ -15,9 +15,20 @@ type FirmUser = {
   last_seen: string | null;
 };
 
+type Invitation = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+  invited_by: string;
+};
+
 export default function TeamManagementPage() {
   const router = useRouter();
   const [users, setUsers] = useState<FirmUser[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -25,6 +36,7 @@ export default function TeamManagementPage() {
   const [inviting, setInviting] = useState(false);
   const [showInviteUrl, setShowInviteUrl] = useState(false);
   const [inviteUrlData, setInviteUrlData] = useState<{ email: string; url: string } | null>(null);
+  const [inviteFilter, setInviteFilter] = useState<"all" | "accountant" | "client">("all");
 
   useEffect(() => {
     checkAccess();
@@ -34,13 +46,14 @@ export default function TeamManagementPage() {
     const role = await getUserRole();
     setUserRole(role);
 
-if (role !== "firm_admin" && role !== "owner") {
-  alert("Access denied. Only firm admins can view team management.");
-  router.push("/dashboard");
-  return;
-}
+    if (role !== "firm_admin" && role !== "owner") {
+      alert("Access denied. Only firm admins can view team management.");
+      router.push("/dashboard");
+      return;
+    }
 
     loadUsers();
+    loadInvitations();
   }
 
   async function loadUsers() {
@@ -48,7 +61,6 @@ if (role !== "firm_admin" && role !== "owner") {
       setLoading(true);
       const firmId = await getMyFirmId();
 
-      // Get firm users
       const { data: firmUsers, error: usersError } = await supabase
         .from("firm_users")
         .select("id, auth_user_id, role, created_at, last_seen")
@@ -57,14 +69,9 @@ if (role !== "firm_admin" && role !== "owner") {
 
       if (usersError) throw usersError;
 
-      // Get auth emails
-      const userIds = firmUsers?.map(u => u.auth_user_id) || [];
-      
-      // Fetch emails from auth.users (requires service role or custom function)
-      // For now, we'll show the auth_user_id. In production, you'd need a server function.
       const usersWithEmails = firmUsers?.map(u => ({
         ...u,
-        email: u.auth_user_id, // Placeholder - replace with actual email lookup
+        email: u.auth_user_id,
       })) as FirmUser[];
 
       setUsers(usersWithEmails || []);
@@ -76,12 +83,29 @@ if (role !== "firm_admin" && role !== "owner") {
     }
   }
 
+  async function loadInvitations() {
+    try {
+      const firmId = await getMyFirmId();
+
+      const { data, error } = await supabase
+        .from("invitations")
+        .select("id, email, role, status, created_at, expires_at, invited_by")
+        .eq("firm_id", firmId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      setInvitations(data || []);
+    } catch (error: any) {
+      console.error("Failed to load invitations:", error);
+    }
+  }
+
   async function updateRole(userId: string, newRole: "accountant" | "client") {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Prevent removing last accountant
       if (newRole === "client") {
         const accountantCount = users.filter(u => u.role === "accountant").length;
         if (accountantCount <= 1) {
@@ -110,13 +134,11 @@ if (role !== "firm_admin" && role !== "owner") {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Prevent removing yourself
       if (userAuthId === user.id) {
         alert("You cannot remove yourself from the team.");
         return;
       }
 
-      // Prevent removing last accountant
       const targetUser = users.find(u => u.id === userId);
       if (targetUser?.role === "accountant") {
         const accountantCount = users.filter(u => u.role === "accountant").length;
@@ -145,62 +167,145 @@ if (role !== "firm_admin" && role !== "owner") {
     }
   }
 
-async function inviteUser() {
-  if (!inviteEmail.trim()) {
-    alert("Please enter an email address");
-    return;
-  }
-
-  try {
-    setInviting(true);
-    const firmId = await getMyFirmId();
-    
-    // Get auth token
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      alert("Not authenticated");
+  async function inviteUser() {
+    if (!inviteEmail.trim()) {
+      alert("Please enter an email address");
       return;
     }
 
-    // Call the invite API
-    const response = await fetch("/api/invite-user", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        email: inviteEmail.trim(),
-        role: inviteRole,
-        firmId: firmId,
-      }),
-    });
+    try {
+      setInviting(true);
+      const firmId = await getMyFirmId();
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Not authenticated");
+        return;
+      }
 
-    const result = await response.json();
+      const response = await fetch("/api/invite-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          firmId: firmId,
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(result.error || "Failed to send invitation");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send invitation");
+      }
+
+      setInviteUrlData({
+        email: inviteEmail,
+        url: result.invitation.inviteUrl,
+      });
+      setShowInviteUrl(true);
+      
+      setInviteEmail("");
+      await loadUsers();
+      await loadInvitations();
+    } catch (error: any) {
+      console.error("Failed to invite user:", error);
+      alert("Failed to send invite: " + error.message);
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function cancelInvitation(invitationId: string) {
+    if (!confirm("Are you sure you want to cancel this invitation?")) {
+      return;
     }
 
-    // Show success with invite URL in modal
-    setInviteUrlData({
-      email: inviteEmail,
-      url: result.invitation.inviteUrl,
-    });
-    setShowInviteUrl(true);
-    
-    setInviteEmail("");
-    await loadUsers();
-  } catch (error: any) {
-    console.error("Failed to invite user:", error);
-    alert("Failed to send invite: " + error.message);
-  } finally {
-    setInviting(false);
-  }
-}
+    try {
+      const { error } = await supabase
+        .from("invitations")
+        .update({ status: "cancelled" })
+        .eq("id", invitationId);
 
-if (loading || (userRole !== "firm_admin" && userRole !== "owner")) {
-      return (
+      if (error) throw error;
+
+      alert("✅ Invitation cancelled");
+      await loadInvitations();
+    } catch (error: any) {
+      console.error("Failed to cancel invitation:", error);
+      alert("Failed to cancel invitation: " + error.message);
+    }
+  }
+
+  async function resendInvitation(email: string, role: string) {
+    try {
+      setInviting(true);
+      const firmId = await getMyFirmId();
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Not authenticated");
+        return;
+      }
+
+      const response = await fetch("/api/invite-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: email,
+          role: role,
+          firmId: firmId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to resend invitation");
+      }
+
+      alert("✅ Invitation resent!");
+      await loadInvitations();
+    } catch (error: any) {
+      console.error("Failed to resend invitation:", error);
+      alert("Failed to resend invitation: " + error.message);
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function getStatusBadge(invitation: Invitation) {
+    const now = new Date();
+    const expiresAt = new Date(invitation.expires_at);
+    
+    if (invitation.status === "accepted") {
+      return <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">Accepted</span>;
+    }
+    
+    if (invitation.status === "cancelled") {
+      return <span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-300">Cancelled</span>;
+    }
+    
+    if (expiresAt < now) {
+      return <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">Expired</span>;
+    }
+    
+    return <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">Pending</span>;
+  }
+
+  const filteredInvitations = invitations.filter(inv => {
+    if (inviteFilter === "all") return true;
+    return inv.role === inviteFilter;
+  });
+
+  if (loading || (userRole !== "firm_admin" && userRole !== "owner")) {
+    return (
       <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
         <div className="max-w-4xl mx-auto">
           <p className="text-gray-500 dark:text-gray-400">
@@ -257,16 +362,113 @@ if (loading || (userRole !== "firm_admin" && userRole !== "owner")) {
             </button>
           </div>
           
-<p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-  The invited user will receive an email with a signup link. They'll be automatically added to your firm with the selected role.
-</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
+            The invited user will receive an email with a signup link. They&apos;ll be automatically added to your firm with the selected role.
+          </p>
+        </div>
+
+        {/* Pending Invitations */}
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm mb-6 border border-transparent dark:border-dark-border overflow-hidden">
+          <div className="p-6 border-b border-gray-200 dark:border-dark-border">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Pending Invitations ({filteredInvitations.length})
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setInviteFilter("all")}
+                  className={`px-3 py-1 text-sm rounded-lg ${
+                    inviteFilter === "all"
+                      ? "bg-accent-500 text-white"
+                      : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setInviteFilter("accountant")}
+                  className={`px-3 py-1 text-sm rounded-lg ${
+                    inviteFilter === "accountant"
+                      ? "bg-accent-500 text-white"
+                      : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  Accountants
+                </button>
+                <button
+                  onClick={() => setInviteFilter("client")}
+                  className={`px-3 py-1 text-sm rounded-lg ${
+                    inviteFilter === "client"
+                      ? "bg-accent-500 text-white"
+                      : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  Clients
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {filteredInvitations.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              No invitations found
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200 dark:divide-dark-border">
+              {filteredInvitations.map((invitation) => {
+                const isExpired = new Date(invitation.expires_at) < new Date();
+                const isPending = invitation.status === "pending" && !isExpired;
+                
+                return (
+                  <div key={invitation.id} className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <div className="font-medium text-gray-900 dark:text-white">
+                            {invitation.email}
+                          </div>
+                          {getStatusBadge(invitation)}
+                          <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                            {invitation.role}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          Sent {new Date(invitation.created_at).toLocaleDateString()} • 
+                          Expires {new Date(invitation.expires_at).toLocaleDateString()}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isPending && (
+                          <button
+                            onClick={() => cancelInvitation(invitation.id)}
+                            className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {isExpired && invitation.status !== "cancelled" && (
+                          <button
+                            onClick={() => resendInvitation(invitation.email, invitation.role)}
+                            className="px-3 py-1.5 text-sm text-accent-600 dark:text-accent-400 hover:bg-accent-50 dark:hover:bg-accent-900/20 rounded-lg transition-colors"
+                          >
+                            Resend
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Team Members List */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden">
           <div className="p-6 border-b border-gray-200 dark:border-dark-border">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Team Members ({users.length})
+              Active Team Members ({users.length})
             </h2>
           </div>
 
