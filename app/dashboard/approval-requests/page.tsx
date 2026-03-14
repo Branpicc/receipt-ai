@@ -34,8 +34,8 @@ export default function ApprovalRequestsPage() {
   }, []);
 
   useEffect(() => {
-    if (userRole === "accountant") {
-      loadRequests();
+if (loading || (userRole !== "accountant" && userRole !== "firm_admin" && userRole !== "owner")) {
+        loadRequests();
     }
   }, [userRole, activeTab]);
 
@@ -43,8 +43,8 @@ export default function ApprovalRequestsPage() {
     const role = await getUserRole();
     setUserRole(role);
 
-    if (role !== "accountant" && role !== "owner") {
-      alert("Access denied. Only accountants can view approval requests.");
+  if (role !== "accountant" && role !== "firm_admin" && role !== "owner") {
+        alert("Access denied. Only accountants can view approval requests.");
       router.push("/dashboard");
       return;
     }
