@@ -16,6 +16,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ReceiptAI - Smart Receipt Management",
   description: "AI-powered receipt management and expense tracking",
+  manifest: "/manifest.json",
+  themeColor: "#3B82F6",
 };
 
 export default function RootLayout({
@@ -25,6 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#3B82F6" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 dark:bg-dark-bg transition-colors`}
       >

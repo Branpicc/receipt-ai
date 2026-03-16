@@ -12,6 +12,7 @@ type Invitation = {
   status: string;
   expires_at: string;
   firm_name: string;
+  client_id?: string;
 };
 
 export default function AcceptInvitePage() {
@@ -39,7 +40,7 @@ export default function AcceptInvitePage() {
 
       const { data: invite, error: inviteError } = await supabase
         .from("invitations")
-        .select("id, firm_id, email, role, status, expires_at")
+        .select("id, firm_id, email, role, status, expires_at, client_id")
         .eq("token", token)
         .single();
 
@@ -121,6 +122,7 @@ export default function AcceptInvitePage() {
             auth_user_id: authData.user.id,
             role: invitation.role,
             display_name: displayName.trim(),
+            client_id: invitation.client_id || null,
           },
         ]);
 

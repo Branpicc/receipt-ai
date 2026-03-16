@@ -189,11 +189,12 @@ export default function TeamManagementPage() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          email: inviteEmail.trim(),
-          role: inviteRole,
-          firmId: firmId,
-        }),
+body: JSON.stringify({
+  email: inviteEmail.trim(),
+  role: inviteRole,
+  firmId: firmId,
+  clientId: inviteRole === "client" ? "1e3dd519-7674-4edc-8389-ca06b6ac146b" : null,
+}),
       });
 
       const result = await response.json();
@@ -257,11 +258,12 @@ export default function TeamManagementPage() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          email: email,
-          role: role,
-          firmId: firmId,
-        }),
+body: JSON.stringify({
+  email: email,
+  role: role,
+  firmId: firmId,
+  clientId: role === "client" ? "1e3dd519-7674-4edc-8389-ca06b6ac146b" : null,
+}),
       });
 
       const result = await response.json();

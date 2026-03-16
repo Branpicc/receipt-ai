@@ -529,9 +529,9 @@ async function splitMismatchedItems(flagId: string) {
         if (r?.file_path) {
           setPreviewLoading(true);
           try {
-            const { data: signedData, error: signedErr } = await supabase.storage
-              .from("receipt-files")
-              .createSignedUrl(r.file_path, 3600);
+const { data: signedData, error: signedErr } = await supabase.storage
+  .from("receipts") 
+  .createSignedUrl(r.file_path, 3600);
 
             if (signedErr) throw signedErr;
 
@@ -570,10 +570,10 @@ const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentat
   if (pdfMatch && pdfMatch[1]) {
     const pdfPath = pdfMatch[1];
     
-    supabase.storage
-      .from('receipt-files')
-      .createSignedUrl(pdfPath, 3600)
-      .then(({ data, error }) => {
+supabase.storage
+  .from('receipts') 
+  .createSignedUrl(pdfPath, 3600)
+        .then(({ data, error }) => {
         if (!error && data) {
           setSplitPdfUrl(data.signedUrl);
         }

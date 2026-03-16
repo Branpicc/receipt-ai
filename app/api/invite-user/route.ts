@@ -17,11 +17,19 @@ const supabaseAdmin = createClient(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, role, firmId } = body;
+    const { email, role, firmId, clientId } = body;
 
     if (!email || !role || !firmId) {
       return NextResponse.json(
         { error: "Email, role, and firmId are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate client_id for client role
+    if (role === "client" && !clientId) {
+      return NextResponse.json(
+        { error: "client_id is required for client role" },
         { status: 400 }
       );
     }
@@ -140,6 +148,7 @@ export async function POST(request: NextRequest) {
           invited_by: firmUser.id,
           expires_at: expiresAt.toISOString(),
           status: "pending",
+          client_id: role === "client" ? clientId : null,
         },
       ])
       .select()
