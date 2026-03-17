@@ -100,7 +100,12 @@ const publicRoutes = [
 
       if (firmUser) {
 // Client users should be redirected to client portal (except for receipts and budget pages)
-const clientAllowedPaths = ['/dashboard/client', '/dashboard/receipts', '/dashboard/budget-settings'];
+const clientAllowedPaths = [
+  '/dashboard/client', 
+  '/dashboard/receipts', 
+  '/dashboard/budget-settings',
+  '/dashboard/settings'  
+];
 const isClientAllowed = clientAllowedPaths.some(p => path === p || path.startsWith(p + '/'));
 
 if (firmUser.role === 'client' && !isClientAllowed) {

@@ -51,40 +51,48 @@ export default function SettingsPage() {
     }
   }, [preferences.theme]);
 
-  const loadUser = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user) {
-        setLoading(false);
-        return;
-      }
-
-      const { data: firmUser } = await supabase
-        .from("firm_users")
-        .select("role, firm_id, display_name")
-        .eq("auth_user_id", session.user.id)
-        .single();
-
-      if (!firmUser) {
-        setLoading(false);
-        return;
-      }
-
-      setUser({
-        email: session.user.email!,
-        role: firmUser.role,
-        firmId: firmUser.firm_id,
-        displayName: firmUser.display_name,
-      });
-      
-      setDisplayName(firmUser.display_name || "");
-    } catch (error) {
-      console.error("Failed to load user:", error);
-    } finally {
+const loadUser = async () => {
+  try {
+    console.log("🔍 Loading user...");
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    console.log("📊 Session:", session?.user?.id);
+    
+    if (!session?.user) {
+      console.log("❌ No session");
       setLoading(false);
+      return;
     }
-  };
+
+    const { data: firmUser, error } = await supabase
+      .from("firm_users")
+      .select("role, firm_id, display_name")
+      .eq("auth_user_id", session.user.id)
+      .single();
+
+    console.log("📊 Firm user:", firmUser, "Error:", error);
+
+    if (!firmUser) {
+      console.log("❌ No firm user found");
+      setLoading(false);
+      return;
+    }
+
+    setUser({
+      email: session.user.email!,
+      role: firmUser.role,
+      firmId: firmUser.firm_id,
+      displayName: firmUser.display_name,
+    });
+    
+    console.log("✅ User loaded:", firmUser.role);
+    setDisplayName(firmUser.display_name || "");
+  } catch (error) {
+    console.error("Failed to load user:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const loadPreferences = async () => {
     try {
@@ -284,7 +292,7 @@ const { error } = await supabase
     );
   }
 
-  return (
+return (
     <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Settings</h1>
