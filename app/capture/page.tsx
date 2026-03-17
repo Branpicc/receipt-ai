@@ -22,6 +22,16 @@ export default function CameraCapturePage() {
     checkAccess();
   }, []);
 
+  // Add this after the existing useEffect
+useEffect(() => {
+  // Cleanup function to stop camera when component unmounts
+  return () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+}, [stream]);
+
   async function checkAccess() {
     try {
       const role = await getUserRole();
@@ -153,9 +163,10 @@ export default function CameraCapturePage() {
       }
 
       // Trigger OCR processing
-      try {
-        await fetch('/api/upload-receipt', {
-          method: 'POST',
+// Trigger OCR processing
+try {
+  await fetch('/api/process-existing-receipt', {
+              method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             receiptId: insertedReceipt.id,

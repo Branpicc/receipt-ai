@@ -102,6 +102,25 @@ const navItems = (isAccountant || isFirmAdmin)
                     </li>
                   );
                 })}
+                {/* Camera Capture - Client Only */}
+{isClient && (
+  <li>
+    <Link
+      href="/capture"
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+        pathname === '/capture'
+          ? 'bg-accent-500 text-white'
+          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+      }`}
+    >
+      <span className="text-xl">📸</span>
+      {sidebarOpen && (
+        <span className="font-medium">Quick Capture</span>
+      )}
+    </Link>
+  </li>
+)}
+
                 {/* Firm Admin Dashboard - Firm Admin Only */}
   {isFirmAdmin && (
     <li>
