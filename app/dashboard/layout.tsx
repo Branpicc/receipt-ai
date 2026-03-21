@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import UploadFab from "@/components/UploadFab";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
@@ -20,9 +21,38 @@ export default function DashboardLayout({
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
 
-  useEffect(() => {
-    loadUserRole();
-  }, []);
+useEffect(() => {
+  loadUserRole();
+  loadAndApplyTheme();
+}, []);
+
+async function loadAndApplyTheme() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("user_preferences")
+      .select("theme")
+      .eq("user_id", user.id)
+      .single();
+
+    const theme = data?.theme || "system";
+    applyTheme(theme);
+  } catch (error) {
+    console.error("Failed to load theme:", error);
+    applyTheme("system"); // Fallback
+  }
+}
+
+function applyTheme(theme: "light" | "dark" | "system") {
+  if (theme === "system") {
+    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.classList.toggle("dark", isDark);
+  } else {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }
+}
 
   async function loadUserRole() {
     const role = await getUserRole();
