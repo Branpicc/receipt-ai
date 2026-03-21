@@ -15,6 +15,9 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [operationsOpen, setOperationsOpen] = useState(true);
+  const [teamOpen, setTeamOpen] = useState(true);
+  const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
@@ -77,108 +80,290 @@ const navItems = (isAccountant || isFirmAdmin)
               </div>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 p-4">
-              <ul className="space-y-2">
-                {navItems.map((item) => {
-                  const isActive = pathname === item.href || 
-                    (item.href !== "/dashboard" && pathname.startsWith(item.href));
-                  
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                          isActive
-                            ? "bg-accent-500 text-white"
-                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
-                        }`}
-                      >
-                        <span className="text-xl">{item.icon}</span>
-                        {sidebarOpen && (
-                          <span className="font-medium">{item.label}</span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-                {/* Camera Capture - Client Only */}
-{isClient && (
-  <li>
-    <Link
-      href="/capture"
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        pathname === '/capture'
-          ? 'bg-accent-500 text-white'
-          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
-      }`}
-    >
-      <span className="text-xl">📸</span>
-      {sidebarOpen && (
-        <span className="font-medium">Quick Capture</span>
-      )}
-    </Link>
-  </li>
-)}
-
-                {/* Firm Admin Dashboard - Firm Admin Only */}
-  {isFirmAdmin && (
+{/* Navigation */}
+<nav className="flex-1 p-4 overflow-y-auto">
+  <ul className="space-y-1">
+    {/* Dashboard - always visible */}
     <li>
       <Link
-        href="/dashboard/firm-admin"
+        href="/dashboard"
         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-          pathname === '/dashboard/firm-admin'
+          pathname === '/dashboard'
             ? 'bg-accent-500 text-white'
             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
         }`}
       >
-        <span className="text-xl">📊</span>
-        {sidebarOpen && (
-          <span className="font-medium">Analytics</span>
-        )}
+        <span className="text-xl">🏠</span>
+        {sidebarOpen && <span className="font-medium">Dashboard</span>}
       </Link>
     </li>
-  )}
 
-                {/* Budget Settings - Accountant only and Firm Admin */}
-                {(isAccountant || isFirmAdmin) && (
-                  <li>
-                    <Link
-                      href="/dashboard/budget-settings"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                        pathname === '/dashboard/budget-settings'
-                          ? 'bg-accent-500 text-white'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                      }`}
-                    >
-                      <span className="text-xl">💰</span>
-                      {sidebarOpen && (
-                        <span className="font-medium">Spending Budget</span>
-                      )}
-                    </Link>
-                  </li>
-                )}
+    {/* Client - Simple nav (no sections) */}
+    {isClient && (
+      <>
+        <li>
+          <Link
+            href="/dashboard/receipts"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/dashboard/receipts' || pathname.startsWith('/dashboard/receipts/')
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+            }`}
+          >
+            <span className="text-xl">📁</span>
+            {sidebarOpen && <span className="font-medium">Receipts</span>}
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/capture"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/capture'
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+            }`}
+          >
+            <span className="text-xl">📸</span>
+            {sidebarOpen && <span className="font-medium">Quick Capture</span>}
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/dashboard/budget-settings"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/dashboard/budget-settings'
+                ? 'bg-accent-500 text-white'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+            }`}
+          >
+            <span className="text-xl">💰</span>
+            {sidebarOpen && <span className="font-medium">Budget</span>}
+          </Link>
+        </li>
+      </>
+    )}
 
-  {/* Team Management - Firm Admin Only */}
-  {isFirmAdmin && (
-                      <li>
-                    <Link
-                      href="/dashboard/team"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                        pathname === '/dashboard/team'
-                          ? 'bg-accent-500 text-white'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                      }`}
-                    >
-                      <span className="text-xl">👥</span>
-                      {sidebarOpen && (
-                        <span className="font-medium">Team</span>
-                      )}
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            </nav>
+    {/* Accountant/Firm Admin - Collapsible sections */}
+    {(isAccountant || isFirmAdmin) && (
+      <>
+        {/* Operations Section */}
+        <li className="mt-4">
+          <button
+onClick={() => {
+  if (!sidebarOpen) {
+    setSidebarOpen(true);
+    setOperationsOpen(true);
+  } else {
+    setOperationsOpen(!operationsOpen);
+  }
+}}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
+          >
+            <span className="text-xl">📊</span>
+            {sidebarOpen ? (
+              <>
+                <span className="flex-1 text-left font-medium">Operations</span>
+                <span className="text-sm">{operationsOpen ? '▼' : '▶'}</span>
+              </>
+            ) : null}
+          </button>
+        </li>
+        {sidebarOpen && operationsOpen && (
+          <>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/receipts"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/receipts' || pathname.startsWith('/dashboard/receipts/')
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">📁</span>
+                <span className="text-sm">Receipts</span>
+              </Link>
+            </li>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/email-inbox"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/email-inbox'
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">📧</span>
+                <span className="text-sm">Email Inbox</span>
+              </Link>
+            </li>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/category-dashboard"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/category-dashboard'
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">📂</span>
+                <span className="text-sm">Categories</span>
+              </Link>
+            </li>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/flags"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/flags'
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">🚩</span>
+                <span className="text-sm">Flags</span>
+              </Link>
+            </li>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/budget-settings"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/budget-settings'
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">💰</span>
+                <span className="text-sm">Spending Budget</span>
+              </Link>
+            </li>
+          </>
+        )}
+
+        {/* Team & Clients Section */}
+        <li className="mt-2">
+          <button
+onClick={() => {
+    if (!sidebarOpen) {
+      setSidebarOpen(true);
+      setTeamOpen(true);  // ✅ CORRECT
+    } else {
+      setTeamOpen(!teamOpen);  // ✅ CORRECT
+    }
+  }}
+    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
+>          
+            <span className="text-xl">👥</span>
+            {sidebarOpen ? (
+              <>
+                <span className="flex-1 text-left font-medium">Team & Clients</span>
+                <span className="text-sm">{teamOpen ? '▼' : '▶'}</span>
+              </>
+            ) : null}
+          </button>
+        </li>
+        {sidebarOpen && teamOpen && (
+          <>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/clients"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/clients' || pathname.startsWith('/dashboard/clients/')
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">🏢</span>
+                <span className="text-sm">Clients</span>
+              </Link>
+            </li>
+            <li className="ml-4">
+              <Link
+                href="/dashboard/approval-requests"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/approval-requests'
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                }`}
+              >
+                <span className="text-lg">📋</span>
+                <span className="text-sm">Requests</span>
+              </Link>
+            </li>
+            {isFirmAdmin && (
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/team"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname === '/dashboard/team'
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <span className="text-lg">👤</span>
+                  <span className="text-sm">Team</span>
+                </Link>
+              </li>
+            )}
+          </>
+        )}
+
+        {/* Reports Section */}
+        <li className="mt-2">
+          <button
+ onClick={() => {
+    if (!sidebarOpen) {
+      setSidebarOpen(true);
+      setReportsOpen(true);
+    } else {
+      setReportsOpen(!reportsOpen);
+    }
+  }}
+  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
+>
+            <span className="text-xl">📈</span>
+            {sidebarOpen ? (
+              <>
+                <span className="flex-1 text-left font-medium">Reports</span>
+                <span className="text-sm">{reportsOpen ? '▼' : '▶'}</span>
+              </>
+            ) : null}
+          </button>
+        </li>
+        {sidebarOpen && reportsOpen && (
+          <>
+            {isFirmAdmin && (
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/firm-admin"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname === '/dashboard/firm-admin'
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <span className="text-lg">📊</span>
+                  <span className="text-sm">Analytics</span>
+                </Link>
+              </li>
+            )}
+            <li className="ml-4">
+              <Link
+                href="/dashboard/tax-codes"
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                  pathname === '/dashboard/tax-codes'
+                    ? 'bg-accent-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+              >
+                <span className="text-lg">🧾</span>
+                <span className="text-sm">Tax Codes</span>
+              </Link>
+            </li>
+          </>
+        )}
+      </>
+    )}
+  </ul>
+</nav>
 
             {/* User Menu */}
             <div className="p-4 border-t border-gray-200 dark:border-dark-border">

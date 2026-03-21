@@ -531,16 +531,16 @@ export default function DashboardHomePage() {
                 </div>
               </Link>
               
-              <button
-                onClick={() => alert("Flags feature coming soon!")}
-                className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors text-left"
-              >
-                <span className="text-2xl">🔔</span>
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">View All Flags</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Unresolved issues</div>
-                </div>
-              </button>
+<Link
+  href="/dashboard/flags"
+  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+>
+  <span className="text-2xl">🚩</span>
+  <div>
+    <div className="font-medium text-gray-900 dark:text-white">View All Flags</div>
+    <div className="text-sm text-gray-500 dark:text-gray-400">Unresolved issues</div>
+  </div>
+</Link>
 
               <button
                 onClick={() => alert("Export feature coming soon!")}
