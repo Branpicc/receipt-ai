@@ -542,16 +542,16 @@ export default function DashboardHomePage() {
   </div>
 </Link>
 
-              <button
-                onClick={() => alert("Export feature coming soon!")}
-                className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors text-left"
-              >
-                <span className="text-2xl">📋</span>
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">Export Reports</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Generate CSV/PDF</div>
-                </div>
-              </button>
+<Link
+  href="/dashboard/reports"
+  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+>
+  <span className="text-2xl">📊</span>
+  <div>
+    <div className="font-medium text-gray-900 dark:text-white">Export Reports</div>
+    <div className="text-sm text-gray-500 dark:text-gray-400">Generate CSV/PDF</div>
+  </div>
+</Link>
 
               <Link
                 href="/dashboard/clients"
