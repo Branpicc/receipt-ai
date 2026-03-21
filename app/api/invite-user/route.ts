@@ -17,19 +17,11 @@ const supabaseAdmin = createClient(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, role, firmId, clientId } = body;
+    const { email, role, firmId, clientId, assignedAccountantId } = body;
 
     if (!email || !role || !firmId) {
       return NextResponse.json(
         { error: "Email, role, and firmId are required" },
-        { status: 400 }
-      );
-    }
-
-    // Validate client_id for client role
-    if (role === "client" && !clientId) {
-      return NextResponse.json(
-        { error: "client_id is required for client role" },
         { status: 400 }
       );
     }
@@ -149,6 +141,7 @@ export async function POST(request: NextRequest) {
           expires_at: expiresAt.toISOString(),
           status: "pending",
           client_id: role === "client" ? clientId : null,
+          assigned_accountant_id: role === "client" ? assignedAccountantId : null,
         },
       ])
       .select()

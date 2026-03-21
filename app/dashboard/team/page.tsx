@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
+import ImprovedInviteModal from "@/components/ImprovedInviteModal";
 
 type FirmUser = {
   id: string;
@@ -37,6 +38,7 @@ export default function TeamManagementPage() {
   const [showInviteUrl, setShowInviteUrl] = useState(false);
   const [inviteUrlData, setInviteUrlData] = useState<{ email: string; url: string } | null>(null);
   const [inviteFilter, setInviteFilter] = useState<"all" | "accountant" | "client">("all");
+  const [showImprovedInvite, setShowImprovedInvite] = useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -331,43 +333,24 @@ body: JSON.stringify({
           </p>
         </div>
 
-        {/* Invite Section */}
-        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Invite Team Member
-          </h2>
-          
-          <div className="flex gap-4">
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="colleague@example.com"
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
-            />
-            
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as "accountant" | "client")}
-              className="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
-            >
-              <option value="client">Client</option>
-              <option value="accountant">Accountant</option>
-            </select>
-            
-            <button
-              onClick={inviteUser}
-              disabled={!inviteEmail || inviting}
-              className="px-6 py-2 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {inviting ? "Inviting..." : "Send Invite"}
-            </button>
-          </div>
-          
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-            The invited user will receive an email with a signup link. They&apos;ll be automatically added to your firm with the selected role.
-          </p>
-        </div>
+{/* Invite Section */}
+<div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+    Invite Team Member
+  </h2>
+  
+  <button
+    onClick={() => setShowImprovedInvite(true)}
+    className="w-full px-6 py-3 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 flex items-center justify-center gap-2"
+  >
+    <span className="text-xl">+</span>
+    <span>Send Invitation</span>
+  </button>
+  
+  <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
+    Invite accountants or clients to your firm. Clients will be assigned to an accountant automatically.
+  </p>
+</div>
 
         {/* Pending Invitations */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm mb-6 border border-transparent dark:border-dark-border overflow-hidden">
@@ -523,6 +506,20 @@ body: JSON.stringify({
             <div><strong>Client:</strong> Limited access - view own receipts, upload receipts, basic reporting</div>
           </div>
         </div>
+        
+{/* Improved Invite Modal */}
+{showImprovedInvite && (
+  <ImprovedInviteModal
+    onClose={() => setShowImprovedInvite(false)}
+    onSuccess={(url, email) => {
+      setShowImprovedInvite(false);
+      setInviteUrlData({ url, email });
+      setShowInviteUrl(true);
+      loadInvitations();
+    }}
+    userRole={userRole || ""}
+  />
+)}
 
         {/* Invite URL Modal */}
         {showInviteUrl && inviteUrlData && (

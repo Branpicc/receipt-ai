@@ -13,6 +13,7 @@ type Invitation = {
   expires_at: string;
   firm_name: string;
   client_id?: string;
+  assigned_accountant_id?: string; 
 };
 
 export default function AcceptInvitePage() {
@@ -38,11 +39,11 @@ export default function AcceptInvitePage() {
     try {
       setLoading(true);
 
-      const { data: invite, error: inviteError } = await supabase
-        .from("invitations")
-        .select("id, firm_id, email, role, status, expires_at, client_id")
-        .eq("token", token)
-        .single();
+const { data: invite, error: inviteError } = await supabase
+  .from("invitations")
+  .select("id, firm_id, email, role, status, expires_at, client_id, assigned_accountant_id")
+  .eq("token", token)
+  .single();
 
       if (inviteError || !invite) {
         setError("Invalid or expired invitation");
@@ -114,18 +115,37 @@ export default function AcceptInvitePage() {
         throw new Error("Failed to create user account");
       }
 
-      const { error: firmUserError } = await supabase
-        .from("firm_users")
-        .insert([
-          {
-            firm_id: invitation.firm_id,
-            auth_user_id: authData.user.id,
-            role: invitation.role,
-            display_name: displayName.trim(),
-            client_id: invitation.client_id || null,
-          },
-        ]);
+// Create client record if needed
+let clientId = invitation.client_id;
+if (invitation.role === "client" && !clientId) {
+  // Client will provide company info - create placeholder
+  const { data: newClient, error: clientError } = await supabase
+    .from("clients")
+    .insert({
+      firm_id: invitation.firm_id,
+      name: `${displayName.trim()} (Pending)`,
+      is_active: true,
+      assigned_accountant_id: invitation.assigned_accountant_id,
+    })
+    .select("id")
+    .single();
 
+  if (clientError) throw clientError;
+  clientId = newClient.id;
+}
+
+const { error: firmUserError } = await supabase
+  .from("firm_users")
+  .insert([
+    {
+      firm_id: invitation.firm_id,
+      auth_user_id: authData.user.id,
+      role: invitation.role,
+      display_name: displayName.trim(),
+      client_id: clientId,
+    },
+  ]);
+  
       if (firmUserError) {
         console.error("Failed to add to firm:", firmUserError);
         throw new Error("Failed to join firm");
