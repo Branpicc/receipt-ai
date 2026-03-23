@@ -317,9 +317,30 @@ export function getClientSteps(
       action: {
         label: "Save & Continue →",
         onClick: async () => {
-          // Call the save function from the component
           if ((window as any).__saveClientEmail) {
             await (window as any).__saveClientEmail();
+          }
+        },
+      },
+    },
+    {
+      title: "Tell Us About Your Income 💼",
+      description: "Help us prepare the right tax forms for you.",
+      content: (
+        <ClientIncomeTypeSelection />
+      ),
+    },
+    {
+      title: "Confirm Your Income Types 📋",
+      description: "Review your selections before continuing.",
+      content: (
+        <ClientIncomeTypeConfirmation />
+      ),
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__saveIncomeTypeConfirm) {
+            await (window as any).__saveIncomeTypeConfirm();
           }
         },
       },
@@ -493,6 +514,340 @@ function ClientEmailSetup({
           💡 <strong>Tip:</strong> Save this email to your contacts so you can quickly forward receipts while on the go!
         </p>
       </div>
+    </div>
+  );
+}
+
+// Client Income Type Selection Component (Step 1)
+function ClientIncomeTypeSelection() {
+  const [primaryIncome, setPrimaryIncome] = React.useState<string[]>(() => {
+    return (window as any).__incomeTypeData?.primaryIncome || [];
+  });
+  const [secondaryIncome, setSecondaryIncome] = React.useState<string[]>(() => {
+    return (window as any).__incomeTypeData?.secondaryIncome || [];
+  });
+  const [otherIncomeText, setOtherIncomeText] = React.useState(() => {
+    return (window as any).__incomeTypeData?.otherIncomeText || "";
+  });
+
+  const incomeTypes = [
+    { value: "employed", label: "Employed (T4)", desc: "You receive a T4 from your employer", icon: "👔" },
+    { value: "self_employed", label: "Self-Employed", desc: "Sole proprietorship, freelancer", icon: "💼" },
+    { value: "incorporated", label: "Incorporated Business", desc: "You own a corporation", icon: "🏢" },
+    { value: "partnership", label: "Partnership", desc: "Business partnership", icon: "🤝" },
+    { value: "retired", label: "Retired/Pension", desc: "CPP, OAS, or pension income", icon: "🏖️" },
+    { value: "rental_property", label: "Rental Property Owner", desc: "Rental income from property", icon: "🏠" },
+    { value: "investment", label: "Investment Income", desc: "Dividends, capital gains", icon: "📈" },
+    { value: "student", label: "Student", desc: "Limited or no income", icon: "🎓" },
+    { value: "other", label: "Other", desc: "Specify your income source", icon: "📝" },
+  ];
+
+  const secondaryOptions = [
+    { value: "rental", label: "Rental Income" },
+    { value: "investment", label: "Investment Income" },
+    { value: "self_employment", label: "Self-Employment" },
+  ];
+
+  function togglePrimaryIncome(value: string) {
+    if (primaryIncome.includes(value)) {
+      setPrimaryIncome(primaryIncome.filter(v => v !== value));
+      if (value === "other") {
+        setOtherIncomeText("");
+      }
+    } else {
+      setPrimaryIncome([...primaryIncome, value]);
+    }
+  }
+
+  // Save to window storage when state changes
+  React.useEffect(() => {
+    (window as any).__incomeTypeData = {
+      primaryIncome,
+      secondaryIncome,
+      otherIncomeText,
+    };
+  }, [primaryIncome, secondaryIncome, otherIncomeText]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-gray-700 dark:text-gray-300">
+        Select all income types that apply to you. This helps us prepare the correct tax forms and track the right expenses.
+      </p>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+          Income Types * (Select all that apply)
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {incomeTypes.map((type) => (
+            <button
+              key={type.value}
+              type="button"
+              onClick={() => togglePrimaryIncome(type.value)}
+              className={`p-4 rounded-lg border-2 text-left transition-all ${
+                primaryIncome.includes(type.value)
+                  ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
+                  : "border-gray-200 dark:border-dark-border hover:border-accent-300"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 relative">
+                  {primaryIncome.includes(type.value) && (
+                    <div className="absolute -top-2 -left-2 bg-accent-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm z-10">
+                      ✓
+                    </div>
+                  )}
+                  <span className="text-2xl">{type.icon}</span>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900 dark:text-white mb-1">
+                    {type.label}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {type.desc}
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+        {primaryIncome.length > 0 && (
+          <p className="text-sm text-accent-600 dark:text-accent-400 mt-2">
+            {primaryIncome.length} income type{primaryIncome.length > 1 ? 's' : ''} selected
+          </p>
+        )}
+      </div>
+
+      {primaryIncome.includes("other") && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Please specify your other income source *
+          </label>
+          <input
+            type="text"
+            value={otherIncomeText}
+            onChange={(e) => setOtherIncomeText(e.target.value)}
+            placeholder="e.g., Consulting, Royalties, Alimony"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+          />
+        </div>
+      )}
+
+      {primaryIncome.length > 0 && !primaryIncome.includes("employed") && !primaryIncome.includes("student") && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Additional Income (Optional)
+          </label>
+          <div className="space-y-2">
+            {secondaryOptions.map((option) => (
+              <label
+                key={option.value}
+                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={secondaryIncome.includes(option.value)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSecondaryIncome([...secondaryIncome, option.value]);
+                    } else {
+                      setSecondaryIncome(secondaryIncome.filter(v => v !== option.value));
+                    }
+                  }}
+                  className="w-4 h-4 text-accent-500 rounded"
+                />
+                <span className="text-gray-900 dark:text-white">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {primaryIncome.length === 0 && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              (window as any).__incomeTypeData = { skipped: true };
+            }}
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
+          >
+            Skip for now - I'll set this later
+          </button>
+        </div>
+      )}
+
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-4">
+        <p className="text-sm text-blue-900 dark:text-blue-200">
+          💡 <strong>Why we ask:</strong> Different income types have different tax forms and deduction rules. This ensures we track the right expenses for you!
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Client Income Type Confirmation Component (Step 2)
+function ClientIncomeTypeConfirmation() {
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const data = (window as any).__incomeTypeData || {};
+  const { primaryIncome = [], secondaryIncome = [], otherIncomeText = "", skipped = false } = data;
+
+  const incomeTypes = [
+    { value: "employed", label: "Employed (T4)", desc: "You receive a T4 from your employer", icon: "👔" },
+    { value: "self_employed", label: "Self-Employed", desc: "Sole proprietorship, freelancer", icon: "💼" },
+    { value: "incorporated", label: "Incorporated Business", desc: "You own a corporation", icon: "🏢" },
+    { value: "partnership", label: "Partnership", desc: "Business partnership", icon: "🤝" },
+    { value: "retired", label: "Retired/Pension", desc: "CPP, OAS, or pension income", icon: "🏖️" },
+    { value: "rental_property", label: "Rental Property Owner", desc: "Rental income from property", icon: "🏠" },
+    { value: "investment", label: "Investment Income", desc: "Dividends, capital gains", icon: "📈" },
+    { value: "student", label: "Student", desc: "Limited or no income", icon: "🎓" },
+    { value: "other", label: "Other", desc: "Specify your income source", icon: "📝" },
+  ];
+
+  const secondaryOptions = [
+    { value: "rental", label: "Rental Income" },
+    { value: "investment", label: "Investment Income" },
+    { value: "self_employment", label: "Self-Employment" },
+  ];
+
+  async function handleSave() {
+    if (skipped) {
+      return;
+    }
+
+    if (primaryIncome.length === 0) {
+      setError("No income types selected. Please go back and select at least one.");
+      throw new Error("No income types selected");
+    }
+
+    if (primaryIncome.includes("other") && !otherIncomeText.trim()) {
+      setError("Please go back and specify your other income source.");
+      throw new Error("Other income text required");
+    }
+
+    try {
+      setSaving(true);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id")
+        .eq("auth_user_id", user.id)
+        .single();
+
+      if (!firmUser?.client_id) {
+        throw new Error("Client record not found");
+      }
+
+      let incomeData = [...primaryIncome];
+      if (primaryIncome.includes("other") && otherIncomeText.trim()) {
+        incomeData = incomeData.map(i => i === "other" ? `other:${otherIncomeText.trim()}` : i);
+      }
+
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({
+          income_type: primaryIncome.length > 1 ? 'other' : primaryIncome[0],
+          secondary_income: primaryIncome.length > 1 ? incomeData : secondaryIncome,
+        })
+        .eq("id", firmUser.client_id);
+
+      if (updateError) throw updateError;
+
+      // Clear temporary data
+      delete (window as any).__incomeTypeData;
+      setError("");
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  React.useEffect(() => {
+    (window as any).__saveIncomeTypeConfirm = handleSave;
+  }, [primaryIncome, secondaryIncome, otherIncomeText, skipped]);
+
+  if (skipped) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-6xl mb-4">✅</div>
+        <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          Skipped!
+        </p>
+        <p className="text-gray-600 dark:text-gray-400">
+          You can set your income type later in Settings.
+        </p>
+      </div>
+    );
+  }
+
+  const selectedTypes = incomeTypes.filter(t => primaryIncome.includes(t.value));
+  const selectedSecondary = secondaryOptions.filter(s => secondaryIncome.includes(s.value));
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="text-6xl mb-4">📋</div>
+        <p className="text-gray-600 dark:text-gray-400">
+          Please review your selections before continuing
+        </p>
+      </div>
+
+      <div className="bg-gray-50 dark:bg-dark-bg rounded-lg p-6">
+        <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
+          Primary Income Sources ({selectedTypes.length})
+        </h4>
+        <div className="space-y-2">
+          {selectedTypes.map(type => (
+            <div key={type.value} className="flex items-center gap-3 p-3 bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border">
+              <span className="text-2xl">{type.icon}</span>
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">
+                  {type.label}
+                  {type.value === "other" && otherIncomeText && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                      ({otherIncomeText})
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  {type.desc}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {selectedSecondary.length > 0 && (
+          <div className="mt-6">
+            <h4 className="font-semibold text-gray-900 dark:text-white mb-4">
+              Secondary Income ({selectedSecondary.length})
+            </h4>
+            <div className="space-y-2">
+              {selectedSecondary.map(sec => (
+                <div key={sec.value} className="flex items-center gap-3 p-3 bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border">
+                  <span className="text-lg">💼</span>
+                  <span className="text-gray-900 dark:text-white">{sec.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+      
+      {saving && (
+        <p className="text-sm text-blue-600 dark:text-blue-400">Saving...</p>
+      )}
     </div>
   );
 }
