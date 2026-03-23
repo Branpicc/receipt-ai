@@ -286,12 +286,25 @@ export default function DashboardHomePage() {
       const firmId = await getMyFirmId();
       const usageCheck = await checkReceiptUploadLimit(firmId);
       
-      if (!usageCheck.canUpload) {
-        alert(usageCheck.message || "Upload limit reached");
-        setUploading(false);
-        setUploadProgress(null);
-        return;
-      }
+if (!usageCheck.canUpload) {
+  // Calculate days remaining in month
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const daysRemaining = lastDay.getDate() - now.getDate();
+  
+  const message = `📊 Monthly Limit Reached\n\n` +
+    `You've used all ${usageCheck.limit} receipts on your ${usageCheck.plan} plan this month.\n\n` +
+    `${daysRemaining} days remaining until your limit resets.\n\n` +
+    `Upgrade to continue uploading receipts immediately!`;
+  
+  if (confirm(message + "\n\nView upgrade options?")) {
+    window.location.href = "/dashboard/settings";
+  }
+  
+  setUploading(false);
+  setUploadProgress(null);
+  return;
+}
 
       const { data: clients } = await supabase
         .from("clients")
