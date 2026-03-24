@@ -166,7 +166,7 @@ export default function UsageStats() {
         {stats.isOverLimit && stats.plan !== 'free' && (
           <div className="pt-3 border-t border-red-200 dark:border-red-900">
             <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">⚠️ You've reached your monthly limit</p>
-            <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer" className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors">
+            <a href="/dashboard/settings" className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors">
               Upgrade Plan
             </a>
           </div>

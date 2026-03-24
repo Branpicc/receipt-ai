@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractReceiptData } from "@/lib/extractReceiptData";
 
-// Use service role key to bypass RLS
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -20,14 +19,14 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const firmId = formData.get("firmId") as string;
     const clientId = formData.get("clientId") as string;
-    const userId = formData.get("userId") as string | null; // Get user ID
+    const authUserId = formData.get("userId") as string | null;
 
     console.log("📤 Upload started:", { 
       fileName: file?.name, 
       fileSize: file?.size,
       firmId, 
       clientId,
-      userId 
+      authUserId 
     });
 
     if (!file || !firmId || !clientId) {
@@ -37,8 +36,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Look up firm_users.id from auth_user_id
+    let firmUserId = null;
+    if (authUserId) {
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("id")
+        .eq("auth_user_id", authUserId)
+        .eq("firm_id", firmId)
+        .single();
+      
+      firmUserId = firmUser?.id;
+      console.log("👤 Resolved firm_user_id:", firmUserId);
+    }
+
     // Check file size (limit to 10MB)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: "File too large. Maximum size is 10MB." },
@@ -53,7 +66,7 @@ export async function POST(request: NextRequest) {
         {
           firm_id: firmId,
           client_id: clientId,
-          uploaded_by: userId, // Track who uploaded
+          uploaded_by: firmUserId, // Use firm_users.id, not auth_user_id
           source: "upload",
           status: "needs_review",
           currency: "CAD",
@@ -71,11 +84,10 @@ export async function POST(request: NextRequest) {
     const receiptId = receiptData.id;
     console.log("✅ Receipt created:", receiptId);
 
-    // 2. Upload file to storage with retry logic and progressive timeouts
+    // 2. Upload file to storage with retry logic
     const safeName = file.name.replace(/[^\w.\-]+/g, "_");
     const storagePath = `${firmId}/${clientId}/${receiptId}/${Date.now()}_${safeName}`;
 
-    // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -84,9 +96,7 @@ export async function POST(request: NextRequest) {
     let uploadAttempt = 0;
     let uploadError = null;
     const MAX_RETRIES = 3;
-
-    // Try progressively longer timeouts and smaller chunks for large files
-    const isLargeFile = buffer.length > 2 * 1024 * 1024; // 2MB+
+    const isLargeFile = buffer.length > 2 * 1024 * 1024;
 
     while (uploadAttempt < MAX_RETRIES) {
       uploadAttempt++;
@@ -113,10 +123,9 @@ export async function POST(request: NextRequest) {
         console.error(`❌ Upload attempt ${uploadAttempt} exception:`, err.message);
       }
 
-      // Wait before retry with exponential backoff (longer for large files)
       if (uploadAttempt < MAX_RETRIES) {
-        const baseWait = isLargeFile ? 3000 : 2000; // Start with 3s for large files
-        const waitTime = Math.pow(2, uploadAttempt - 1) * baseWait; // 3s, 6s, 12s for large
+        const baseWait = isLargeFile ? 3000 : 2000;
+        const waitTime = Math.pow(2, uploadAttempt - 1) * baseWait;
         console.log(`⏳ Waiting ${waitTime}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
@@ -124,10 +133,7 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error("❌ All upload attempts failed:", uploadError);
-      
-      // Delete the receipt record since upload failed
       await supabase.from("receipts").delete().eq("id", receiptId);
-      
       throw new Error(`Storage upload failed after ${MAX_RETRIES} attempts: ${uploadError.message}`);
     }
 
@@ -139,32 +145,6 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Receipt updated with file_path");
 
-    // 4. Check if firm has OCR feature (not on free plan)
-    const { data: firm } = await supabase
-      .from("firms")
-      .select("subscription_plan")
-      .eq("id", firmId)
-      .single();
-
-    const plan = firm?.subscription_plan || 'free';
-
-    // Skip OCR for free plan
-    if (plan === 'free') {
-      console.log("ℹ️ Free plan - skipping OCR (manual entry required)");
-      await supabase
-        .from("receipts")
-        .update({ extraction_status: "manual_entry_required" })
-        .eq("id", receiptId);
-
-      return NextResponse.json({
-        success: true,
-        receiptId,
-        message: "Receipt uploaded successfully (manual entry required for free plan)",
-        requiresManualEntry: true,
-      });
-    }
-
-    // Continue with OCR for paid plans...
     // 5. Get signed URL and run OCR
     const { data: signedData, error: signedError } = await supabase.storage
       .from("receipt-files")
@@ -172,7 +152,6 @@ export async function POST(request: NextRequest) {
 
     if (signedError || !signedData?.signedUrl) {
       console.error("❌ Failed to create signed URL:", signedError);
-      // Don't fail the whole upload, OCR can be done later
       return NextResponse.json({
         success: true,
         receiptId,
@@ -190,7 +169,6 @@ export async function POST(request: NextRequest) {
 
       vendorName = extracted.vendor || "Unknown vendor";
 
-      // 6. Update receipt with extracted data
       await supabase
         .from("receipts")
         .update({
@@ -204,7 +182,6 @@ export async function POST(request: NextRequest) {
 
       console.log("✅ Receipt updated with OCR data");
 
-      // 7. Save tax if found
       if (extracted.tax_cents && extracted.tax_cents > 0) {
         await supabase.from("receipt_taxes").insert([
           {
@@ -218,7 +195,6 @@ export async function POST(request: NextRequest) {
         console.log("✅ Tax saved:", extracted.tax_cents);
       }
       
-      // 8. Save line items if extracted
       if (extracted.line_items && extracted.line_items.length > 0) {
         const lineItemsToInsert = extracted.line_items.map((item, index) => ({
           receipt_id: receiptId,
@@ -240,17 +216,15 @@ export async function POST(request: NextRequest) {
         .eq("id", receiptId);
     }
 
-    // 9. Create notifications for OTHER users in the firm (not the uploader)
+    // 9. Create notifications for OTHER users
     try {
-      // Get all users in this firm EXCEPT the uploader
       const { data: firmUsers } = await supabase
         .from("firm_users")
         .select("auth_user_id")
         .eq("firm_id", firmId)
-        .neq("auth_user_id", userId || ""); // Exclude uploader
+        .neq("auth_user_id", authUserId || "");
 
       if (firmUsers && firmUsers.length > 0) {
-        // Create notification for each other user
         const notifications = firmUsers.map(user => ({
           firm_id: firmId,
           user_id: user.auth_user_id,
@@ -263,12 +237,9 @@ export async function POST(request: NextRequest) {
 
         await supabase.from("notifications").insert(notifications);
         console.log(`✅ Created ${notifications.length} notifications for other users`);
-      } else {
-        console.log("ℹ️ No other users to notify");
       }
     } catch (notifError: any) {
       console.error("❌ Failed to create notifications:", notifError);
-      // Don't fail the upload if notification fails
     }
 
     return NextResponse.json({
