@@ -705,19 +705,91 @@ export default function SettingsPage() {
                         >
                           Change Plan
                         </button>
-                        {billingInfo.plan !== 'free' && (
-                          <button
-                            onClick={() => {
-                              if (confirm("Are you sure you want to cancel your subscription? You'll lose access to premium features.")) {
-                                // TODO: Implement retention offer flow
-                                alert("Cancellation flow coming soon!");
-                              }
-                            }}
-                            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium transition-colors"
-                          >
-                            Cancel Plan
-                          </button>
-                        )}
+{billingInfo.plan !== 'free' && (
+  <button
+    onClick={async () => {
+      try {
+        // Check eligibility for retention offer
+        const eligibilityRes = await fetch('/api/retention/check-eligibility', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firmId: user.firmId }),
+        });
+        
+const eligibility = await eligibilityRes.json();
+console.log('🔍 Retention eligibility:', eligibility);
+
+if (eligibility.eligible) {
+  console.log('✅ Eligible for retention offer!');
+  // Show retention offer// 
+
+          const accepted = confirm(
+            "🎉 Special Offer!\n\n" +
+            "We'd hate to see you go! As a valued customer, we'd like to offer you:\n\n" +
+            "✨ 30% OFF your current plan for the next 3 months\n\n" +
+            `That's just $${billingInfo.plan === 'starter' ? '20.30' : '55.30'}/month instead of $${billingInfo.plan === 'starter' ? '29' : '79'}!\n\n` +
+            "Accept this exclusive offer?"
+          );
+          
+          if (accepted) {
+            // Accept retention offer
+            const acceptRes = await fetch('/api/retention/accept-offer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                firmId: user.firmId,
+                cardFingerprint: eligibility.cardFingerprint,
+                customerId: eligibility.customerId,
+              }),
+            });
+            
+            if (acceptRes.ok) {
+              alert("🎉 Amazing! Your 30% discount has been applied for 3 months. Thank you for staying with us!");
+              loadBillingInfo(); // Reload to show updated info
+            } else {
+              alert("Failed to apply discount. Please try again or contact support.");
+            }
+} else {
+  console.log('❌ Not eligible:', eligibility.reason);
+  // Not eligible for retention offer, go straight to cancellation
+              
+            // User declined offer, proceed with cancellation
+            const confirmCancel = confirm(
+              "Are you sure you want to cancel?\n\n" +
+              "You'll lose access to:\n" +
+              "• Unlimited receipts\n" +
+              "• AI categorization\n" +
+              "• Priority support\n\n" +
+              "Your account will revert to the Free plan (10 receipts/month)."
+            );
+            
+            if (confirmCancel) {
+              // TODO: Implement actual cancellation
+              alert("Cancellation flow coming soon!");
+            }
+          }
+        } else {
+          // Not eligible for retention offer, go straight to cancellation
+          const confirmCancel = confirm(
+            "Are you sure you want to cancel your subscription?\n\n" +
+            "Your account will revert to the Free plan (10 receipts/month)."
+          );
+          
+          if (confirmCancel) {
+            // TODO: Implement actual cancellation
+            alert("Cancellation flow coming soon!");
+          }
+        }
+      } catch (error) {
+        console.error("Cancel flow error:", error);
+        alert("Something went wrong. Please contact support.");
+      }
+    }}
+    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium transition-colors"
+  >
+    Cancel Plan
+  </button>
+)}
                       </div>
                     </div>
 
