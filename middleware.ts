@@ -104,7 +104,8 @@ const clientAllowedPaths = [
   '/dashboard/client', 
   '/dashboard/receipts', 
   '/dashboard/budget-settings',
-  '/dashboard/settings'  
+  '/dashboard/settings',
+  '/dashboard/billing'  // Allow clients to view billing/plans
 ];
 const isClientAllowed = clientAllowedPaths.some(p => path === p || path.startsWith(p + '/'));
 

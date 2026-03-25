@@ -287,7 +287,9 @@ async function handleMultipleFiles(files: FileList | null) {
     
     // Initial usage check
     const initialCheck = await checkReceiptUploadLimit(firmId);
-    
+
+    console.log('🔍 RAW initialCheck result:', initialCheck);
+
     if (!initialCheck.canUpload) {
       const now = new Date();
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -328,22 +330,24 @@ async function handleMultipleFiles(files: FileList | null) {
     let failed = 0;
     let limitReached = false;
     
-    // Track current usage locally to avoid race conditions
-    let currentUsage = initialCheck.currentCount;
-    const limit = initialCheck.limit;
-    console.log('🔍 Initial check:', { currentUsage, limit, plan: initialCheck.plan });
+// Track current usage locally to avoid race conditions
+let currentUsage = initialCheck.currentCount;
+const limit = initialCheck.limit;
+console.log('🔍 Initial check:', { currentUsage, limit, plan: initialCheck.plan });
 
-    for (let i = 0; i < fileArray.length; i++) {
-      const file = fileArray[i];
-      
-      setUploadProgress({
-        total: fileArray.length,
-        current: i + 1,
-        currentFile: file.name,
-        succeeded,
-        failed,
-      });
+console.log('🔍 About to start loop with:', { currentUsage, limit, fileCount: fileArray.length }); // ADD THIS LINE
 
+for (let i = 0; i < fileArray.length; i++) {
+  const file = fileArray[i];
+  
+  setUploadProgress({
+    total: fileArray.length,
+    current: i + 1,
+    currentFile: file.name,
+    succeeded,
+    failed,
+  });
+  
       // Check if we've hit the limit (using local counter)
       if (currentUsage >= limit) {
         console.log(`⚠️ Limit reached: ${currentUsage}/${limit}`);

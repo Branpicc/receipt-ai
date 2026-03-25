@@ -186,96 +186,159 @@ export default function ClientDashboardPage() {
     setBudgetStatus(status);
   }
 
-  async function handleMultipleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    if (!clientId) return;
+async function handleMultipleFiles(files: FileList | null) {
+  if (!files || files.length === 0) return;
+  if (!clientId) return;
 
-    const fileArray = Array.from(files);
+  const fileArray = Array.from(files);
+  
+  try {
+    setUploading(true);
+    setUploadProgress({
+      total: fileArray.length,
+      current: 0,
+      currentFile: fileArray[0]?.name || "",
+      succeeded: 0,
+      failed: 0,
+    });
+
+    const firmId = await getMyFirmId();
     
-    try {
-      setUploading(true);
-      setUploadProgress({
-        total: fileArray.length,
-        current: 0,
-        currentFile: fileArray[0]?.name || "",
-        succeeded: 0,
-        failed: 0,
-      });
-
-      const firmId = await getMyFirmId();
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
-
-      let succeeded = 0;
-      let failed = 0;
-
-      for (let i = 0; i < fileArray.length; i++) {
-        const file = fileArray[i];
-        
-        setUploadProgress({
-          total: fileArray.length,
-          current: i + 1,
-          currentFile: file.name,
-          succeeded,
-          failed,
-        });
-
-        try {
-          let uploadFile = file;
-          try {
-            uploadFile = await convertHeicToJpg(file);
-          } catch (conversionError) {
-            console.error('HEIC conversion failed for', file.name, conversionError);
-            failed++;
-            continue;
-          }
-
-          const formData = new FormData();
-          formData.append("file", uploadFile);
-          formData.append("firmId", firmId);
-          formData.append("clientId", clientId);
-          if (userId) {
-            formData.append("userId", userId);
-          }
-
-          const response = await fetch("/api/upload-receipt", {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error(`Upload failed for ${file.name}`);
-          }
-
-          succeeded++;
-        } catch (err: any) {
-          console.error(`Failed to upload ${file.name}:`, err);
-          failed++;
-        }
+    // CHECK LIMIT FIRST
+    const { checkReceiptUploadLimit } = await import('@/lib/checkUsageLimits');
+    const initialCheck = await checkReceiptUploadLimit(firmId);
+    
+    console.log('🔍 Client Dashboard - Initial check:', initialCheck);
+    
+    if (!initialCheck.canUpload) {
+      const now = new Date();
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const daysRemaining = lastDay.getDate() - now.getDate();
+      
+      const message = `📊 Monthly Limit Reached\n\n` +
+        `You've used all ${initialCheck.limit} receipts on your ${initialCheck.plan} plan this month.\n\n` +
+        `${daysRemaining} days remaining until your limit resets.\n\n` +
+        `Upgrade to continue uploading receipts immediately!`;
+      
+      if (confirm(message + "\n\nView upgrade options?")) {
+        window.location.href = "/dashboard/settings";
       }
-
-      if (failed === 0) {
-        alert(`✅ All ${succeeded} receipts uploaded successfully!`);
-      } else if (succeeded === 0) {
-        alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
-      } else {
-        alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
-      }
-
-      // Reload data
-      if (clientId) {
-        const firmId = await getMyFirmId();
-        await loadStats(clientId, firmId);
-        await loadRecentReceipts(clientId);
-        await loadBudgetStatus(clientId, firmId);
-      }
-    } catch (err: any) {
-      alert("Upload process failed: " + err.message);
-    } finally {
+      
       setUploading(false);
       setUploadProgress(null);
+      return;
     }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+
+    let succeeded = 0;
+    let failed = 0;
+    let limitReached = false;
+    
+    // Track usage locally
+    let currentUsage = initialCheck.currentCount;
+    const limit = initialCheck.limit;
+    
+    console.log('🔍 Starting with:', { currentUsage, limit, fileCount: fileArray.length });
+
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      
+      setUploadProgress({
+        total: fileArray.length,
+        current: i + 1,
+        currentFile: file.name,
+        succeeded,
+        failed,
+      });
+
+      // Check limit before each file
+      if (currentUsage >= limit) {
+        console.log(`⚠️ Limit reached: ${currentUsage}/${limit}`);
+        limitReached = true;
+        
+        const remainingFiles = fileArray.length - i;
+        const now = new Date();
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const daysRemaining = lastDay.getDate() - now.getDate();
+        
+        const message = `📊 Monthly Limit Reached\n\n` +
+          `Successfully uploaded ${succeeded} receipt${succeeded !== 1 ? 's' : ''}.\n` +
+          `${remainingFiles} file${remainingFiles !== 1 ? 's' : ''} not uploaded (limit reached).\n\n` +
+          `You've used all ${limit} receipts on your ${initialCheck.plan} plan.\n` +
+          `${daysRemaining} days remaining until reset.\n\n` +
+          `Upgrade to upload the remaining receipts!`;
+        
+        if (confirm(message + "\n\nView upgrade options?")) {
+          window.location.href = "/dashboard/settings";
+        }
+        
+        break;
+      }
+
+      try {
+        let uploadFile = file;
+        try {
+          uploadFile = await convertHeicToJpg(file);
+        } catch (conversionError) {
+          console.error('HEIC conversion failed for', file.name, conversionError);
+          failed++;
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append("file", uploadFile);
+        formData.append("firmId", firmId);
+        formData.append("clientId", clientId);
+        if (userId) {
+          formData.append("userId", userId);
+        }
+
+        const response = await fetch("/api/upload-receipt", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed for ${file.name}`);
+        }
+
+        succeeded++;
+        currentUsage++; // Increment immediately
+        
+        console.log(`✅ Uploaded ${succeeded}/${fileArray.length}, usage: ${currentUsage}/${limit}`);
+      } catch (err: any) {
+        console.error(`Failed to upload ${file.name}:`, err);
+        failed++;
+      }
+    }
+
+    // Show results
+    if (limitReached) {
+      // Already showed message
+    } else if (failed === 0) {
+      alert(`✅ All ${succeeded} receipts uploaded successfully!`);
+    } else if (succeeded === 0) {
+      alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
+    } else {
+      alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
+    }
+
+    // Reload data
+    if (clientId) {
+      const firmId = await getMyFirmId();
+      await loadStats(clientId, firmId);
+      await loadRecentReceipts(clientId);
+      await loadBudgetStatus(clientId, firmId);
+    }
+  } catch (err: any) {
+    alert("Upload process failed: " + err.message);
+  } finally {
+    setUploading(false);
+    setUploadProgress(null);
   }
+}
 
   if (loading) {
     return (

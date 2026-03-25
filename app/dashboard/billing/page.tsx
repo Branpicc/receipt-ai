@@ -21,9 +21,10 @@ const plans: Plan[] = [
     price: "$0",
     priceId: "free",
     features: [
-      "5 receipts per month",
+      "10 receipts per month",
       "1 user",
-      "Manual categorization",
+      "AI-powered OCR",
+      "Auto-categorization",
       "CSV export",
       "Basic receipt storage",
     ],
@@ -47,7 +48,7 @@ const plans: Plan[] = [
     priceId: "professional",
     recommended: true,
     features: [
-      "500 receipts per month",
+      "Unlimited receipts",
       "3 users",
       "AI categorization",
       "QuickBooks export",
@@ -92,19 +93,16 @@ export default function BillingPage() {
       const firmId = await getMyFirmId();
       const { data: firm } = await supabase
         .from("firms")
-        .select("subscription_plan, subscription_status")
+        .select("subscription_tier, subscription_plan, subscription_status")
         .eq("id", firmId)
         .single();
 
-      // Set current plan (including 'free')
-      if (firm?.subscription_plan) {
-        setCurrentPlan(firm.subscription_plan);
-      } else {
-        setCurrentPlan('free'); // Default to free if no plan set
-      }
+      // Priority: subscription_tier over subscription_plan
+      const plan = firm?.subscription_tier || firm?.subscription_plan || 'free';
+      setCurrentPlan(plan);
     } catch (error) {
       console.error("Failed to load current plan:", error);
-      setCurrentPlan('free'); // Default to free on error
+      setCurrentPlan('free');
     }
   };
 
@@ -116,11 +114,10 @@ export default function BillingPage() {
 
     // Handle free plan (no Stripe needed)
     if (planName === "Free") {
-      // Show confirmation dialog
       const confirmed = confirm(
         "Switch to Free plan?\n\n" +
-        "• 5 receipts per month\n" +
-        "• Manual entry only (no OCR)\n" +
+        "• 10 receipts per month\n" +
+        "• AI-powered OCR\n" +
         "• CSV export\n\n" +
         "Your current paid subscription will be canceled."
       );
@@ -131,14 +128,12 @@ export default function BillingPage() {
         setLoading(planIdentifier);
         const firmId = await getMyFirmId();
 
-        // Get current subscription to cancel it
         const { data: firm } = await supabase
           .from('firms')
           .select('stripe_subscription_id, stripe_customer_id')
           .eq('id', firmId)
           .single();
 
-        // Cancel Stripe subscription if exists
         if (firm?.stripe_subscription_id) {
           const response = await fetch("/api/stripe/cancel-subscription", {
             method: "POST",
@@ -151,14 +146,14 @@ export default function BillingPage() {
           }
         }
 
-        // Update firm to free plan
         const { error } = await supabase
           .from('firms')
           .update({ 
+            subscription_tier: 'free',
             subscription_plan: 'free',
             subscription_status: null,
             stripe_subscription_id: null,
-            stripe_customer_id: firm?.stripe_customer_id || null, // Keep customer ID
+            stripe_customer_id: firm?.stripe_customer_id || null,
           })
           .eq('id', firmId);
 
@@ -183,10 +178,8 @@ export default function BillingPage() {
 
     try {
       setLoading(planIdentifier);
-
       const firmId = await getMyFirmId();
 
-      // Create checkout session (API will map plan name to price ID)
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -199,7 +192,6 @@ export default function BillingPage() {
         throw new Error(error);
       }
 
-      // Redirect to Stripe Checkout
       if (url) {
         window.location.href = url;
       }
@@ -214,7 +206,6 @@ export default function BillingPage() {
   const handleManageSubscription = async () => {
     try {
       setLoading("portal");
-      
       const firmId = await getMyFirmId();
 
       const response = await fetch("/api/stripe/create-portal-session", {
@@ -237,34 +228,36 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing & Plans</h1>
-        <p className="text-gray-600 mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Billing & Plans</h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
           Choose the plan that's right for your business
         </p>
 
         {currentPlan && (
-          <div className="mb-8 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="mb-8 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-green-900">
+                <p className="font-medium text-green-900 dark:text-green-100">
                   Current Plan: <span className="capitalize">{currentPlan}</span>
                 </p>
-                <p className="text-sm text-green-700">Your subscription is active</p>
+                <p className="text-sm text-green-700 dark:text-green-300">Your subscription is active</p>
               </div>
-              <button
-                onClick={handleManageSubscription}
-                disabled={loading === "portal"}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-              >
-                {loading === "portal" ? "Loading..." : "Manage Subscription"}
-              </button>
+              {currentPlan !== 'free' && (
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={loading === "portal"}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {loading === "portal" ? "Loading..." : "Manage Subscription"}
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {plans.map((plan) => {
             const isCurrentPlan = currentPlan?.toLowerCase() === plan.name.toLowerCase();
 
@@ -273,41 +266,41 @@ export default function BillingPage() {
                 key={plan.name}
                 className={`rounded-2xl border-2 p-6 ${
                   plan.recommended
-                    ? "border-black bg-gray-50"
+                    ? "border-accent-500 dark:border-accent-400 bg-accent-50 dark:bg-accent-900/20"
                     : isCurrentPlan
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-200 bg-white"
+                    ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
+                    : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"
                 }`}
               >
                 {plan.recommended && (
-                  <div className="text-xs font-semibold text-black mb-2">
+                  <div className="text-xs font-semibold text-accent-600 dark:text-accent-400 mb-2">
                     RECOMMENDED
                   </div>
                 )}
                 {isCurrentPlan && (
-                  <div className="text-xs font-semibold text-green-600 mb-2">
+                  <div className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2">
                     CURRENT PLAN
                   </div>
                 )}
 
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
                   {plan.name}
                 </h3>
 
                 <div className="mb-4">
-                  <span className="text-4xl font-bold text-gray-900">
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">
                     {plan.price}
                   </span>
                   {plan.price !== "Custom" && (
-                    <span className="text-gray-500">/month</span>
+                    <span className="text-gray-500 dark:text-gray-400">/month</span>
                   )}
                 </div>
 
                 <ul className="space-y-3 mb-6">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm">
-                      <span className="text-green-600 mt-0.5">✓</span>
-                      <span className="text-gray-700">{feature}</span>
+                      <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
+                      <span className="text-gray-700 dark:text-gray-300">{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -317,10 +310,10 @@ export default function BillingPage() {
                   disabled={loading === plan.priceId || isCurrentPlan}
                   className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
                     isCurrentPlan
-                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                      ? "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
                       : plan.recommended
-                      ? "bg-black text-white hover:bg-gray-800"
-                      : "bg-white border-2 border-gray-900 text-gray-900 hover:bg-gray-50"
+                      ? "bg-accent-600 text-white hover:bg-accent-700"
+                      : "bg-white dark:bg-dark-surface border-2 border-gray-900 dark:border-white text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-dark-hover"
                   } disabled:opacity-50`}
                 >
                   {loading === plan.priceId

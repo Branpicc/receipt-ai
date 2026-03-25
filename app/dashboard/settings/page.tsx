@@ -21,7 +21,7 @@ type UserPreferences = {
   weeklyDigest: boolean;
 };
 
-type Tab = "profile" | "notifications" | "email" | "security" | "advanced";
+type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "advanced";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -50,10 +50,24 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Billing info
+  const [billingInfo, setBillingInfo] = useState<{
+    plan: string;
+    status: string;
+    receiptsUsed: number;
+    receiptsLimit: number;
+  } | null>(null);
+
   useEffect(() => {
     loadUser();
     loadPreferences();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadBillingInfo();
+    }
+  }, [user]);
 
   // Apply theme when preferences load or change
   useEffect(() => {
@@ -118,6 +132,35 @@ export default function SettingsPage() {
     }
   };
 
+  const loadBillingInfo = async () => {
+    try {
+      const firmId = user?.firmId;
+      if (!firmId) return;
+
+      // Get firm subscription info
+      const { data: firm } = await supabase
+        .from("firms")
+        .select("subscription_tier, subscription_plan, subscription_status")
+        .eq("id", firmId)
+        .single();
+
+      const plan = firm?.subscription_tier || firm?.subscription_plan || 'free';
+
+      // Get usage stats
+      const { getUsageStats } = await import('@/lib/checkUsageLimits');
+      const usage = await getUsageStats(firmId);
+
+      setBillingInfo({
+        plan,
+        status: firm?.subscription_status || 'active',
+        receiptsUsed: usage?.currentCount || 0,
+        receiptsLimit: usage?.limit || 10,
+      });
+    } catch (error) {
+      console.error("Failed to load billing info:", error);
+    }
+  };
+
   const loadPreferences = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -139,7 +182,6 @@ export default function SettingsPage() {
           weeklyDigest: data.weekly_digest ?? false,
         };
         setPreferences(loadedPrefs);
-        // Apply theme immediately on load
         applyTheme(loadedPrefs.theme);
       }
     } catch (error) {
@@ -173,7 +215,6 @@ export default function SettingsPage() {
       
       if (error) throw error;
 
-      // Apply theme immediately
       if (newPreferences.theme) {
         applyTheme(newPreferences.theme);
       }
@@ -231,7 +272,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailForwarding)) {
       alert("Please enter a valid email address");
@@ -243,7 +283,6 @@ export default function SettingsPage() {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
-      // Get client_id from firm_users
       const { data: firmUser } = await supabase
         .from("firm_users")
         .select("client_id")
@@ -400,13 +439,21 @@ export default function SettingsPage() {
   const isClient = user.role === "client";
   const isAccountant = user.role === "accountant" || user.role === "firm_admin" || user.role === "owner";
 
-const tabs = [
-  { id: "profile" as Tab, label: "Profile", icon: "👤" },
-  { id: "notifications" as Tab, label: "Notifications", icon: "🔔" },
-  ...(isClient ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
-  { id: "security" as Tab, label: "Security", icon: "🔒" },
-  { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
-];
+  const tabs = [
+    { id: "profile" as Tab, label: "Profile", icon: "👤" },
+    { id: "notifications" as Tab, label: "Notifications", icon: "🔔" },
+    { id: "billing" as Tab, label: "Billing & Plan", icon: "💳" },
+    ...(isClient ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
+    { id: "security" as Tab, label: "Security", icon: "🔒" },
+    { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
+  ];
+
+  const planNames: Record<string, string> = {
+    free: 'Free',
+    starter: 'Starter',
+    professional: 'Professional',
+    enterprise: 'Enterprise',
+  };
 
   return (
     <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
@@ -600,6 +647,166 @@ const tabs = [
             </div>
           )}
 
+          {/* Billing Tab */}
+          {activeTab === "billing" && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Subscription & Billing
+                </h2>
+
+                {billingInfo ? (
+                  <div className="space-y-6">
+                    {/* Current Plan Card */}
+                    <div className="bg-gradient-to-br from-accent-50 to-accent-100 dark:from-accent-900/20 dark:to-accent-800/20 border border-accent-200 dark:border-accent-800 rounded-lg p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <div className="text-sm text-accent-600 dark:text-accent-400 mb-1">
+                            Current Plan
+                          </div>
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white capitalize">
+                            {planNames[billingInfo.plan] || billingInfo.plan}
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Status: <span className="font-medium text-green-600 dark:text-green-400 capitalize">
+                              {billingInfo.status}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Monthly Usage</div>
+                          <div className="text-xl font-bold text-gray-900 dark:text-white">
+                            {billingInfo.receiptsUsed} / {billingInfo.receiptsLimit === -1 || billingInfo.receiptsLimit >= 999999 ? '∞' : billingInfo.receiptsLimit}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">receipts</div>
+                        </div>
+                      </div>
+
+                      {/* Usage Progress Bar */}
+                      {billingInfo.receiptsLimit < 999999 && (
+                        <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2 mb-4">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              billingInfo.receiptsUsed >= billingInfo.receiptsLimit
+                                ? "bg-red-500"
+                                : billingInfo.receiptsUsed / billingInfo.receiptsLimit > 0.8
+                                ? "bg-orange-500"
+                                : "bg-green-500"
+                            }`}
+                            style={{ width: `${Math.min((billingInfo.receiptsUsed / billingInfo.receiptsLimit) * 100, 100)}%` }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => window.location.href = '/dashboard/billing'}
+                          className="flex-1 px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 font-medium transition-colors"
+                        >
+                          Change Plan
+                        </button>
+                        {billingInfo.plan !== 'free' && (
+                          <button
+                            onClick={() => {
+                              if (confirm("Are you sure you want to cancel your subscription? You'll lose access to premium features.")) {
+                                // TODO: Implement retention offer flow
+                                alert("Cancellation flow coming soon!");
+                              }
+                            }}
+                            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium transition-colors"
+                          >
+                            Cancel Plan
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Plan Features */}
+                    <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-lg p-6">
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-3">
+                        Your Plan Includes
+                      </h3>
+                      <ul className="space-y-2">
+                        {billingInfo.plan === 'free' && (
+                          <>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">10 receipts per month</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">1 user</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">AI-powered OCR</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">CSV export</span>
+                            </li>
+                          </>
+                        )}
+                        {billingInfo.plan === 'starter' && (
+                          <>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">100 receipts per month</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">1 user</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">AI-powered OCR</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Auto-categorization</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Email support</span>
+                            </li>
+                          </>
+                        )}
+                        {billingInfo.plan === 'professional' && (
+                          <>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Unlimited receipts</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">3 users</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">AI categorization</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">QuickBooks export</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Priority support</span>
+                            </li>
+                          </>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Loading billing information...
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Email Forwarding Tab (Clients Only) */}
           {activeTab === "email" && isClient && (
             <div>
@@ -646,7 +853,7 @@ const tabs = [
                       <button
                         onClick={() => {
                           setEditingEmail(false);
-                          loadUser(); // Reload original value
+                          loadUser();
                         }}
                         className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
                       >
@@ -669,119 +876,119 @@ const tabs = [
             </div>
           )}
 
-          {/* Security Tab */}
-          {activeTab === "security" && (
-            <div className="space-y-6">
+{/* Security Tab */}
+      {activeTab === "security" && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Change Password
+            </h2>
+
+            <div className="space-y-4 max-w-md">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Change Password
-                </h2>
-
-                <div className="space-y-4 max-w-md">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      New Password
-                    </label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new password"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Confirm New Password
-                    </label>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
-                    />
-                  </div>
-
-                  <button
-                    onClick={changePassword}
-                    disabled={changingPassword || !newPassword || !confirmPassword}
-                    className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {changingPassword ? "Changing..." : "Change Password"}
-                  </button>
-
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Password must be at least 8 characters long
-                  </p>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
               </div>
 
-              <div className="border-t border-gray-200 dark:border-dark-border pt-6">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                  Two-Factor Authentication
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Add an extra layer of security to your account (Coming Soon)
-                </p>
-                <button
-                  disabled
-                  className="px-6 py-2 bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg cursor-not-allowed"
-                >
-                  Enable 2FA (Coming Soon)
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Advanced Tab */}
-          {activeTab === "advanced" && (
-            <div className="space-y-6">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Onboarding Tour
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Replay the onboarding tour to learn about ReceiptAI features again
-                </p>
-                <button
-                  onClick={handleReplayTour}
-                  disabled={replayingTour}
-                  className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50"
-                >
-                  {replayingTour ? "Restarting..." : "🎯 Replay Tour"}
-                </button>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
               </div>
 
-              <div className="border-t border-gray-200 dark:border-dark-border pt-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Data Export
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Export all your receipts to a CSV file for use in Excel or accounting software
-                </p>
-                <button
-                  onClick={exportData}
-                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                >
-                  📊 Export Receipts (CSV)
-                </button>
-              </div>
+              <button
+                onClick={changePassword}
+                disabled={changingPassword || !newPassword || !confirmPassword}
+                className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {changingPassword ? "Changing..." : "Change Password"}
+              </button>
 
-              <div className="border-t border-gray-200 dark:border-dark-border pt-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Sign Out
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Sign out of your account on this device
-                </p>
-                <LogoutButton className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" />
-              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Password must be at least 8 characters long
+              </p>
             </div>
-          )}
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Two-Factor Authentication
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Add an extra layer of security to your account (Coming Soon)
+            </p>
+            <button
+              disabled
+              className="px-6 py-2 bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg cursor-not-allowed"
+            >
+              Enable 2FA (Coming Soon)
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Advanced Tab */}
+      {activeTab === "advanced" && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Onboarding Tour
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Replay the onboarding tour to learn about ReceiptAI features again
+            </p>
+            <button
+              onClick={handleReplayTour}
+              disabled={replayingTour}
+              className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50"
+            >
+              {replayingTour ? "Restarting..." : "🎯 Replay Tour"}
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Data Export
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Export all your receipts to a CSV file for use in Excel or accounting software
+            </p>
+            <button
+              onClick={exportData}
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              📊 Export Receipts (CSV)
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Sign Out
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Sign out of your account on this device
+            </p>
+            <LogoutButton className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" />
+          </div>
+        </div>
+      )}
     </div>
+  </div>
+</div>
   );
 }

@@ -133,7 +133,10 @@ export default function UsageStats() {
     <div className={`rounded-2xl border p-6 ${stats.isOverLimit ? "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20" : stats.isNearLimit ? "border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-900/20" : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Monthly Usage</h3>
-        <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline">
+        <a 
+          href="/dashboard/billing" 
+          className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline"
+        >
           View Plans
         </a>
       </div>
@@ -157,7 +160,10 @@ export default function UsageStats() {
         {stats.isOverLimit && stats.plan === 'free' && (
           <div className="pt-3 border-t border-red-200 dark:border-red-900">
             <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">⚠️ You've used all your free receipts this month</p>
-            <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer" className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors">
+            <a 
+              href="/dashboard/billing" 
+              className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
+            >
               Upgrade to Continue
             </a>
           </div>
@@ -166,7 +172,10 @@ export default function UsageStats() {
         {stats.isOverLimit && stats.plan !== 'free' && (
           <div className="pt-3 border-t border-red-200 dark:border-red-900">
             <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">⚠️ You've reached your monthly limit</p>
-            <a href="/dashboard/settings" className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors">
+            <a 
+              href="/dashboard/billing" 
+              className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
+            >
               Upgrade Plan
             </a>
           </div>
