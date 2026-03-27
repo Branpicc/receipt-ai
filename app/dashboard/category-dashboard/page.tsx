@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
+import { getUserRole } from "@/lib/getUserRole";
 import Link from "next/link";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { useClientContext } from "@/lib/ClientContext";
 
 type CategorySummary = {
   category: string;
@@ -40,17 +42,17 @@ type BudgetComparison = {
 };
 
 const CHART_COLORS = [
-  "#3b82f6", // blue
-  "#10b981", // green
-  "#f59e0b", // amber
-  "#8b5cf6", // purple
-  "#ec4899", // pink
-  "#14b8a6", // teal
-  "#f97316", // orange
-  "#06b6d4", // cyan
-  "#84cc16", // lime
-  "#a855f7", // violet
-  "#ef4444", // red - only used if you have 11+ categories
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
+  "#f97316",
+  "#06b6d4",
+  "#84cc16",
+  "#a855f7",
+  "#ef4444",
 ];
 
 export default function CategoryDashboardPage() {
@@ -60,19 +62,48 @@ export default function CategoryDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<"all" | "month" | "quarter" | "year">("month");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const { selectedClient, isFiltered } = useClientContext();
 
   useEffect(() => {
-    loadDashboard();
-  }, [dateRange]);
+    loadUserContext();
+  }, []);
+
+  useEffect(() => {
+    // Only load dashboard once we know the role (and client_id if applicable)
+    if (userRole !== null) {
+      loadDashboard();
+    }
+  }, [dateRange, userRole, clientId, selectedClient]);
+
+  async function loadUserContext() {
+    const role = await getUserRole();
+    setUserRole(role);
+
+    if (role === "client") {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const firmId = await getMyFirmId();
+        const { data: firmUser } = await supabase
+          .from("firm_users")
+          .select("client_id")
+          .eq("auth_user_id", user.id)
+          .eq("firm_id", firmId)
+          .single();
+        setClientId(firmUser?.client_id ?? null);
+      }
+    }
+  }
 
   async function loadDashboard() {
     try {
       setLoading(true);
       const firmId = await getMyFirmId();
-      
+
       let startDate: string | null = null;
       const now = new Date();
-      
+
       if (dateRange === "month") {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       } else if (dateRange === "quarter") {
@@ -87,84 +118,90 @@ export default function CategoryDashboardPage() {
         .from("category_budgets")
         .select("*")
         .eq("firm_id", firmId);
-      
+
       setBudgets(budgetsData || []);
 
+      // Build receipts query
       let query = supabase
         .from("receipts")
         .select("id, vendor, receipt_date, total_cents, approved_category, suggested_category, purpose_text")
         .eq("firm_id", firmId);
-      
+
+      // Scope to client if applicable
+      if (userRole === "client" && clientId) {
+        query = query.eq("client_id", clientId);
+        // Clients only see categorized receipts
+        query = query.not("approved_category", "is", null);
+      } else if (isFiltered && selectedClient) {
+        // Accountant has selected a specific client
+        query = query.eq("client_id", selectedClient.id);
+      }
+
       if (startDate) {
         query = query.gte("receipt_date", startDate);
       }
 
       const { data: receiptsData, error: receiptsError } = await query;
-      
       if (receiptsError) throw receiptsError;
       setReceipts(receiptsData || []);
 
+      // Build category summaries
       const categoryMap = new Map<string, CategorySummary>();
-      
+
       receiptsData?.forEach(r => {
         const category = r.approved_category || r.suggested_category || "Uncategorized";
         const total = r.total_cents || 0;
-        
+
         if (!categoryMap.has(category)) {
-          categoryMap.set(category, {
-            category,
-            count: 0,
-            total_cents: 0,
-            tax_cents: 0,
-          });
+          categoryMap.set(category, { category, count: 0, total_cents: 0, tax_cents: 0 });
         }
-        
+
         const summary = categoryMap.get(category)!;
         summary.count++;
         summary.total_cents += total;
       });
 
+      // Load taxes
       const receiptIds = receiptsData?.map(r => r.id) || [];
-      const { data: taxesData } = await supabase
-        .from("receipt_taxes")
-        .select("receipt_id, amount_cents")
-        .in("receipt_id", receiptIds);
+      if (receiptIds.length > 0) {
+        const { data: taxesData } = await supabase
+          .from("receipt_taxes")
+          .select("receipt_id, amount_cents")
+          .in("receipt_id", receiptIds);
 
-      taxesData?.forEach(tax => {
-        const receipt = receiptsData?.find(r => r.id === tax.receipt_id);
-        if (receipt) {
-          const category = receipt.approved_category || receipt.suggested_category || "Uncategorized";
-          const summary = categoryMap.get(category);
-          if (summary) {
-            summary.tax_cents += tax.amount_cents;
+        taxesData?.forEach(tax => {
+          const receipt = receiptsData?.find(r => r.id === tax.receipt_id);
+          if (receipt) {
+            const category = receipt.approved_category || receipt.suggested_category || "Uncategorized";
+            const summary = categoryMap.get(category);
+            if (summary) summary.tax_cents += tax.amount_cents;
           }
-        }
-      });
+        });
+      }
 
       const summaryArray = Array.from(categoryMap.values()).sort(
         (a, b) => b.total_cents - a.total_cents
       );
-      
+
       setSummaries(summaryArray);
     } catch (err: any) {
       console.error("Failed to load dashboard:", err);
-      alert(err.message);
     } finally {
       setLoading(false);
     }
   }
 
+  const isClient = userRole === "client";
   const totalAmount = summaries.reduce((sum, s) => sum + s.total_cents, 0);
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
   const totalCount = summaries.reduce((sum, s) => sum + s.count, 0);
 
-  // Calculate budget comparisons (only for current month)
   const budgetComparisons: BudgetComparison[] = budgets
     .map((budget, index) => {
       const summary = summaries.find(s => s.category === budget.category);
       const spent_cents = summary?.total_cents || 0;
       const remaining_cents = budget.monthly_budget_cents - spent_cents;
-      const percentage = budget.monthly_budget_cents > 0 
+      const percentage = budget.monthly_budget_cents > 0
         ? Math.round((spent_cents / budget.monthly_budget_cents) * 100)
         : 0;
       const isOverBudget = spent_cents > budget.monthly_budget_cents;
@@ -182,17 +219,8 @@ export default function CategoryDashboardPage() {
     .filter(bc => bc.budget_cents > 0)
     .sort((a, b) => b.percentage - a.percentage);
 
-  // Prepare pie chart data
-  const pieData = budgetComparisons.map(bc => ({
-    name: bc.category,
-    value: bc.spent_cents / 100,
-    budget: bc.budget_cents / 100,
-    percentage: bc.percentage,
-    isOverBudget: bc.isOverBudget,
-  }));
-
   const filteredReceipts = selectedCategory
-    ? receipts.filter(r => 
+    ? receipts.filter(r =>
         (r.approved_category || r.suggested_category || "Uncategorized") === selectedCategory
       )
     : [];
@@ -202,67 +230,49 @@ export default function CategoryDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Category Dashboard</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">View receipts grouped by expense category</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {isClient ? "My Spending" : "Category Dashboard"}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {isClient
+                ? "View your categorized receipts and budget progress"
+                : isFiltered && selectedClient
+                ? `Showing spending for ${selectedClient.name}`
+                : "View receipts grouped by expense category"}
+            </p>
           </div>
           <Link
-            href="/dashboard/receipts"
+            href={isClient ? "/dashboard/client" : "/dashboard/receipts"}
             className="text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800 dark:hover:text-gray-200"
           >
-            ← Back to receipts
+            ← Back
           </Link>
         </div>
 
         {/* Date Range Filter */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-4 mb-6 border border-transparent dark:border-dark-border">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDateRange("month")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "month"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              This Month
-            </button>
-            <button
-              onClick={() => setDateRange("quarter")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "quarter"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              This Quarter
-            </button>
-            <button
-              onClick={() => setDateRange("year")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "year"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              This Year
-            </button>
-            <button
-              onClick={() => setDateRange("all")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "all"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              All Time
-            </button>
+          <div className="flex gap-2 flex-wrap">
+            {(["month", "quarter", "year", "all"] as const).map((range) => (
+              <button
+                key={range}
+                onClick={() => setDateRange(range)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  dateRange === range
+                    ? "bg-accent-500 text-white"
+                    : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
+                }`}
+              >
+                {range === "month" ? "This Month" : range === "quarter" ? "This Quarter" : range === "year" ? "This Year" : "All Time"}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Budget Pie Chart Section - Only show for "This Month" */}
+        {/* Budget Pie Chart — This Month only */}
         {showBudgetSection && (
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
             <div className="flex items-center justify-between mb-6">
@@ -280,81 +290,72 @@ export default function CategoryDashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Pie Chart */}
               <div className="flex items-center justify-center">
-<ResponsiveContainer width="100%" height={300}>
-  <PieChart>
-<Pie
-  data={budgetComparisons.flatMap(bc => [
-    // Spent portion (bold category color)
-    {
-      name: bc.category,
-      value: Math.min(bc.spent_cents, bc.budget_cents) / 100,
-      color: bc.color,
-      isSpent: true,
-      fullData: bc,
-    },
-    // Remaining portion (grey with category-colored border)
-    {
-      name: `${bc.category} (remaining)`,
-      value: Math.max(0, bc.budget_cents - bc.spent_cents) / 100,
-      color: bc.color,
-      isSpent: false,
-      fullData: bc,
-    },
-  ])}
-  cx="50%"
-  cy="50%"
-  innerRadius={60}
-  outerRadius={100}
-  paddingAngle={0}
-  dataKey="value"
->
-  {budgetComparisons.flatMap((bc, index) => [
-    <Cell 
-      key={`spent-${index}`}
-      fill={bc.color}
-      opacity={1}
-      stroke={bc.isOverBudget ? '#ef4444' : 'none'}
-      strokeWidth={bc.isOverBudget ? 3 : 0}
-    />,
-    <Cell 
-      key={`remaining-${index}`}
-      fill="#d1d5db" // Grey fill
-      opacity={0.8}
-      stroke={bc.color} // Category-colored border
-      strokeWidth={2}
-    />,
-  ])}
-</Pie>
-    
-    <Tooltip
-      content={({ active, payload }: { active?: boolean; payload?: readonly any[] }) => {
-        if (active && payload && payload.length) {
-          const data = payload[0].payload;
-          const bc = data.fullData;
-          
-          return (
-            <div className="bg-white dark:bg-dark-surface p-3 rounded-lg shadow-lg border border-gray-200 dark:border-dark-border">
-              <p className="font-semibold text-gray-900 dark:text-white">{bc.category}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Spent: ${(bc.spent_cents / 100).toFixed(2)}
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Budget: ${(bc.budget_cents / 100).toFixed(2)}
-              </p>
-              <p className={`text-sm font-semibold ${bc.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
-                {bc.percentage}% {bc.isOverBudget ? 'over' : 'used'}
-              </p>
-            </div>
-          );
-        }
-        return null;
-      }}
-    />
-  </PieChart>
-</ResponsiveContainer>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={budgetComparisons.flatMap(bc => [
+                        {
+                          name: bc.category,
+                          value: Math.min(bc.spent_cents, bc.budget_cents) / 100,
+                          color: bc.color,
+                          isSpent: true,
+                          fullData: bc,
+                        },
+                        {
+                          name: `${bc.category} (remaining)`,
+                          value: Math.max(0, bc.budget_cents - bc.spent_cents) / 100,
+                          color: bc.color,
+                          isSpent: false,
+                          fullData: bc,
+                        },
+                      ])}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={0}
+                      dataKey="value"
+                    >
+                      {budgetComparisons.flatMap((bc, index) => [
+                        <Cell
+                          key={`spent-${index}`}
+                          fill={bc.color}
+                          opacity={1}
+                          stroke={bc.isOverBudget ? "#ef4444" : "none"}
+                          strokeWidth={bc.isOverBudget ? 3 : 0}
+                        />,
+                        <Cell
+                          key={`remaining-${index}`}
+                          fill="#d1d5db"
+                          opacity={0.8}
+                          stroke={bc.color}
+                          strokeWidth={2}
+                        />,
+                      ])}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }: { active?: boolean; payload?: readonly any[] }) => {
+                        if (active && payload && payload.length) {
+                          const bc = payload[0].payload.fullData;
+                          return (
+                            <div className="bg-white dark:bg-dark-surface p-3 rounded-lg shadow-lg border border-gray-200 dark:border-dark-border">
+                              <p className="font-semibold text-gray-900 dark:text-white">{bc.category}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Spent: ${(bc.spent_cents / 100).toFixed(2)}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Budget: ${(bc.budget_cents / 100).toFixed(2)}</p>
+                              <p className={`text-sm font-semibold ${bc.isOverBudget ? "text-red-600" : "text-green-600"}`}>
+                                {bc.percentage}% {bc.isOverBudget ? "over" : "used"}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
 
-              {/* Budget List */}
+              {/* Budget bars */}
               <div className="space-y-3">
                 {budgetComparisons.map((bc) => (
                   <div
@@ -363,35 +364,22 @@ export default function CategoryDashboardPage() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: bc.isOverBudget ? '#ef4444' : bc.color }}
-                        />
-                        <span className="font-medium text-gray-900 dark:text-white text-sm">
-                          {bc.category}
-                        </span>
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bc.isOverBudget ? "#ef4444" : bc.color }} />
+                        <span className="font-medium text-gray-900 dark:text-white text-sm">{bc.category}</span>
                         {bc.isOverBudget && (
                           <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded">
                             ⚠️ Over
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        {bc.percentage}%
-                      </span>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{bc.percentage}%</span>
                     </div>
-                    
                     <div className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
                       <div
-                        className={`absolute top-0 left-0 h-2 rounded-full transition-all ${
-                          bc.isOverBudget 
-                            ? 'bg-red-600 dark:bg-red-500' 
-                            : 'bg-green-600 dark:bg-green-500'
-                        }`}
+                        className={`absolute top-0 left-0 h-2 rounded-full transition-all ${bc.isOverBudget ? "bg-red-600 dark:bg-red-500" : "bg-green-600 dark:bg-green-500"}`}
                         style={{ width: `${Math.min(bc.percentage, 100)}%` }}
                       />
                     </div>
-
                     <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
                       <span>${(bc.spent_cents / 100).toFixed(2)} spent</span>
                       <span>${(bc.budget_cents / 100).toFixed(2)} budget</span>
@@ -403,10 +391,33 @@ export default function CategoryDashboardPage() {
           </div>
         )}
 
+        {/* No budgets set — prompt client to set them */}
+        {isClient && dateRange === "month" && budgetComparisons.length === 0 && !loading && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">💡</div>
+              <div>
+                <p className="font-medium text-blue-900 dark:text-blue-200 mb-1">Set up your budget</p>
+                <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                  Add monthly budgets for your expense categories to see your spending progress here.
+                </p>
+                <Link
+                  href="/dashboard/budget-settings"
+                  className="text-sm font-medium text-blue-700 dark:text-blue-300 underline hover:text-blue-900 dark:hover:text-blue-100"
+                >
+                  Set up budgets →
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Receipts</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+              {isClient ? "Categorized Receipts" : "Total Receipts"}
+            </div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">{totalCount}</div>
           </div>
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
@@ -426,18 +437,22 @@ export default function CategoryDashboardPage() {
           </div>
         </div>
 
-        {/* Loading State */}
+        {/* Category list + receipt detail */}
         {loading ? (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">Loading dashboard...</p>
           </div>
         ) : summaries.length === 0 ? (
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-12 text-center border border-transparent dark:border-dark-border">
-            <p className="text-gray-500 dark:text-gray-400">No receipts found for this period</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              {isClient
+                ? "No categorized receipts found for this period. Your accountant will categorize your receipts once reviewed."
+                : "No receipts found for this period."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Category List */}
+            {/* Category list */}
             <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Categories ({summaries.length})
@@ -463,9 +478,7 @@ export default function CategoryDashboardPage() {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {summary.category}
-                          </span>
+                          <span className="font-medium text-gray-900 dark:text-white">{summary.category}</span>
                           {isOverBudget && showBudgetSection && (
                             <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded font-medium">
                               ⚠️ Over Budget
@@ -477,12 +490,8 @@ export default function CategoryDashboardPage() {
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Total: ${(summary.total_cents / 100).toFixed(2)}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-400">
-                          Tax: ${(summary.tax_cents / 100).toFixed(2)}
-                        </span>
+                        <span className="text-gray-600 dark:text-gray-400">Total: ${(summary.total_cents / 100).toFixed(2)}</span>
+                        <span className="text-gray-500 dark:text-gray-400">Tax: ${(summary.tax_cents / 100).toFixed(2)}</span>
                       </div>
                     </button>
                   );
@@ -490,7 +499,7 @@ export default function CategoryDashboardPage() {
               </div>
             </div>
 
-            {/* Receipt Details */}
+            {/* Receipt detail */}
             <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
               {selectedCategory ? (
                 <>

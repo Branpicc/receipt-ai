@@ -8,6 +8,7 @@ import UploadFab from "@/components/UploadFab";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
+import { ClientProvider } from "@/lib/ClientContext";
 
 export default function DashboardLayout({
   children,
@@ -63,9 +64,10 @@ const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
 const isAccountant = userRole === "accountant" || userRole === "owner" || userRole === "firm_admin";
 const isClient = userRole === "client";
 
-  return (
+return (
+  <ClientProvider userRole={userRole}>
     <OnboardingWrapper>
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
+            <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
         {/* Sidebar */}
         <aside
           className={`bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border transition-all duration-300 ${
@@ -417,6 +419,20 @@ const isClient = userRole === "client";
         </>
       )}
 
+      <li>
+  <Link
+    href="/dashboard/category-dashboard"
+    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+      pathname === '/dashboard/category-dashboard'
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+    }`}
+  >
+    <span className="text-xl">📊</span>
+    <span className="font-medium">My Spending</span>
+  </Link>
+</li>
+
       {/* Accountant/Firm Admin icons */}
       {(isAccountant || isFirmAdmin) && (
         <>
@@ -521,9 +537,10 @@ const isClient = userRole === "client";
           {children}
         </main>
               
-        {/* Floating Upload Button */}
+{/* Floating Upload Button */}
         <UploadFab />
       </div>
     </OnboardingWrapper>
+  </ClientProvider>
   );
 }

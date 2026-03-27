@@ -24,15 +24,23 @@ const PLAN_LIMITS = {
   },
 };
 
-export default function UsageStats() {
+export default function UsageStats({ onRefresh }: { onRefresh?: () => void }) {
   const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);  
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+useEffect(() => {
+  loadStats();
+}, []);
 
-  const loadStats = async () => {
+// Add this new useEffect
+useEffect(() => {
+  if (onRefresh) {
+    // Expose refresh function to parent
+    (window as any).__refreshUsageStats = loadStats;
+  }
+}, [onRefresh]);
+
+const loadStats = async () => {
     try {
       const firmId = await getMyFirmId();
       

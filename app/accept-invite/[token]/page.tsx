@@ -41,9 +41,21 @@ export default function AcceptInvitePage() {
 
 const { data: invite, error: inviteError } = await supabase
   .from("invitations")
-  .select("id, firm_id, email, role, status, expires_at, client_id, assigned_accountant_id")
+  .select(`
+    id, 
+    firm_id, 
+    email, 
+    role, 
+    status, 
+    expires_at, 
+    client_id, 
+    assigned_accountant_id,
+    firms (name)
+  `)
   .eq("token", token)
   .single();
+
+  console.log('🔍 Invite data:', invite);
 
       if (inviteError || !invite) {
         setError("Invalid or expired invitation");
@@ -63,16 +75,10 @@ const { data: invite, error: inviteError } = await supabase
         return;
       }
 
-      const { data: firm } = await supabase
-        .from("firms")
-        .select("name")
-        .eq("id", invite.firm_id)
-        .single();
-
-      setInvitation({
-        ...invite,
-        firm_name: firm?.name || "Unknown Firm",
-      });
+setInvitation({
+  ...invite,
+  firm_name: (invite as any).firms?.name || "Unknown Firm",
+});
     } catch (err: any) {
       setError("Failed to load invitation");
     } finally {
@@ -80,97 +86,57 @@ const { data: invite, error: inviteError } = await supabase
     }
   }
 
-  async function handleAccept(e: React.FormEvent) {
-    e.preventDefault();
-    
-    if (!invitation) return;
+async function handleAccept(e: React.FormEvent) {
+  e.preventDefault();
+  
+  if (!invitation) return;
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
+  if (password.length < 6) {
+    setError("Password must be at least 6 characters");
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
+  if (password !== confirmPassword) {
+    setError("Passwords do not match");
+    return;
+  }
 
-    if (!displayName.trim()) {
-      setError("Display name is required");
-      return;
-    }
+  if (!displayName.trim()) {
+    setError("Display name is required");
+    return;
+  }
 
-    try {
-      setAccepting(true);
-      setError("");
+  try {
+    setAccepting(true);
+    setError("");
 
-      const { data: authData, error: signupError } = await supabase.auth.signUp({
+    // Call API route to accept invitation
+    const response = await fetch("/api/accept-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: token,
         email: invitation.email,
         password: password,
-      });
+        displayName: displayName.trim(),
+      }),
+    });
 
-      if (signupError) throw signupError;
+    const data = await response.json();
 
-      if (!authData.user) {
-        throw new Error("Failed to create user account");
-      }
-
-// Create client record if needed
-let clientId = invitation.client_id;
-if (invitation.role === "client" && !clientId) {
-  // Client will provide company info - create placeholder
-  const { data: newClient, error: clientError } = await supabase
-    .from("clients")
-    .insert({
-      firm_id: invitation.firm_id,
-      name: `${displayName.trim()} (Pending)`,
-      is_active: true,
-      assigned_accountant_id: invitation.assigned_accountant_id,
-    })
-    .select("id")
-    .single();
-
-  if (clientError) throw clientError;
-  clientId = newClient.id;
-}
-
-const { error: firmUserError } = await supabase
-  .from("firm_users")
-  .insert([
-    {
-      firm_id: invitation.firm_id,
-      auth_user_id: authData.user.id,
-      role: invitation.role,
-      display_name: displayName.trim(),
-      client_id: clientId,
-    },
-  ]);
-  
-      if (firmUserError) {
-        console.error("Failed to add to firm:", firmUserError);
-        throw new Error("Failed to join firm");
-      }
-
-      const { error: updateError } = await supabase
-        .from("invitations")
-        .update({
-          status: "accepted",
-          accepted_at: new Date().toISOString(),
-        })
-        .eq("id", invitation.id);
-
-      if (updateError) {
-        console.error("Failed to update invitation:", updateError);
-      }
-
-      alert(`✅ Welcome to ${invitation.firm_name}! You can now log in.`);
-      router.push("/login");
-    } catch (err: any) {
-      setError(err.message || "Failed to accept invitation");
-    } finally {
-      setAccepting(false);
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to accept invitation");
     }
+
+    alert(`✅ Welcome to ${invitation.firm_name}! You can now log in.`);
+    router.push("/login");
+  } catch (err: any) {
+    console.error("Accept error:", err);
+    setError(err.message || "Failed to accept invitation");
+  } finally {
+    setAccepting(false);
   }
+}
 
   if (loading) {
     return (

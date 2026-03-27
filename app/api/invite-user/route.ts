@@ -168,66 +168,21 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const inviteUrl = `${baseUrl}/accept-invite/${inviteToken}`;
 
-    // Send email using SendGrid (if configured)
-    if (process.env.SENDGRID_API_KEY) {
-      try {
-        const emailResponse = await fetch("https://api.sendgrid.com/v3/mail/send", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
-          },
-          body: JSON.stringify({
-            personalizations: [
-              {
-                to: [{ email: email }],
-                subject: `You're invited to join ${firmName} on ReceiptAI`,
-              },
-            ],
-            from: {
-              email: process.env.SENDGRID_FROM_EMAIL || "noreply@receiptai.app",
-              name: "ReceiptAI",
-            },
-            content: [
-              {
-                type: "text/html",
-                value: `
-                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h1 style="color: #3B82F6;">You're invited to ReceiptAI</h1>
-                    <p>You've been invited to join <strong>${firmName}</strong> as a <strong>${role}</strong>.</p>
-                    <p>Click the button below to accept the invitation and create your account:</p>
-                    <a href="${inviteUrl}" style="display: inline-block; background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 20px 0;">
-                      Accept Invitation
-                    </a>
-                    <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
-                    <p style="color: #666; font-size: 14px; word-break: break-all;">${inviteUrl}</p>
-                    <p style="color: #666; font-size: 14px; margin-top: 30px;">This invitation expires in 7 days.</p>
-                  </div>
-                `,
-              },
-            ],
-          }),
-        });
+// TODO: Re-enable email sending when SendGrid production account is ready
+// SendGrid free tier has strict rate limits causing failures
+console.log('📧 Email sending temporarily disabled');
+console.log('✅ Invitation created successfully');
+console.log('📎 Share this link with the user:', inviteUrl);
 
-        if (!emailResponse.ok) {
-          const errorData = await emailResponse.text();
-          console.error("Failed to send email via SendGrid:", errorData);
-        }
-      } catch (emailError) {
-        console.error("Email sending error:", emailError);
-        // Don't fail the request if email fails - invitation is still created
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        inviteUrl: inviteUrl,
-      },
-    });
+return NextResponse.json({
+  success: true,
+  invitation: {
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    inviteUrl: inviteUrl,
+  },
+});
   } catch (error: any) {
     console.error("Invite error:", error);
     return NextResponse.json(
