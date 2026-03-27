@@ -147,16 +147,17 @@ export default function SettingsPage() {
       const plan = firm?.subscription_tier || firm?.subscription_plan || 'free';
 
       // Get usage stats
-      const { getUsageStats } = await import('@/lib/checkUsageLimits');
-      const usage = await getUsageStats(firmId);
+const { getUsageStats } = await import('@/lib/checkUsageLimits');
+const usage = await getUsageStats(firmId);
 
-      setBillingInfo({
-        plan,
-        status: firm?.subscription_status || 'active',
-        receiptsUsed: usage?.currentCount || 0,
-        receiptsLimit: usage?.limit || 10,
-      });
-    } catch (error) {
+setBillingInfo({
+  plan,
+  status: firm?.subscription_status || 'active',
+  receiptsUsed: usage?.clients || 0,
+  receiptsLimit: usage?.clientLimit || 5,
+});
+
+} catch (error) {
       console.error("Failed to load billing info:", error);
     }
   };
@@ -442,7 +443,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: "profile" as Tab, label: "Profile", icon: "👤" },
     { id: "notifications" as Tab, label: "Notifications", icon: "🔔" },
-    { id: "billing" as Tab, label: "Billing & Plan", icon: "💳" },
+    ...(user.role === "firm_admin" || user.role === "owner" ? [{ id: "billing" as Tab, label: "Billing & Plan", icon: "💳" }] : []),
     ...(isClient ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
     { id: "security" as Tab, label: "Security", icon: "🔒" },
     { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
@@ -727,7 +728,7 @@ if (eligibility.eligible) {
             "🎉 Special Offer!\n\n" +
             "We'd hate to see you go! As a valued customer, we'd like to offer you:\n\n" +
             "✨ 30% OFF your current plan for the next 3 months\n\n" +
-            `That's just $${billingInfo.plan === 'starter' ? '20.30' : '55.30'}/month instead of $${billingInfo.plan === 'starter' ? '29' : '79'}!\n\n` +
+            `That's just $${billingInfo.plan === 'starter' ? '34.30' : '139.30'}/month instead of $${billingInfo.plan === 'starter' ? '49' : '199'}!\n\n` +
             "Accept this exclusive offer?"
           );
           

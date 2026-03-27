@@ -62,14 +62,14 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Public routes that don't require authentication
-const publicRoutes = [
-  '/login',
-  '/signup',
-  '/accept-invite',
-  '/forgot-password',
-  '/reset-password',
-  '/magic-link',
-]
+  const publicRoutes = [
+    '/login',
+    '/signup',
+    '/accept-invite',
+    '/forgot-password',
+    '/reset-password',
+    '/magic-link',
+  ]
 
   const isPublicRoute = publicRoutes.some((route) => path.startsWith(route))
 
@@ -81,11 +81,11 @@ const publicRoutes = [
   }
 
   // If authenticated and trying to access auth pages, redirect to dashboard
-      if (session && isPublicRoute && path !== '/accept-invite') {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+  if (session && isPublicRoute && path !== '/accept-invite') {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Get user role for role-based routing
+  // Role-based routing
   if (session && path.startsWith('/dashboard')) {
     try {
       const { data: firmUser } = await supabase
@@ -96,28 +96,41 @@ const publicRoutes = [
 
       console.log('🔍 Middleware - Path:', path)
       console.log('🔍 Middleware - User role:', firmUser?.role)
-      console.log('🔍 Middleware - Client ID:', firmUser?.client_id)
 
       if (firmUser) {
-// Client users should be redirected to client portal (except for receipts and budget pages)
-const clientAllowedPaths = [
-  '/dashboard',          
-  '/dashboard/client', 
-  '/dashboard/category-dashboard',
-  '/dashboard/receipts', 
-  '/dashboard/budget-settings',
-  '/dashboard/settings',
-  '/dashboard/billing'
-];
-const isClientAllowed = clientAllowedPaths.some(p => path === p || path.startsWith(p + '/'));
+        const role = firmUser.role;
 
-if (firmUser.role === 'client' && !isClientAllowed) {
-  console.log('🔍 Middleware - Redirecting client to /dashboard/client')
-  return NextResponse.redirect(new URL('/dashboard/client', request.url))
-}
+        // ── BILLING: only firm_admin and owner ──────────────────────────────
+        const isBillingPath = path === '/dashboard/billing' || path.startsWith('/dashboard/billing/');
+        if (isBillingPath && role !== 'firm_admin' && role !== 'owner') {
+          console.log('🔍 Middleware - Blocking billing access for role:', role)
+          return NextResponse.redirect(new URL('/dashboard/settings', request.url))
+        }
 
-        // Non-client users should not access client portal (exact match or subpaths)
-        if (firmUser.role !== 'client' && (path === '/dashboard/client' || path.startsWith('/dashboard/client/'))) {
+        // ── CLIENT: allowed paths ────────────────────────────────────────────
+        const clientAllowedPaths = [
+          '/dashboard',
+          '/dashboard/client',
+          '/dashboard/category-dashboard',
+          '/dashboard/reports',
+          '/dashboard/receipts',
+          '/dashboard/budget-settings',
+          '/dashboard/settings',
+          '/dashboard/reports/clients',
+          // Note: /dashboard/billing intentionally excluded for clients
+        ];
+
+        const isClientAllowed = clientAllowedPaths.some(
+          p => path === p || path.startsWith(p + '/')
+        );
+
+        if (role === 'client' && !isClientAllowed) {
+          console.log('🔍 Middleware - Redirecting client to /dashboard/client')
+          return NextResponse.redirect(new URL('/dashboard/client', request.url))
+        }
+
+        // ── NON-CLIENT: block client portal ─────────────────────────────────
+        if (role !== 'client' && (path === '/dashboard/client' || path.startsWith('/dashboard/client/'))) {
           console.log('🔍 Middleware - Redirecting non-client from /dashboard/client')
           return NextResponse.redirect(new URL('/dashboard', request.url))
         }
@@ -132,14 +145,6 @@ if (firmUser.role === 'client' && !isClientAllowed) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
-     * - api routes (handled separately)
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\..*|api).*)',
   ],
 }

@@ -1,127 +1,77 @@
-// components/UsageStats.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { supabase } from "@/lib/supabaseClient";
-
-const PLAN_LIMITS = {
-  free: {
-    receipts: 10,
-    users: 1,
-  },
-  starter: {
-    receipts: 100,
-    users: 1,
-  },
-  professional: {
-    receipts: 999999,
-    users: 3,
-  },
-  enterprise: {
-    receipts: -1,
-    users: -1,
-  },
-};
+import { getUserRole } from "@/lib/getUserRole";
 
 export default function UsageStats({ onRefresh }: { onRefresh?: () => void }) {
   const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);  
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-useEffect(() => {
-  loadStats();
-}, []);
+  useEffect(() => {
+    loadStats();
+  }, []);
 
-// Add this new useEffect
-useEffect(() => {
-  if (onRefresh) {
-    // Expose refresh function to parent
-    (window as any).__refreshUsageStats = loadStats;
-  }
-}, [onRefresh]);
-
-const loadStats = async () => {
+  const loadStats = async () => {
     try {
+      const role = await getUserRole();
+      setUserRole(role);
+
+      // Only firm admins and owners see usage stats
+      if (role !== "firm_admin" && role !== "owner") {
+        setLoading(false);
+        return;
+      }
+
       const firmId = await getMyFirmId();
-      
-      const { data: firm, error } = await supabase
-        .from('firms')
-        .select('subscription_plan, subscription_status, subscription_tier')
-        .eq('id', firmId)
+
+      const { data: firm } = await supabase
+        .from("firms")
+        .select("subscription_tier, subscription_plan, subscription_status")
+        .eq("id", firmId)
         .single();
 
-      if (error) {
-        console.error('Error loading firm:', error);
-        setLoading(false);
-        return;
-      }
+      const plan = firm?.subscription_tier || firm?.subscription_plan || "starter";
 
-      const plan = firm?.subscription_tier || firm?.subscription_plan || 'free';
-      
-      if (plan !== 'free' && firm?.subscription_status !== 'active') {
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+      const limits: Record<string, { clients: number; users: number }> = {
+        trial: { clients: 20, users: 3 },
+        starter: { clients: 5, users: 1 },
+        professional: { clients: 20, users: 3 },
+        enterprise: { clients: -1, users: -1 },
+      };
 
-        const { count: regularCount } = await supabase
-          .from("receipts")
-          .select("*", { count: "exact", head: true })
-          .eq("firm_id", firmId)
-          .gte("created_at", startOfMonth.toISOString());
+      const planLimits = limits[plan] || limits.starter;
 
-        const { count: emailCount } = await supabase
-          .from("email_receipts")
-          .select("*", { count: "exact", head: true })
-          .eq("firm_id", firmId)
-          .eq("status", "approved")
-          .gte("created_at", startOfMonth.toISOString());
-
-        const currentCount = (regularCount || 0) + (emailCount || 0);
-        const freeLimit = 10;
-        const percentage = Math.round((currentCount / freeLimit) * 100);
-
-        setStats({
-          currentCount,
-          limit: freeLimit,
-          percentage,
-          plan: 'free',
-          isNearLimit: percentage >= 80,
-          isOverLimit: currentCount >= freeLimit,
-        });
-        setLoading(false);
-        return;
-      }
-
-      const planLimits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
-
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-
-      const { count: regularCount } = await supabase
-        .from("receipts")
+      // Count active clients
+      const { count: clientCount } = await supabase
+        .from("clients")
         .select("*", { count: "exact", head: true })
         .eq("firm_id", firmId)
-        .gte("created_at", startOfMonth.toISOString());
+        .eq("is_active", true);
 
-      const { count: emailCount } = await supabase
-        .from("email_receipts")
+      // Count accountants only (firm_admin excluded)
+      const { count: accountantCount } = await supabase
+        .from("firm_users")
         .select("*", { count: "exact", head: true })
         .eq("firm_id", firmId)
-        .eq("status", "approved")
-        .gte("created_at", startOfMonth.toISOString());
+        .eq("role", "accountant");
 
-      const currentCount = (regularCount || 0) + (emailCount || 0);
-      const limit = planLimits?.receipts || 10;
-      const percentage = limit === -1 || limit >= 999999 ? 0 : Math.round((currentCount / limit) * 100);
+      const clients = clientCount || 0;
+      const accountants = accountantCount || 0;
+      const clientLimit = planLimits.clients;
+      const userLimit = planLimits.users;
 
       setStats({
-        currentCount,
-        limit,
-        percentage,
         plan,
-        isNearLimit: percentage >= 80 && limit !== -1 && limit < 999999,
-        isOverLimit: currentCount >= limit && limit !== -1 && limit < 999999,
+        clients,
+        clientLimit,
+        accountants,
+        userLimit,
+        clientPercentage: clientLimit === -1 ? 0 : Math.round((clients / clientLimit) * 100),
+        isNearClientLimit: clientLimit !== -1 && clients / clientLimit >= 0.8,
+        isAtClientLimit: clientLimit !== -1 && clients >= clientLimit,
       });
     } catch (error) {
       console.error("Failed to load usage stats:", error);
@@ -131,67 +81,100 @@ const loadStats = async () => {
     }
   };
 
-  if (loading || !stats) {
+  // Don't render for non-admins or while loading
+  if (loading || !stats || (userRole !== "firm_admin" && userRole !== "owner")) {
     return null;
   }
 
-  const isUnlimited = stats.limit === -1 || stats.limit >= 999999;
+  const clientsUnlimited = stats.clientLimit === -1;
+  const usersUnlimited = stats.userLimit === -1;
 
   return (
-    <div className={`rounded-2xl border p-6 ${stats.isOverLimit ? "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20" : stats.isNearLimit ? "border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-900/20" : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"}`}>
+    <div className={`rounded-2xl border p-6 ${
+      stats.isAtClientLimit
+        ? "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20"
+        : stats.isNearClientLimit
+        ? "border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-900/20"
+        : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"
+    }`}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Monthly Usage</h3>
-        <a 
-          href="/dashboard/billing" 
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Plan Usage</h3>
+        <a
+          href="/dashboard/billing"
           className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline"
         >
-          View Plans
+          Manage Plan
         </a>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.currentCount}</span>
-          <span className="text-gray-500 dark:text-gray-400">/ {isUnlimited ? "∞" : stats.limit} receipts</span>
+      <div className="space-y-4">
+        {/* Clients */}
+        <div>
+          <div className="flex items-baseline justify-between mb-1">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Clients</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {stats.clients} / {clientsUnlimited ? "∞" : stats.clientLimit}
+            </span>
+          </div>
+          {!clientsUnlimited && (
+            <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all ${
+                  stats.isAtClientLimit ? "bg-red-500" : stats.isNearClientLimit ? "bg-yellow-500" : "bg-green-500"
+                }`}
+                style={{ width: `${Math.min(stats.clientPercentage, 100)}%` }}
+              />
+            </div>
+          )}
         </div>
 
-        {!isUnlimited && (
-          <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2">
-            <div className={`h-2 rounded-full transition-all ${stats.isOverLimit ? "bg-red-600 dark:bg-red-500" : stats.isNearLimit ? "bg-yellow-500 dark:bg-yellow-400" : "bg-green-600 dark:bg-green-500"}`} style={{ width: `${Math.min(stats.percentage, 100)}%` }} />
+        {/* Accountants */}
+        <div>
+          <div className="flex items-baseline justify-between mb-1">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Accountants</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {stats.accountants} / {usersUnlimited ? "∞" : stats.userLimit}
+            </span>
           </div>
-        )}
+          {!usersUnlimited && (
+            <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2">
+              <div
+                className="h-2 rounded-full transition-all bg-blue-500"
+                style={{ width: `${Math.min(Math.round((stats.accountants / stats.userLimit) * 100), 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
 
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          <span className="capitalize">{stats.plan === 'free' ? 'Free' : stats.plan}</span> plan • {isUnlimited ? "Unlimited receipts" : `${Math.max(0, stats.limit - stats.currentCount)} remaining this month`}
+        {/* Receipts */}
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Receipts</span>
+          <span className="text-sm text-green-600 dark:text-green-400 font-medium">Unlimited</span>
+        </div>
+
+        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+          {stats.plan} plan
         </p>
 
-        {stats.isOverLimit && stats.plan === 'free' && (
+        {stats.isAtClientLimit && (
           <div className="pt-3 border-t border-red-200 dark:border-red-900">
-            <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">⚠️ You've used all your free receipts this month</p>
-            <a 
-              href="/dashboard/billing" 
-              className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
-            >
-              Upgrade to Continue
-            </a>
-          </div>
-        )}
-
-        {stats.isOverLimit && stats.plan !== 'free' && (
-          <div className="pt-3 border-t border-red-200 dark:border-red-900">
-            <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">⚠️ You've reached your monthly limit</p>
-            <a 
-              href="/dashboard/billing" 
-              className="inline-block px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
+            <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">
+              ⚠️ Client limit reached
+            </p>
+            <a
+              href="/dashboard/billing"
+              className="inline-block px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
             >
               Upgrade Plan
             </a>
           </div>
         )}
 
-        {stats.isNearLimit && !stats.isOverLimit && (
+        {stats.isNearClientLimit && !stats.isAtClientLimit && (
           <div className="pt-3 border-t border-yellow-200 dark:border-yellow-900">
-            <p className="text-sm text-yellow-800 dark:text-yellow-300">You're at {stats.percentage}% of your monthly limit</p>
+            <p className="text-sm text-yellow-800 dark:text-yellow-300">
+              Approaching client limit — {stats.clientLimit - stats.clients} slot{stats.clientLimit - stats.clients !== 1 ? "s" : ""} remaining
+            </p>
           </div>
         )}
       </div>

@@ -339,12 +339,26 @@ return (
                   <span className="text-sm">Tax Codes</span>
                 </Link>
               </li>
+              <li className="ml-4">
+  <Link
+href="/dashboard/reports/clients"
+    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+      pathname.startsWith('/dashboard/reports')
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+    }`}
+  >
+    <span className="text-lg">📊</span>
+    <span className="text-sm">Client Reports</span>
+  </Link>
+</li>
             </>
           )}
         </>
       )}
     </ul>
   ) : (
+
     // COLLAPSED SIDEBAR - Icon-only view with floating bubble tooltips
     <ul className="space-y-2">
       {/* Dashboard */}

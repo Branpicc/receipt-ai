@@ -1,737 +1,556 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter, useSearchParams } from "next/navigation";
+import { getMyFirmId } from "@/lib/getFirmId";
 import Link from "next/link";
+import { convertHeicToJpg } from "@/lib/convertHeicClient";
+import UsageStats from "@/components/UsageStats";
 
-type Receipt = {
+type UploadProgress = {
+  total: number;
+  current: number;
+  currentFile: string;
+  succeeded: number;
+  failed: number;
+};
+
+type RecentReceipt = {
   id: string;
   vendor: string | null;
+  total_cents: number;
   receipt_date: string | null;
-  total_cents: number | null;
-  status: string;
   created_at: string;
   approved_category: string | null;
-  suggested_category: string | null;
-  folder_id: string | null;
-  has_flags?: boolean;
 };
 
-type Folder = {
+type BudgetStatus = {
+  category: string;
+  budget_cents: number;
+  spent_cents: number;
+  percentage: number;
+};
+
+type MonthlyReport = {
   id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-  receipt_count?: number;
+  report_month: string;
+  total_spend_cents: number;
+  total_receipts: number;
+  total_tax_cents: number;
 };
 
-type StatusFilter = "all" | "needs_review" | "categorized" | "uncategorized" | "flagged";
-type DateFilter = "any" | "this_week" | "this_month" | "this_year" | "custom";
-type MainView = "receipts" | "folders";
-
-function getDateRange(filter: DateFilter, customStart?: string, customEnd?: string) {
-  const now = new Date();
-  switch (filter) {
-    case "this_week": {
-      const start = new Date(now);
-      start.setDate(now.getDate() - now.getDay());
-      start.setHours(0, 0, 0, 0);
-      return { start: start.toISOString(), end: now.toISOString() };
-    }
-    case "this_month": {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { start: start.toISOString(), end: now.toISOString() };
-    }
-    case "this_year": {
-      const start = new Date(now.getFullYear(), 0, 1);
-      return { start: start.toISOString(), end: now.toISOString() };
-    }
-    case "custom":
-      return {
-        start: customStart ? new Date(customStart).toISOString() : undefined,
-        end: customEnd ? new Date(customEnd + "T23:59:59").toISOString() : undefined,
-      };
-    default:
-      return { start: undefined, end: undefined };
-  }
-}
-
-export default function ReceiptsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+export default function ClientDashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [firmId, setFirmId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [usageRefreshKey, setUsageRefreshKey] = useState(0);
 
-  // Main view: receipt list vs folder list
-  const [mainView, setMainView] = useState<MainView>("receipts");
+  const [stats, setStats] = useState({
+    totalReceipts: 0,
+    thisMonth: 0,
+    categorized: 0,
+  });
 
-  // When inside a folder
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const [activeFolderName, setActiveFolderName] = useState<string>("");
+  const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
+  const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([]);
+  const [recentReports, setRecentReports] = useState<MonthlyReport[]>([]);
 
-  // Status filter
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-
-  // Date filter
-  const [dateFilter, setDateFilter] = useState<DateFilter>("any");
-  const [dateSearchType, setDateSearchType] = useState<"receipt_date" | "created_at">("receipt_date");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
-  const [showCustomRange, setShowCustomRange] = useState(false);
-
-  // Folder management
-  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [newFolderDesc, setNewFolderDesc] = useState("");
-  const [savingFolder, setSavingFolder] = useState(false);
-  const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
-  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
-
-  // Read status from URL on mount
   useEffect(() => {
-    const status = searchParams.get("status") as StatusFilter | null;
-    if (status) setStatusFilter(status);
-  }, [searchParams]);
-
-  // Load user profile once
-  useEffect(() => {
-    async function loadProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-
-      const { data: profile } = await supabase
-        .from("firm_users")
-        .select("firm_id, client_id, role")
-        .eq("auth_user_id", user.id)
-        .single();
-
-      if (profile?.firm_id) {
-        setFirmId(profile.firm_id);
-        setClientId(profile.client_id ?? null);
-        setUserRole(profile.role);
-      }
-    }
-    loadProfile();
+    loadClientInfo();
   }, []);
 
-  // Reload receipts when filters change
-  useEffect(() => {
-    if (firmId) loadReceipts();
-  }, [firmId, statusFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId]);
-
-  // Load folders when switching to folder view
-  useEffect(() => {
-    if (firmId && mainView === "folders" && !activeFolderId) loadFolders();
-  }, [firmId, mainView, activeFolderId]);
-
-  async function loadReceipts() {
-    setLoading(true);
+  async function loadClientInfo() {
     try {
-      if (!firmId) return;
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      let query = supabase
-        .from("receipts")
-        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id")
+      const firmId = await getMyFirmId();
+
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id")
+        .eq("auth_user_id", user.id)
         .eq("firm_id", firmId)
-        .order("created_at", { ascending: false });
+        .single();
 
-      if (userRole === "client" && clientId) {
-        query = query.eq("client_id", clientId);
+      if (firmUser?.client_id) {
+        setClientId(firmUser.client_id);
+
+        const { data: client } = await supabase
+          .from("clients")
+          .select("name, email_alias, client_code")
+          .eq("id", firmUser.client_id)
+          .single();
+
+        if (client) {
+          setClientName(client.name);
+          const emailAlias = client.email_alias || client.client_code;
+          setClientEmail(`${emailAlias}@receipts.example.com`);
+        }
+
+        await loadStats(firmUser.client_id, firmId);
+        await loadRecentReceipts(firmUser.client_id);
+        await loadBudgetStatus(firmUser.client_id, firmId);
+        await loadRecentReports(firmUser.client_id, firmId);
       }
-
-      // Filter to folder if inside one
-      if (activeFolderId) {
-        query = query.eq("folder_id", activeFolderId);
-      }
-
-      // Date filter
-      const { start, end } = getDateRange(dateFilter, customStart, customEnd);
-      if (start) query = query.gte(dateSearchType, start);
-      if (end) query = query.lte(dateSearchType, end);
-
-      const { data: receiptsData, error } = await query;
-      if (error) throw error;
-
-      // Flags
-      const { data: flagsData } = await supabase
-        .from("receipt_flags")
-        .select("receipt_id")
-        .eq("firm_id", firmId)
-        .is("resolved_at", null);
-
-      const flaggedIds = new Set(flagsData?.map((f) => f.receipt_id) || []);
-      const withFlags = (receiptsData || []).map((r) => ({
-        ...r,
-        has_flags: flaggedIds.has(r.id),
-      }));
-
-      // Status filter
-      let filtered = withFlags;
-      switch (statusFilter) {
-        case "needs_review": filtered = withFlags.filter((r) => !r.approved_category || r.has_flags); break;
-        case "categorized": filtered = withFlags.filter((r) => r.approved_category); break;
-        case "uncategorized": filtered = withFlags.filter((r) => !r.approved_category); break;
-        case "flagged": filtered = withFlags.filter((r) => r.has_flags); break;
-      }
-
-      setReceipts(filtered);
-    } catch (err) {
-      console.error("Load receipts error:", err);
+    } catch (error) {
+      console.error("Failed to load client info:", error);
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadFolders() {
-    if (!firmId) return;
-    try {
-      let query = supabase
-        .from("receipt_folders")
-        .select("id, name, description, created_at")
-        .eq("firm_id", firmId)
-        .order("created_at", { ascending: true });
+  async function loadStats(clientId: string, firmId: string) {
+    const { count: total } = await supabase
+      .from("receipts")
+      .select("*", { count: "exact", head: true })
+      .eq("firm_id", firmId)
+      .eq("client_id", clientId);
 
-      if (userRole === "client" && clientId) {
-        query = query.eq("client_id", clientId);
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { count: thisMonth } = await supabase
+      .from("receipts")
+      .select("*", { count: "exact", head: true })
+      .eq("firm_id", firmId)
+      .eq("client_id", clientId)
+      .gte("created_at", startOfMonth.toISOString());
+
+    const { count: categorized } = await supabase
+      .from("receipts")
+      .select("*", { count: "exact", head: true })
+      .eq("firm_id", firmId)
+      .eq("client_id", clientId)
+      .not("approved_category", "is", null);
+
+    setStats({
+      totalReceipts: total || 0,
+      thisMonth: thisMonth || 0,
+      categorized: categorized || 0,
+    });
+  }
+
+  async function loadRecentReceipts(clientId: string) {
+    const { data } = await supabase
+      .from("receipts")
+      .select("id, vendor, total_cents, receipt_date, created_at, approved_category")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    setRecentReceipts((data as RecentReceipt[]) || []);
+  }
+
+  async function loadBudgetStatus(clientId: string, firmId: string) {
+    const { data: budgets } = await supabase
+      .from("category_budgets")
+      .select("category, monthly_budget_cents")
+      .eq("firm_id", firmId);
+
+    if (!budgets || budgets.length === 0) return;
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { data: receipts } = await supabase
+      .from("receipts")
+      .select("approved_category, total_cents")
+      .eq("client_id", clientId)
+      .not("approved_category", "is", null)
+      .gte("created_at", startOfMonth.toISOString());
+
+    const spendingByCategory: Record<string, number> = {};
+    receipts?.forEach((r) => {
+      const cat = r.approved_category!;
+      spendingByCategory[cat] = (spendingByCategory[cat] || 0) + r.total_cents;
+    });
+
+    const status: BudgetStatus[] = budgets
+      .map((b) => ({
+        category: b.category,
+        budget_cents: b.monthly_budget_cents,
+        spent_cents: spendingByCategory[b.category] || 0,
+        percentage: b.monthly_budget_cents > 0
+          ? Math.round((spendingByCategory[b.category] || 0) / b.monthly_budget_cents * 100)
+          : 0,
+      }))
+      .filter((b) => b.budget_cents > 0)
+      .sort((a, b) => b.percentage - a.percentage)
+      .slice(0, 4);
+
+    setBudgetStatus(status);
+  }
+
+  async function loadRecentReports(clientId: string, firmId: string) {
+    const { data } = await supabase
+      .from("client_reports")
+      .select("id, report_month, total_spend_cents, total_receipts, total_tax_cents")
+      .eq("client_id", clientId)
+      .eq("firm_id", firmId)
+      .order("report_month", { ascending: false })
+      .limit(3);
+
+    setRecentReports((data as MonthlyReport[]) || []);
+  }
+
+  async function handleMultipleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    if (!clientId) return;
+
+    const fileArray = Array.from(files);
+
+    try {
+      setUploading(true);
+      setUploadProgress({
+        total: fileArray.length,
+        current: 0,
+        currentFile: fileArray[0]?.name || "",
+        succeeded: 0,
+        failed: 0,
+      });
+
+      const firmId = await getMyFirmId();
+
+      const { checkReceiptUploadLimit } = await import('@/lib/checkUsageLimits');
+      const initialCheck = await checkReceiptUploadLimit(firmId);
+
+      if (!initialCheck.canUpload) {
+        const now = new Date();
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const daysRemaining = lastDay.getDate() - now.getDate();
+        if (confirm(`📊 Monthly Limit Reached\n\nYou've used all ${initialCheck.limit} receipts on your ${initialCheck.plan} plan this month.\n\n${daysRemaining} days remaining until your limit resets.\n\nUpgrade to continue uploading receipts immediately!\n\nView upgrade options?`)) {
+          window.location.href = "/dashboard/settings";
+        }
+        setUploading(false);
+        setUploadProgress(null);
+        return;
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
 
-      // Count receipts per folder
-      const withCounts = await Promise.all(
-        (data || []).map(async (folder) => {
-          let countQuery = supabase
-            .from("receipts")
-            .select("*", { count: "exact", head: true })
-            .eq("firm_id", firmId)
-            .eq("folder_id", folder.id);
-          if (userRole === "client" && clientId) {
-            countQuery = countQuery.eq("client_id", clientId);
+      let succeeded = 0;
+      let failed = 0;
+      let limitReached = false;
+      let currentUsage = initialCheck.currentCount;
+      const limit = initialCheck.limit;
+
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+
+        setUploadProgress({
+          total: fileArray.length,
+          current: i + 1,
+          currentFile: file.name,
+          succeeded,
+          failed,
+        });
+
+        if (currentUsage >= limit) {
+          limitReached = true;
+          const remainingFiles = fileArray.length - i;
+          const now = new Date();
+          const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          const daysRemaining = lastDay.getDate() - now.getDate();
+          if (confirm(`📊 Monthly Limit Reached\n\nSuccessfully uploaded ${succeeded} receipt${succeeded !== 1 ? 's' : ''}.\n${remainingFiles} file${remainingFiles !== 1 ? 's' : ''} not uploaded (limit reached).\n\nYou've used all ${limit} receipts on your ${initialCheck.plan} plan.\n${daysRemaining} days remaining until reset.\n\nUpgrade to upload the remaining receipts!\n\nView upgrade options?`)) {
+            window.location.href = "/dashboard/settings";
           }
-          const { count } = await countQuery;
-          return { ...folder, receipt_count: count || 0 };
-        })
-      );
+          break;
+        }
 
-      setFolders(withCounts);
-    } catch (err) {
-      console.error("Load folders error:", err);
-    }
-  }
+        try {
+          let uploadFile = file;
+          try {
+            uploadFile = await convertHeicToJpg(file);
+          } catch (conversionError) {
+            console.error('HEIC conversion failed for', file.name, conversionError);
+            failed++;
+            continue;
+          }
 
-  async function createFolder() {
-    if (!newFolderName.trim() || !firmId) return;
-    setSavingFolder(true);
-    try {
-      const insertData: any = {
-        name: newFolderName.trim(),
-        description: newFolderDesc.trim() || null,
-        firm_id: firmId,
-      };
-      if (userRole === "client" && clientId) {
-        insertData.client_id = clientId;
+          const formData = new FormData();
+          formData.append("file", uploadFile);
+          formData.append("firmId", firmId);
+          formData.append("clientId", clientId);
+          if (userId) formData.append("userId", userId);
+
+          const response = await fetch("/api/upload-receipt", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
+
+          succeeded++;
+          currentUsage++;
+        } catch (err: any) {
+          console.error(`Failed to upload ${file.name}:`, err);
+          failed++;
+        }
       }
-      const { error } = await supabase.from("receipt_folders").insert(insertData);
-      if (error) throw error;
-      setNewFolderName("");
-      setNewFolderDesc("");
-      setShowNewFolderModal(false);
-      await loadFolders();
+
+      if (!limitReached) {
+        if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded successfully!`);
+        else if (succeeded === 0) alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
+        else alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
+      }
+
+      if (clientId) {
+        const firmId = await getMyFirmId();
+        await loadStats(clientId, firmId);
+        await loadRecentReceipts(clientId);
+        await loadBudgetStatus(clientId, firmId);
+        setUsageRefreshKey(prev => prev + 1);
+      }
     } catch (err: any) {
-      alert("Failed to create folder: " + err.message);
+      alert("Upload process failed: " + err.message);
     } finally {
-      setSavingFolder(false);
+      setUploading(false);
+      setUploadProgress(null);
     }
   }
 
-  async function updateFolder() {
-    if (!editingFolder || !editingFolder.name.trim()) return;
-    setSavingFolder(true);
-    try {
-      const { error } = await supabase
-        .from("receipt_folders")
-        .update({ name: editingFolder.name.trim(), description: editingFolder.description || null })
-        .eq("id", editingFolder.id);
-      if (error) throw error;
-      setEditingFolder(null);
-      await loadFolders();
-    } catch (err: any) {
-      alert("Failed to update folder: " + err.message);
-    } finally {
-      setSavingFolder(false);
-    }
+  if (loading) {
+    return (
+      <div className="p-8">
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </div>
+    );
   }
 
-  async function deleteFolder(folderId: string) {
-    if (!confirm("Delete this folder? Receipts inside will not be deleted — they'll become unassigned.")) return;
-    setDeletingFolderId(folderId);
-    try {
-      await supabase.from("receipts").update({ folder_id: null }).eq("folder_id", folderId);
-      const { error } = await supabase.from("receipt_folders").delete().eq("id", folderId);
-      if (error) throw error;
-      await loadFolders();
-    } catch (err: any) {
-      alert("Failed to delete folder: " + err.message);
-    } finally {
-      setDeletingFolderId(null);
-    }
+  const completionRate = stats.totalReceipts > 0
+    ? Math.round((stats.categorized / stats.totalReceipts) * 100)
+    : 0;
+
+  function formatMonth(dateStr: string) {
+    return new Date(dateStr).toLocaleDateString('en-CA', { year: 'numeric', month: 'long' });
   }
 
-  function openFolder(folder: Folder) {
-    setActiveFolderId(folder.id);
-    setActiveFolderName(folder.name);
-    setStatusFilter("all");
-    setDateFilter("any");
-  }
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        Welcome back, {clientName}!
+      </h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">
+        Track your receipts and manage your business expenses
+      </p>
 
-  function exitFolder() {
-    setActiveFolderId(null);
-    setActiveFolderName("");
-    setStatusFilter("all");
-    setDateFilter("any");
-  }
-
-  function handleDateFilterChange(value: DateFilter) {
-    setDateFilter(value);
-    setShowCustomRange(value === "custom");
-    if (value !== "custom") {
-      setCustomStart("");
-      setCustomEnd("");
-    }
-  }
-
-  const statusButtons: { label: string; value: StatusFilter; icon: string }[] = [
-    { label: "All", value: "all", icon: "📋" },
-    { label: "Needs Review", value: "needs_review", icon: "⚠️" },
-    { label: "Categorized", value: "categorized", icon: "✅" },
-    { label: "Uncategorized", value: "uncategorized", icon: "❓" },
-    { label: "Flagged", value: "flagged", icon: "🚩" },
-  ];
-
-  const dateButtons: { label: string; value: DateFilter }[] = [
-    { label: "Any Time", value: "any" },
-    { label: "This Week", value: "this_week" },
-    { label: "This Month", value: "this_month" },
-    { label: "This Year", value: "this_year" },
-    { label: "Custom", value: "custom" },
-  ];
-
-  // Shared filters bar — used in receipt list view AND inside folders
-  const FiltersBar = () => (
-    <div className="space-y-3 mb-6">
-      {/* Date filter */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Date:</span>
-        {dateButtons.map((btn) => (
-          <button
-            key={btn.value}
-            onClick={() => handleDateFilterChange(btn.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-              dateFilter === btn.value
-                ? "bg-accent-500 text-white"
-                : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
-            }`}
+      {/* Upload Hero */}
+      <div className="bg-gradient-to-br from-accent-600 to-accent-800 dark:from-accent-500 dark:to-accent-700 rounded-xl p-6 mb-8 text-white shadow-lg">
+        <div className="max-w-xl">
+          <h2 className="text-xl font-bold mb-2">Upload Receipts</h2>
+          <p className="text-accent-50 mb-6">
+            Select one or multiple receipts to upload. Our AI will extract all the details automatically.
+          </p>
+          <label
+            htmlFor="hero-upload"
+            className={`block border-2 border-dashed border-accent-200 dark:border-accent-300 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            {btn.label}
-          </button>
-        ))}
-
-        {/* Receipt date vs submitted date toggle */}
-        {dateFilter !== "any" && (
-          <div className="ml-2 flex items-center gap-1 bg-gray-100 dark:bg-dark-surface rounded-lg p-1 border dark:border-dark-border">
-            <button
-              onClick={() => setDateSearchType("receipt_date")}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                dateSearchType === "receipt_date"
-                  ? "bg-white dark:bg-dark-hover shadow text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              Receipt Date
-            </button>
-            <button
-              onClick={() => setDateSearchType("created_at")}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                dateSearchType === "created_at"
-                  ? "bg-white dark:bg-dark-hover shadow text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              Date Submitted
-            </button>
-          </div>
-        )}
+            <input
+              type="file"
+              id="hero-upload"
+              accept="image/*,application/pdf,.heic,.heif"
+              multiple
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => handleMultipleFiles(e.target.files)}
+            />
+            {uploading && uploadProgress ? (
+              <div className="space-y-3">
+                <div className="text-4xl mb-3">⏳</div>
+                <div className="text-lg font-semibold">
+                  Uploading {uploadProgress.current} of {uploadProgress.total}
+                </div>
+                <div className="text-sm text-accent-100">{uploadProgress.currentFile}</div>
+                <div className="w-full bg-accent-700 rounded-full h-2 mt-3">
+                  <div
+                    className="bg-white h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                  />
+                </div>
+                <div className="text-xs text-accent-100 mt-2">
+                  ✅ {uploadProgress.succeeded} succeeded • ❌ {uploadProgress.failed} failed
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-4xl mb-3">📸</div>
+                <div className="text-lg font-semibold mb-2">Click to upload or drag here</div>
+                <div className="text-sm text-accent-100">Supports JPG, PNG, PDF, HEIC • Select multiple files</div>
+              </>
+            )}
+          </label>
+        </div>
       </div>
 
-      {/* Custom date range pickers */}
-      {showCustomRange && (
-        <div className="flex flex-wrap items-center gap-3 pl-1">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 dark:text-gray-400">From</label>
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="text-xs border border-gray-300 dark:border-dark-border rounded-lg px-2 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 dark:text-gray-400">To</label>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="text-xs border border-gray-300 dark:border-dark-border rounded-lg px-2 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
-            />
+      {/* Email Inbox Reminder */}
+      {clientEmail && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">📧</div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-1">Your Receipt Inbox</h3>
+              <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                Forward receipts to your personal email address and we'll process them automatically:
+              </p>
+              <div className="bg-white dark:bg-dark-surface border border-blue-300 dark:border-blue-700 rounded px-3 py-2 font-mono text-sm text-gray-900 dark:text-white inline-block">
+                {clientEmail}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Status filter */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Status:</span>
-        {statusButtons.map((btn) => (
-          <button
-            key={btn.value}
-            onClick={() => setStatusFilter(btn.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-              statusFilter === btn.value
-                ? "bg-accent-500 text-white"
-                : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
-            }`}
-          >
-            {btn.icon} {btn.label}
-          </button>
-        ))}
+      {/* Usage Stats */}
+      <div className="mb-8">
+        <UsageStats key={usageRefreshKey} />
       </div>
-    </div>
-  );
 
-  // Shared receipt grid
-  const ReceiptGrid = () => (
-    <>
-      {loading ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading receipts...</div>
-      ) : receipts.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
-          <p className="text-gray-500 dark:text-gray-400">
-            {activeFolderId
-              ? "No receipts in this folder yet."
-              : dateFilter !== "any"
-              ? "No receipts found for the selected date range."
-              : statusFilter === "all"
-              ? "No receipts yet. Upload your first receipt to get started!"
-              : `No ${statusFilter.replace("_", " ")} receipts found.`}
-          </p>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">My Receipts</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalReceipts}</div>
+        </Link>
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">This Month</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.thisMonth}</div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {receipts.map((receipt) => (
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Categorized</div>
+          <div className="text-3xl font-bold text-green-600 dark:text-green-400">{completionRate}%</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.categorized} of {stats.totalReceipts}</div>
+        </div>
+      </div>
+
+      {/* Budget Status */}
+      {budgetStatus.length > 0 && (
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-8 border border-transparent dark:border-dark-border">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">💰 Budget Status</h2>
+            <Link href="/dashboard/budget-settings" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">
+              Manage →
+            </Link>
+          </div>
+          <div className="space-y-4">
+            {budgetStatus.map((budget) => (
+              <div key={budget.category}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="font-medium text-gray-700 dark:text-gray-300">{budget.category}</span>
+                  <span className={`font-semibold ${budget.percentage > 100 ? "text-red-600 dark:text-red-400" : budget.percentage > 80 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400"}`}>
+                    ${(budget.spent_cents / 100).toFixed(2)} / ${(budget.budget_cents / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${budget.percentage > 100 ? "bg-red-500" : budget.percentage > 80 ? "bg-orange-500" : "bg-green-500"}`}
+                    style={{ width: `${Math.min(budget.percentage, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* My Reports */}
+      <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden mb-8">
+        <div className="p-6 border-b border-gray-200 dark:border-dark-border flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">📊 My Monthly Reports</h2>
+          {clientId && (
             <Link
-              key={receipt.id}
-              href={`/dashboard/receipts/${receipt.id}`}
-              className="block p-4 rounded-xl border border-gray-200 dark:border-dark-border hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500"
+              href={`/dashboard/reports/clients/${clientId}`}
+              className="text-sm text-accent-600 dark:text-accent-400 hover:underline"
             >
-              <div className="flex items-start justify-between mb-3">
+              View All →
+            </Link>
+          )}
+        </div>
+        {recentReports.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No reports yet — reports are generated automatically at the end of each month.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-dark-border">
+            {recentReports.map((report) => (
+              <Link
+                key={report.id}
+                href={`/dashboard/reports/clients/${clientId}`}
+                className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-white">{formatMonth(report.report_month)}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {report.total_receipts} receipt{report.total_receipts !== 1 ? 's' : ''} •{' '}
+                    ${(report.total_tax_cents / 100).toFixed(2)} in tax
+                  </div>
+                </div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                  ${(report.total_spend_cents / 100).toFixed(2)}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Receipts */}
+      {recentReceipts.length > 0 && (
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden">
+          <div className="p-6 border-b border-gray-200 dark:border-dark-border flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">📁 Recent Receipts</h2>
+            <Link href="/dashboard/receipts" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">
+              View All →
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-200 dark:divide-dark-border">
+            {recentReceipts.map((receipt) => (
+              <Link
+                key={receipt.id}
+                href={`/dashboard/receipts/${receipt.id}`}
+                className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors flex items-center justify-between"
+              >
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 dark:text-white">
                     {receipt.vendor || "Unknown vendor"}
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {receipt.receipt_date || "No date"}
+                    {receipt.receipt_date
+                      ? new Date(receipt.receipt_date).toLocaleDateString()
+                      : new Date(receipt.created_at).toLocaleDateString()}
+                    {receipt.approved_category && (
+                      <span className="ml-2 text-green-600 dark:text-green-400">• {receipt.approved_category}</span>
+                    )}
                   </div>
                 </div>
-                {receipt.has_flags && (
-                  <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-xs rounded-full font-medium">
-                    🚩 Flagged
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                  ${((receipt.total_cents || 0) / 100).toFixed(2)}
+                  ${(receipt.total_cents / 100).toFixed(2)}
                 </div>
-                {receipt.approved_category ? (
-                  <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs rounded-full font-medium">
-                    ✓ {receipt.approved_category}
-                  </span>
-                ) : receipt.suggested_category ? (
-                  <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded-full font-medium">
-                    → {receipt.suggested_category}
-                  </span>
-                ) : (
-                  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full font-medium">
-                    Uncategorized
-                  </span>
-                )}
-              </div>
-            </Link>
-          ))}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
-    </>
-  );
 
-  return (
-    <main className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
-      <div className="max-w-7xl mx-auto">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Receipts</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {activeFolderId
-                ? `${receipts.length} receipt${receipts.length !== 1 ? "s" : ""} in "${activeFolderName}"`
-                : mainView === "receipts"
-                ? `${receipts.length} ${statusFilter === "all" ? "total" : statusFilter.replace("_", " ")} receipt${receipts.length !== 1 ? "s" : ""}`
-                : `${folders.length} folder${folders.length !== 1 ? "s" : ""}`}
-            </p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
-          >
-            ← Back to Dashboard
-          </Link>
+      {/* Empty State */}
+      {stats.totalReceipts === 0 && (
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-12 text-center border border-transparent dark:border-dark-border">
+          <div className="text-gray-400 dark:text-gray-500 text-5xl mb-4">📸</div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No receipts yet</h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Get started by uploading your first receipt above, or forward receipt emails to your inbox.
+          </p>
         </div>
-
-        {/* Main view tabs — hidden when inside a folder */}
-        {!activeFolderId && (
-          <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-dark-surface p-1 rounded-xl w-fit border dark:border-dark-border">
-            <button
-              onClick={() => setMainView("receipts")}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                mainView === "receipts"
-                  ? "bg-white dark:bg-dark-hover shadow text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
-            >
-              📋 All Receipts
-            </button>
-            <button
-              onClick={() => { setMainView("folders"); loadFolders(); }}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                mainView === "folders"
-                  ? "bg-white dark:bg-dark-hover shadow text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
-            >
-              📁 Folders
-            </button>
-          </div>
-        )}
-
-        {/* ── ALL RECEIPTS VIEW ── */}
-        {mainView === "receipts" && !activeFolderId && (
-          <>
-            <FiltersBar />
-            <ReceiptGrid />
-          </>
-        )}
-
-        {/* ── FOLDERS LIST VIEW ── */}
-        {mainView === "folders" && !activeFolderId && (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Organize receipts into project folders
-              </p>
-              <button
-                onClick={() => setShowNewFolderModal(true)}
-                className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                + New Folder
-              </button>
-            </div>
-
-            {folders.length === 0 ? (
-              <div className="text-center py-16 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
-                <div className="text-5xl mb-4">📁</div>
-                <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">No folders yet</p>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
-                  Create a folder to organize receipts by project or category
-                </p>
-                <button
-                  onClick={() => setShowNewFolderModal(true)}
-                  className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  + Create First Folder
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {folders.map((folder) => (
-                  <div
-                    key={folder.id}
-                    className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl p-5 hover:border-accent-500 dark:hover:border-accent-500 hover:shadow-md transition-all group"
-                  >
-                    <div className="cursor-pointer" onClick={() => openFolder(folder)}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="text-3xl">📁</div>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-dark-hover px-2 py-1 rounded-full">
-                          {folder.receipt_count} receipt{folder.receipt_count !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors">
-                        {folder.name}
-                      </h3>
-                      {folder.description && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-                          {folder.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-dark-border">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setEditingFolder({ ...folder }); }}
-                        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                      >
-                        ✏️ Rename
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }}
-                        disabled={deletingFolderId === folder.id}
-                        className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors ml-auto"
-                      >
-                        {deletingFolderId === folder.id ? "Deleting..." : "🗑️ Delete"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── INSIDE A FOLDER ── */}
-        {activeFolderId && (
-          <>
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 mb-5 text-sm">
-              <button
-                onClick={exitFolder}
-                className="text-accent-600 dark:text-accent-400 hover:underline font-medium"
-              >
-                📁 Folders
-              </button>
-              <span className="text-gray-400 dark:text-gray-500">/</span>
-              <span className="text-gray-700 dark:text-gray-300 font-medium">{activeFolderName}</span>
-            </div>
-            <FiltersBar />
-            <ReceiptGrid />
-          </>
-        )}
-
-        {/* ── NEW FOLDER MODAL ── */}
-        {showNewFolderModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-dark-surface rounded-xl shadow-xl w-full max-w-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">New Folder</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Folder Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="e.g. Bathroom Reno, Office Supplies Q1"
-                    className="w-full border border-gray-300 dark:border-dark-border rounded-lg px-3 py-2 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-                    onKeyDown={(e) => e.key === "Enter" && createFolder()}
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newFolderDesc}
-                    onChange={(e) => setNewFolderDesc(e.target.value)}
-                    placeholder="Brief description of this folder"
-                    className="w-full border border-gray-300 dark:border-dark-border rounded-lg px-3 py-2 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => { setShowNewFolderModal(false); setNewFolderName(""); setNewFolderDesc(""); }}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={createFolder}
-                  disabled={savingFolder || !newFolderName.trim()}
-                  className="flex-1 px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {savingFolder ? "Creating..." : "Create Folder"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── EDIT FOLDER MODAL ── */}
-        {editingFolder && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-dark-surface rounded-xl shadow-xl w-full max-w-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Rename Folder</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Folder Name
-                  </label>
-                  <input
-                    type="text"
-                    value={editingFolder.name}
-                    onChange={(e) => setEditingFolder({ ...editingFolder, name: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-dark-border rounded-lg px-3 py-2 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={editingFolder.description || ""}
-                    onChange={(e) => setEditingFolder({ ...editingFolder, description: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-dark-border rounded-lg px-3 py-2 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setEditingFolder(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={updateFolder}
-                  disabled={savingFolder || !editingFolder.name.trim()}
-                  className="flex-1 px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {savingFolder ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
-    </main>
+      )}
+    </div>
   );
 }
