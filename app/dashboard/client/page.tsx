@@ -252,10 +252,10 @@ if (!initialCheck.canUpload && initialCheck.limit !== -1) {
           failed,
         });
 
-          if (limit !== -1 && currentUsage >= limit) {
-            limitReached = true;
-          const remainingFiles = fileArray.length - i;
-          const now = new Date();
+if (limit !== -1 && currentUsage >= limit) {
+  limitReached = true;
+  const remainingFiles = fileArray.length - i;
+            const now = new Date();
           const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
           const daysRemaining = lastDay.getDate() - now.getDate();
           if (confirm(`📊 Monthly Limit Reached\n\nSuccessfully uploaded ${succeeded} receipt${succeeded !== 1 ? 's' : ''}.\n${remainingFiles} file${remainingFiles !== 1 ? 's' : ''} not uploaded (limit reached).\n\nYou've used all ${limit} receipts on your ${initialCheck.plan} plan.\n${daysRemaining} days remaining until reset.\n\nUpgrade to upload the remaining receipts!\n\nView upgrade options?`)) {
@@ -552,4 +552,4 @@ if (!initialCheck.canUpload && initialCheck.limit !== -1) {
       )}
     </div>
   );
-}
+}// force rebuild Sat Mar 28 01:18:07 EDT 2026
