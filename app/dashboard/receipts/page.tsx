@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -58,7 +58,7 @@ function getDateRange(filter: DateFilter, customStart?: string, customEnd?: stri
   }
 }
 
-export default function ReceiptsPage() {
+function ReceiptsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { selectedClient, isFiltered } = useClientContext();
@@ -765,5 +765,13 @@ export default function ReceiptsPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function ReceiptsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-500 dark:text-gray-400">Loading receipts...</div>}>
+      <ReceiptsPageContent />
+    </Suspense>
   );
 }
