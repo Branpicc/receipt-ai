@@ -223,8 +223,9 @@ export default function ClientDashboardPage() {
       let succeeded = 0;
       let failed = 0;
       let limitReached = false;
-      let currentUsage = 0;
-      const limit = -1;
+let currentUsage = 0;
+const limit = -1;
+console.log('🔍 Upload limits:', { limit, currentUsage });
 
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
