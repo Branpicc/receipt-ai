@@ -21,12 +21,12 @@ export async function POST(request: NextRequest) {
     const clientId = formData.get("clientId") as string;
     const authUserId = formData.get("userId") as string | null;
 
-    console.log("📤 Upload started:", { 
-      fileName: file?.name, 
+    console.log("📤 Upload started:", {
+      fileName: file?.name,
       fileSize: file?.size,
-      firmId, 
+      firmId,
       clientId,
-      authUserId 
+      authUserId,
     });
 
     if (!file || !firmId || !clientId) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         .eq("auth_user_id", authUserId)
         .eq("firm_id", firmId)
         .single();
-      
+
       firmUserId = firmUser?.id;
       console.log("👤 Resolved firm_user_id:", firmUserId);
     }
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         {
           firm_id: firmId,
           client_id: clientId,
-          uploaded_by: firmUserId, // Use firm_users.id, not auth_user_id
+          uploaded_by: firmUserId,
           source: "upload",
           status: "needs_review",
           currency: "CAD",
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     while (uploadAttempt < MAX_RETRIES) {
       uploadAttempt++;
-      console.log(`Upload attempt ${uploadAttempt}/${MAX_RETRIES}${isLargeFile ? ' (large file mode)' : ''}`);
+      console.log(`Upload attempt ${uploadAttempt}/${MAX_RETRIES}${isLargeFile ? " (large file mode)" : ""}`);
 
       try {
         const { error } = await supabase.storage
@@ -127,14 +127,16 @@ export async function POST(request: NextRequest) {
         const baseWait = isLargeFile ? 3000 : 2000;
         const waitTime = Math.pow(2, uploadAttempt - 1) * baseWait;
         console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
 
     if (uploadError) {
       console.error("❌ All upload attempts failed:", uploadError);
       await supabase.from("receipts").delete().eq("id", receiptId);
-      throw new Error(`Storage upload failed after ${MAX_RETRIES} attempts: ${uploadError.message}`);
+      throw new Error(
+        `Storage upload failed after ${MAX_RETRIES} attempts: ${uploadError.message}`
+      );
     }
 
     // 3. Update receipt with file path
@@ -145,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Receipt updated with file_path");
 
-    // 5. Get signed URL and run OCR
+    // 4. Get signed URL and run OCR
     const { data: signedData, error: signedError } = await supabase.storage
       .from("receipt-files")
       .createSignedUrl(storagePath, 3600);
@@ -160,14 +162,16 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("📸 Starting OCR extraction...");
-    
+
     let vendorName = "Unknown vendor";
-    
+    let totalCents = 0;
+
     try {
       const extracted = await extractReceiptData(signedData.signedUrl);
       console.log("✅ OCR extracted:", extracted);
 
       vendorName = extracted.vendor || "Unknown vendor";
+      totalCents = extracted.total_cents || 0;
 
       await supabase
         .from("receipts")
@@ -194,7 +198,7 @@ export async function POST(request: NextRequest) {
         ]);
         console.log("✅ Tax saved:", extracted.tax_cents);
       }
-      
+
       if (extracted.line_items && extracted.line_items.length > 0) {
         const lineItemsToInsert = extracted.line_items.map((item, index) => ({
           receipt_id: receiptId,
@@ -216,7 +220,7 @@ export async function POST(request: NextRequest) {
         .eq("id", receiptId);
     }
 
-    // 9. Create notifications for OTHER users
+    // 5. Create notifications for OTHER users
     try {
       const { data: firmUsers } = await supabase
         .from("firm_users")
@@ -225,7 +229,7 @@ export async function POST(request: NextRequest) {
         .neq("auth_user_id", authUserId || "");
 
       if (firmUsers && firmUsers.length > 0) {
-        const notifications = firmUsers.map(user => ({
+        const notifications = firmUsers.map((user) => ({
           firm_id: firmId,
           user_id: user.auth_user_id,
           type: "receipt_uploaded",
@@ -240,6 +244,34 @@ export async function POST(request: NextRequest) {
       }
     } catch (notifError: any) {
       console.error("❌ Failed to create notifications:", notifError);
+    }
+
+    // 6. Trigger SMS to client if they have SMS enabled
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const smsResponse = await fetch(`${appUrl}/api/sms/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receiptId,
+          clientId,
+          firmId,
+        }),
+      });
+
+      if (smsResponse.ok) {
+        const smsResult = await smsResponse.json();
+        if (smsResult.skipped) {
+          console.log("📱 SMS skipped:", smsResult.reason);
+        } else if (smsResult.sent) {
+          console.log("📱 SMS sent immediately");
+        } else {
+          console.log("📱 SMS queued for:", smsResult.scheduledFor);
+        }
+      }
+    } catch (smsError: any) {
+      // Never block the upload if SMS fails
+      console.error("❌ SMS trigger failed (non-blocking):", smsError.message);
     }
 
     return NextResponse.json({

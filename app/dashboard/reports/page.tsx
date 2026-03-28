@@ -1,270 +1,465 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
-import Link from "next/link";
+import { getUserRole } from "@/lib/getUserRole";
+import { useRouter } from "next/navigation";
 
-type ClientWithReport = {
-  id: string;
-  name: string;
-  email_alias: string | null;
-  latest_report_month: string | null;
-  latest_report_spend: number | null;
-  latest_report_receipts: number | null;
-  has_report: boolean;
-};
+type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly";
 
-export default function ReportsIndexPage() {
-  const [clients, setClients] = useState<ClientWithReport[]>([]);
+export default function ReportsPage() {
+  const router = useRouter();
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generatingAll, setGeneratingAll] = useState(false);
-  const [search, setSearch] = useState("");
+  const [selectedReport, setSelectedReport] = useState<ReportType>("receipts");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selectedClient, setSelectedClient] = useState("");
+  const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    loadClients();
+    checkAccess();
   }, []);
 
+  async function checkAccess() {
+    const role = await getUserRole();
+    setUserRole(role);
+
+    if (role !== "firm_admin" && role !== "owner" && role !== "accountant") {
+      alert("Access denied. Only firm admins and accountants can access reports.");
+      router.push("/dashboard");
+      return;
+    }
+
+    loadClients();
+    setLoading(false);
+  }
+
   async function loadClients() {
-    setLoading(true);
     try {
       const firmId = await getMyFirmId();
-
-      // Load all active clients
-      const { data: clientsData, error } = await supabase
+      const { data } = await supabase
         .from("clients")
-        .select("id, name, email_alias")
+        .select("id, name")
         .eq("firm_id", firmId)
         .eq("is_active", true)
-        .order("name", { ascending: true });
+        .order("name");
 
-      if (error) throw error;
-
-      // Load latest report for each client
-      const withReports = await Promise.all(
-        (clientsData || []).map(async (client) => {
-          const { data: latestReport } = await supabase
-            .from("client_reports")
-            .select("report_month, total_spend_cents, total_receipts")
-            .eq("client_id", client.id)
-            .order("report_month", { ascending: false })
-            .limit(1)
-            .single();
-
-          return {
-            ...client,
-            latest_report_month: latestReport?.report_month || null,
-            latest_report_spend: latestReport?.total_spend_cents || null,
-            latest_report_receipts: latestReport?.total_receipts || null,
-            has_report: !!latestReport,
-          };
-        })
-      );
-
-      // Sort — clients with reports first, then alphabetically
-      withReports.sort((a, b) => {
-        if (a.has_report && !b.has_report) return -1;
-        if (!a.has_report && b.has_report) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      setClients(withReports);
-    } catch (err) {
-      console.error("Failed to load clients:", err);
-    } finally {
-      setLoading(false);
+      setClients(data || []);
+    } catch (error) {
+      console.error("Failed to load clients:", error);
     }
   }
 
-  async function generateAllReports() {
-    if (!confirm("Generate reports for all clients for the current month?")) return;
-    setGeneratingAll(true);
+  async function exportReport() {
     try {
+      setExporting(true);
       const firmId = await getMyFirmId();
-      const now = new Date();
-      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
-      let succeeded = 0;
-      let failed = 0;
+      let data: any[] = [];
+      let filename = "";
+      let headers: string[] = [];
 
-      for (const client of clients) {
-        try {
-          const response = await fetch("/api/generate-monthly-report", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ clientId: client.id, firmId, month }),
-          });
-          if (response.ok) succeeded++;
-          else failed++;
-        } catch {
-          failed++;
-        }
+      switch (selectedReport) {
+        case "receipts":
+          data = await fetchReceiptsReport(firmId);
+          filename = `receipts-report-${new Date().toISOString().split("T")[0]}.csv`;
+          headers = ["Date", "Vendor", "Amount", "Category", "Tax Code", "Payment Method", "Client", "Status"];
+          break;
+
+        case "tax_codes":
+          data = await fetchTaxCodesReport(firmId);
+          filename = `tax-codes-report-${new Date().toISOString().split("T")[0]}.csv`;
+          headers = ["Tax Code", "Description", "Total Amount", "Receipt Count"];
+          break;
+
+        case "clients":
+          data = await fetchClientsReport(firmId);
+          filename = `clients-report-${new Date().toISOString().split("T")[0]}.csv`;
+          headers = ["Client", "Total Receipts", "Total Amount", "Avg Receipt", "Last Activity"];
+          break;
+
+        case "categories":
+          data = await fetchCategoriesReport(firmId);
+          filename = `categories-report-${new Date().toISOString().split("T")[0]}.csv`;
+          headers = ["Category", "Total Amount", "Receipt Count", "Percentage"];
+          break;
+
+        case "monthly":
+          data = await fetchMonthlyReport(firmId);
+          filename = `monthly-report-${new Date().toISOString().split("T")[0]}.csv`;
+          headers = ["Month", "Total Amount", "Receipt Count", "Avg Receipt"];
+          break;
       }
 
-      alert(`✅ Done — ${succeeded} generated, ${failed} failed`);
-      await loadClients();
-    } catch (err: any) {
-      alert("Failed: " + err.message);
+      if (data.length === 0) {
+        alert("No data to export for the selected filters");
+        return;
+      }
+
+      // Generate CSV
+      const csvRows = [
+        headers.join(","),
+        ...data.map(row => 
+          headers.map(header => {
+            const value = row[header] || "";
+            // Escape quotes and wrap in quotes if contains comma
+            const escaped = String(value).replace(/"/g, '""');
+            return escaped.includes(",") ? `"${escaped}"` : escaped;
+          }).join(",")
+        )
+      ];
+
+      const csvContent = csvRows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      alert(`✅ Exported ${data.length} rows to ${filename}`);
+    } catch (error: any) {
+      console.error("Export error:", error);
+      alert("Failed to export report: " + error.message);
     } finally {
-      setGeneratingAll(false);
+      setExporting(false);
     }
   }
 
-  function formatMonth(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-CA", {
-      year: "numeric",
-      month: "long",
-    });
+  async function fetchReceiptsReport(firmId: string) {
+    let query = supabase
+      .from("receipts")
+.select(`
+  receipt_date,
+  vendor,
+  total_cents,
+  approved_category,
+  suggested_category,
+  payment_method,
+  status,
+  clients (name)
+`)
+      .eq("firm_id", firmId)
+      .order("receipt_date", { ascending: false });
+
+    // Date filters
+    if (dateFrom) query = query.gte("receipt_date", dateFrom);
+    if (dateTo) query = query.lte("receipt_date", dateTo);
+    
+    // Client filter
+    if (selectedClient) query = query.eq("client_id", selectedClient);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data || []).map(r => ({
+      "Date": r.receipt_date || "",
+      "Vendor": r.vendor || "",
+      "Amount": (r.total_cents / 100).toFixed(2),
+      "Category": r.approved_category || r.suggested_category || "",
+      "Payment Method": r.payment_method || "",
+      "Client": (() => {
+       const client = Array.isArray(r.clients) ? r.clients[0] : r.clients;
+       return client?.name || "";
+        })(),
+      "Status": r.status || ""
+    }));
   }
 
-  const filtered = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+async function fetchTaxCodesReport(firmId: string) {
+  // Since there's no tax_code column, group by approved/suggested category
+  const { data, error } = await supabase
+    .from("receipts")
+    .select("approved_category, suggested_category, total_cents")
+    .eq("firm_id", firmId);
 
-  const withReports = filtered.filter((c) => c.has_report);
-  const withoutReports = filtered.filter((c) => !c.has_report);
+  if (error) throw error;
+
+  // Group by category (treating it as tax reporting categories)
+  const grouped = (data || []).reduce((acc: any, r) => {
+    const category = r.approved_category || r.suggested_category || "Uncategorized";
+    if (!acc[category]) {
+      acc[category] = { count: 0, total: 0 };
+    }
+    acc[category].count++;
+    acc[category].total += r.total_cents;
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).map(([category, stats]: [string, any]) => ({
+    "Tax Code": getCategoryTaxCode(category),
+    "Description": category,
+    "Total Amount": (stats.total / 100).toFixed(2),
+    "Receipt Count": stats.count
+  }));
+}
+  async function fetchClientsReport(firmId: string) {
+    const { data, error } = await supabase
+      .from("receipts")
+      .select(`
+        total_cents,
+        created_at,
+        clients (id, name)
+      `)
+      .eq("firm_id", firmId);
+
+    if (error) throw error;
+
+    // Group by client
+    const grouped = (data || []).reduce((acc: any, r) => {
+const client = Array.isArray(r.clients) ? r.clients[0] : r.clients;
+const clientId = client?.id;
+const clientName = client?.name || "Unknown";
+      if (!acc[clientId]) {
+        acc[clientId] = {
+          name: clientName,
+          count: 0,
+          total: 0,
+          lastActivity: r.created_at
+        };
+      }
+      acc[clientId].count++;
+      acc[clientId].total += r.total_cents;
+      if (new Date(r.created_at) > new Date(acc[clientId].lastActivity)) {
+        acc[clientId].lastActivity = r.created_at;
+      }
+      return acc;
+    }, {});
+
+    return Object.values(grouped).map((client: any) => ({
+      "Client": client.name,
+      "Total Receipts": client.count,
+      "Total Amount": (client.total / 100).toFixed(2),
+      "Avg Receipt": (client.total / client.count / 100).toFixed(2),
+      "Last Activity": new Date(client.lastActivity).toLocaleDateString()
+    }));
+  }
+
+async function fetchCategoriesReport(firmId: string) {
+  const { data, error } = await supabase
+    .from("receipts")
+    .select("approved_category, suggested_category, total_cents")
+    .eq("firm_id", firmId);
+
+  if (error) throw error;
+
+  const grouped = (data || []).reduce((acc: any, r) => {
+    const cat = r.approved_category || r.suggested_category || "Uncategorized";
+    if (!cat) return acc;
+    if (!acc[cat]) {
+      acc[cat] = { count: 0, total: 0 };
+    }
+    acc[cat].count++;
+    acc[cat].total += r.total_cents;
+    return acc;
+  }, {});
+
+  const total = Object.values(grouped).reduce((sum: number, g: any) => sum + g.total, 0);
+
+  return Object.entries(grouped).map(([category, stats]: [string, any]) => ({
+    "Category": category,
+    "Total Amount": (stats.total / 100).toFixed(2),
+    "Receipt Count": stats.count,
+    "Percentage": ((stats.total / total) * 100).toFixed(1) + "%"
+  }));
+}
+
+  async function fetchMonthlyReport(firmId: string) {
+    const { data, error } = await supabase
+      .from("receipts")
+      .select("receipt_date, total_cents")
+      .eq("firm_id", firmId)
+      .not("receipt_date", "is", null)
+      .order("receipt_date", { ascending: false });
+
+    if (error) throw error;
+
+    // Group by month
+    const grouped = (data || []).reduce((acc: any, r) => {
+      const month = r.receipt_date.substring(0, 7); // YYYY-MM
+      if (!acc[month]) {
+        acc[month] = { count: 0, total: 0 };
+      }
+      acc[month].count++;
+      acc[month].total += r.total_cents;
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([month, stats]: [string, any]) => ({
+        "Month": month,
+        "Total Amount": (stats.total / 100).toFixed(2),
+        "Receipt Count": stats.count,
+        "Avg Receipt": (stats.total / stats.count / 100).toFixed(2)
+      }));
+  }
+
+function getTaxCodeDescription(code: string): string {
+  return code;
+}
+
+function getCategoryTaxCode(category: string): string {
+  // Map categories to T2125 tax codes
+  const mapping: Record<string, string> = {
+    "Meals & Entertainment": "8523",
+    "Motor Vehicle": "9281", 
+    "Office Expenses": "8590",
+    "Professional Fees": "8810",
+    "Supplies": "9270",
+    "Advertising": "8521",
+    "Insurance": "9804",
+    "Travel": "9200"
+  };
+  return mapping[category] || "9270"; // Default to Supplies
+}
+
+  if (loading) {
+    return (
+      <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </div>
+    );
+  }
+
+  const reportTypes = [
+    { value: "receipts", label: "Receipt Summary", icon: "📄", desc: "All receipts with details" },
+    { value: "tax_codes", label: "Tax Code Report", icon: "🧾", desc: "Grouped by T2125 codes" },
+    { value: "clients", label: "Client Report", icon: "👥", desc: "Per-client breakdown" },
+    { value: "categories", label: "Category Report", icon: "📊", desc: "Expenses by category" },
+    { value: "monthly", label: "Monthly Summary", icon: "📅", desc: "Month-over-month" }
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
-      <div className="max-w-4xl mx-auto">
-
+    <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Client Reports
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Monthly spending reports for all clients — auto-generated at month end
-            </p>
-          </div>
-          <button
-            onClick={generateAllReports}
-            disabled={generatingAll || clients.length === 0}
-            className="px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {generatingAll ? "Generating..." : "⚡ Generate All"}
-          </button>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Export Reports
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Generate detailed reports for accounting and analysis
+          </p>
         </div>
 
-        {/* Search */}
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search clients..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full border border-gray-300 dark:border-dark-border rounded-lg px-4 py-2.5 text-sm bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-          />
+        {/* Report Type Selection */}
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Select Report Type
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {reportTypes.map((type) => (
+              <button
+                key={type.value}
+                onClick={() => setSelectedReport(type.value as ReportType)}
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  selectedReport === type.value
+                    ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
+                    : "border-gray-200 dark:border-dark-border hover:border-accent-300"
+                }`}
+              >
+                <div className="text-3xl mb-2">{type.icon}</div>
+                <div className="font-medium text-gray-900 dark:text-white mb-1">
+                  {type.label}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {type.desc}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {loading ? (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            Loading clients...
-          </div>
-        ) : clients.length === 0 ? (
-          <div className="text-center py-16 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border">
-            <div className="text-5xl mb-4">👥</div>
-            <p className="text-gray-600 dark:text-gray-400 font-medium">No clients yet</p>
-            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-              Add clients to start generating reports
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-
-            {/* Clients with reports */}
-            {withReports.length > 0 && (
+        {/* Filters */}
+        {selectedReport === "receipts" && (
+          <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Filters
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                  Reports Available ({withReports.length})
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {withReports.map((client) => (
-                    <Link
-                      key={client.id}
-                      href={`/dashboard/reports/${client.id}`}
-                      className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl p-5 hover:border-accent-500 dark:hover:border-accent-500 hover:shadow-md transition-all group"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-accent-100 dark:bg-accent-900/30 flex items-center justify-center text-accent-700 dark:text-accent-300 font-bold text-sm">
-                            {client.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors">
-                              {client.name}
-                            </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              Latest: {formatMonth(client.latest_report_month!)}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium">
-                          ✓ Report ready
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-gray-50 dark:bg-dark-hover rounded-lg p-3">
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Total Spend</div>
-                          <div className="text-lg font-bold text-gray-900 dark:text-white">
-                            ${((client.latest_report_spend || 0) / 100).toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-dark-hover rounded-lg p-3">
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Receipts</div>
-                          <div className="text-lg font-bold text-gray-900 dark:text-white">
-                            {client.latest_report_receipts || 0}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 text-xs text-accent-600 dark:text-accent-400 font-medium group-hover:underline">
-                        View full report →
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Date From
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
               </div>
-            )}
 
-            {/* Clients without reports */}
-            {withoutReports.length > 0 && (
               <div>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                  No Reports Yet ({withoutReports.length})
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {withoutReports.map((client) => (
-                    <Link
-                      key={client.id}
-                      href={`/dashboard/reports/${client.id}`}
-                      className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl p-5 hover:border-accent-400 dark:hover:border-accent-400 transition-all group opacity-75 hover:opacity-100"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-dark-hover flex items-center justify-center text-gray-500 dark:text-gray-400 font-bold text-sm">
-                          {client.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors">
-                            {client.name}
-                          </h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            No reports generated yet
-                          </p>
-                        </div>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors">
-                          Generate →
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Date To
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
               </div>
-            )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Client
+                </label>
+                <select
+                  value={selectedClient}
+                  onChange={(e) => setSelectedClient(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                >
+                  <option value="">All Clients</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Export Button */}
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                Ready to Export
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Report will be downloaded as CSV file
+              </p>
+            </div>
+
+            <button
+              onClick={exportReport}
+              disabled={exporting}
+              className="px-6 py-3 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <span>📥</span>
+                  <span>Export Report</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
