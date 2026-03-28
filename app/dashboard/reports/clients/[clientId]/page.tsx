@@ -308,7 +308,7 @@ export default function ClientReportsPage() {
                             ))}
                           </Pie>
 <Tooltip
-  formatter={(value: number | undefined) => value != null ? formatCents(value) : ''}
+  formatter={(value: any) => [value != null ? formatCents(Number(value)) : '', '']}
 />
                         </PieChart>
                       </ResponsiveContainer>
@@ -384,8 +384,8 @@ export default function ClientReportsPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${v}`} />
-                        <Tooltip formatter={(v: number | undefined) => v != null ? `$${v.toFixed(2)}` : ''} />
-                            <Legend />
+<Tooltip formatter={(value: any) => [value != null ? `$${Number(value).toFixed(2)}` : '', '']} />
+                              <Legend />
                         <Bar dataKey="spend" name="Total Spend ($)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
