@@ -1,10 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signUp, validateInvitation } from "@/lib/auth";
 
-export default function AcceptInvitationPage() {
+function AcceptInvitationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -23,14 +24,12 @@ export default function AcceptInvitationPage() {
       setLoading(false);
       return;
     }
-
     validateToken();
   }, [token]);
 
   const validateToken = async () => {
     try {
       const { valid, invitation: inv } = await validateInvitation(token!);
-
       if (!valid || !inv) {
         setError("This invitation is invalid or has expired");
       } else {
@@ -87,14 +86,9 @@ export default function AcceptInvitationPage() {
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
             <div className="text-center">
               <div className="text-4xl mb-4">❌</div>
-              <h3 className="text-lg font-semibold text-red-900 mb-2">
-                Invalid Invitation
-              </h3>
+              <h3 className="text-lg font-semibold text-red-900 mb-2">Invalid Invitation</h3>
               <p className="text-sm text-red-700">{error}</p>
-              <a
-                href="/login"
-                className="mt-4 inline-block text-sm text-red-800 underline hover:text-red-900"
-              >
+              <a href="/login" className="mt-4 inline-block text-sm text-red-800 underline hover:text-red-900">
                 Go to login →
               </a>
             </div>
@@ -108,9 +102,7 @@ export default function AcceptInvitationPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h1 className="text-center text-4xl font-bold text-gray-900">
-            ReceiptAI
-          </h1>
+          <h1 className="text-center text-4xl font-bold text-gray-900">ReceiptAI</h1>
           <h2 className="mt-6 text-center text-3xl font-semibold text-gray-900">
             Accept your invitation
           </h2>
@@ -140,9 +132,7 @@ export default function AcceptInvitationPage() {
 
           <form onSubmit={handleAcceptInvitation} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email address
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
               <input
                 type="email"
                 disabled
@@ -166,9 +156,7 @@ export default function AcceptInvitationPage() {
                 placeholder="••••••••"
                 minLength={8}
               />
-              <p className="mt-1 text-xs text-gray-500">
-                Must be at least 8 characters
-              </p>
+              <p className="mt-1 text-xs text-gray-500">Must be at least 8 characters</p>
             </div>
 
             <div>
@@ -199,11 +187,24 @@ export default function AcceptInvitationPage() {
 
         <div className="text-center text-sm text-gray-600">
           Already have an account?{" "}
-          <a href="/login" className="text-gray-900 underline hover:text-gray-700">
-            Sign in
-          </a>
+          <a href="/login" className="text-gray-900 underline hover:text-gray-700">Sign in</a>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AcceptInvitationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="text-2xl mb-4">⏳</div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <AcceptInvitationContent />
+    </Suspense>
   );
 }
