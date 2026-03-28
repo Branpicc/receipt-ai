@@ -1,10 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, sendMagicLink } from "@/lib/auth";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
@@ -20,7 +21,6 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
       await signIn(email, password);
       router.push(redirectTo);
@@ -35,7 +35,6 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
       await sendMagicLink(email);
       setMagicLinkSent(true);
@@ -158,33 +157,40 @@ export default function LoginPage() {
                 disabled={loading}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading
-                  ? "Loading..."
-                  : useMagicLink
-                  ? "Send magic link"
-                  : "Sign in"}
+                {loading ? "Loading..." : useMagicLink ? "Send magic link" : "Sign in"}
               </button>
             </form>
 
-{!useMagicLink && (
-  <div className="text-center">
-    
-    <a
-      href="/forgot-password"
-      className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white underline"
-    >
-      Forgot your password?
-    </a>
-  </div>
-)}
+            {!useMagicLink && (
+              <div className="text-center">
+                <a
+                  href="/forgot-password"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white underline"
+                >
+                  Forgot your password?
+                </a>
+              </div>
+            )}
 
-<div className="text-center text-sm text-gray-600 dark:text-gray-400">
-  Don't have an account?{" "}
-  <span className="text-gray-900 dark:text-white">Contact your firm administrator</span>
-</div>
+            <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+              Don't have an account?{" "}
+              <span className="text-gray-900 dark:text-white">Contact your firm administrator</span>
+            </div>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg">
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   );
 }
