@@ -265,14 +265,14 @@ if (limit !== -1 && currentUsage >= limit) {
         }
 
         try {
-          let uploadFile = file;
-          try {
-            uploadFile = await convertHeicToJpg(file);
-          } catch (conversionError) {
-            console.error('HEIC conversion failed for', file.name, conversionError);
-            failed++;
-            continue;
-          }
+let uploadFile = file;
+try {
+  uploadFile = await convertHeicToJpg(file);
+} catch (conversionError) {
+  // Conversion failed but file might still be uploadable as-is
+  console.error('HEIC conversion failed for', file.name, conversionError);
+  uploadFile = file; // use original file
+}
 
           const formData = new FormData();
           formData.append("file", uploadFile);
