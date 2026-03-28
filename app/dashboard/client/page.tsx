@@ -218,21 +218,20 @@ export default function ClientDashboardPage() {
 
       const firmId = await getMyFirmId();
 
-      const { checkReceiptUploadLimit } = await import('@/lib/checkUsageLimits');
-      const initialCheck = await checkReceiptUploadLimit(firmId);
-
-      if (!initialCheck.canUpload) {
-        const now = new Date();
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        const daysRemaining = lastDay.getDate() - now.getDate();
-        if (confirm(`📊 Monthly Limit Reached\n\nYou've used all ${initialCheck.limit} receipts on your ${initialCheck.plan} plan this month.\n\n${daysRemaining} days remaining until your limit resets.\n\nUpgrade to continue uploading receipts immediately!\n\nView upgrade options?`)) {
-          window.location.href = "/dashboard/settings";
-        }
-        setUploading(false);
-        setUploadProgress(null);
-        return;
-      }
-
+const { checkReceiptUploadLimit } = await import('@/lib/checkUsageLimits');
+const initialCheck = await checkReceiptUploadLimit(firmId);
+// All paid plans are unlimited — only block if truly over limit
+if (!initialCheck.canUpload && initialCheck.limit !== -1) {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const daysRemaining = lastDay.getDate() - now.getDate();
+  if (confirm(`📊 Monthly Limit Reached\n\nYou've used all ${initialCheck.limit} receipts on your ${initialCheck.plan} plan this month.\n\n${daysRemaining} days remaining until your limit resets.\n\nUpgrade to continue uploading receipts immediately!\n\nView upgrade options?`)) {
+    window.location.href = "/dashboard/settings";
+  }
+  setUploading(false);
+  setUploadProgress(null);
+  return;
+}
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
 
@@ -253,8 +252,8 @@ export default function ClientDashboardPage() {
           failed,
         });
 
-        if (currentUsage >= limit) {
-          limitReached = true;
+          if (limit !== -1 && currentUsage >= limit) {
+            limitReached = true;
           const remainingFiles = fileArray.length - i;
           const now = new Date();
           const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
