@@ -217,29 +217,14 @@ export default function ClientDashboardPage() {
       });
 
       const firmId = await getMyFirmId();
-
-const { checkReceiptUploadLimit } = await import('@/lib/checkUsageLimits');
-const initialCheck = await checkReceiptUploadLimit(firmId);
-// All paid plans are unlimited — only block if truly over limit
-if (!initialCheck.canUpload && initialCheck.limit !== -1) {
-  const now = new Date();
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const daysRemaining = lastDay.getDate() - now.getDate();
-  if (confirm(`📊 Monthly Limit Reached\n\nYou've used all ${initialCheck.limit} receipts on your ${initialCheck.plan} plan this month.\n\n${daysRemaining} days remaining until your limit resets.\n\nUpgrade to continue uploading receipts immediately!\n\nView upgrade options?`)) {
-    window.location.href = "/dashboard/settings";
-  }
-  setUploading(false);
-  setUploadProgress(null);
-  return;
-}
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
 
       let succeeded = 0;
       let failed = 0;
       let limitReached = false;
-      let currentUsage = initialCheck.currentCount;
-      const limit = initialCheck.limit;
+      let currentUsage = 0;
+      const limit = -1;
 
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
@@ -258,7 +243,7 @@ if (limit !== -1 && currentUsage >= limit) {
             const now = new Date();
           const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
           const daysRemaining = lastDay.getDate() - now.getDate();
-          if (confirm(`📊 Monthly Limit Reached\n\nSuccessfully uploaded ${succeeded} receipt${succeeded !== 1 ? 's' : ''}.\n${remainingFiles} file${remainingFiles !== 1 ? 's' : ''} not uploaded (limit reached).\n\nYou've used all ${limit} receipts on your ${initialCheck.plan} plan.\n${daysRemaining} days remaining until reset.\n\nUpgrade to upload the remaining receipts!\n\nView upgrade options?`)) {
+          if (confirm(`📊 Monthly Limit Reached\n\nSuccessfully uploaded ${succeeded} receipt${succeeded !== 1 ? 's' : ''}.\n${remainingFiles} file${remainingFiles !== 1 ? 's' : ''} not uploaded (limit reached).\n\nYou've used all ${limit} receipts on your professional plan.\n${daysRemaining} days remaining until reset.\n\nUpgrade to upload the remaining receipts!\n\nView upgrade options?`)) {
             window.location.href = "/dashboard/settings";
           }
           break;
