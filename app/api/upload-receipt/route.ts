@@ -246,31 +246,12 @@ export async function POST(request: NextRequest) {
       console.error("❌ Failed to create notifications:", notifError);
     }
 
-    // 6. Trigger SMS to client if they have SMS enabled
+// 6. Trigger SMS to client if they have SMS enabled
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-      const smsResponse = await fetch(`${appUrl}/api/sms/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          receiptId,
-          clientId,
-          firmId,
-        }),
-      });
-
-      if (smsResponse.ok) {
-        const smsResult = await smsResponse.json();
-        if (smsResult.skipped) {
-          console.log("📱 SMS skipped:", smsResult.reason);
-        } else if (smsResult.sent) {
-          console.log("📱 SMS sent immediately");
-        } else {
-          console.log("📱 SMS queued for:", smsResult.scheduledFor);
-        }
-      }
+      const { triggerSms } = await import('@/lib/triggerSms');
+      const smsResult = await triggerSms(receiptId, clientId, firmId);
+      console.log('📱 SMS result:', smsResult);
     } catch (smsError: any) {
-      // Never block the upload if SMS fails
       console.error("❌ SMS trigger failed (non-blocking):", smsError.message);
     }
 
