@@ -29,8 +29,8 @@ export default function UploadFab() {
 
       // Check usage limit before starting
       const limitCheck = await checkReceiptUploadLimit(firmId);
-      if (!limitCheck.canUpload) {
-        const now = new Date();
+if (!limitCheck.canUpload && limitCheck.limit !== -1) {
+          const now = new Date();
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         const daysRemaining = lastDay.getDate() - now.getDate();
         if (confirm(`📊 Monthly Limit Reached\n\nYou've used all ${limitCheck.limit} receipts on your ${limitCheck.plan} plan this month.\n\n${daysRemaining} days remaining until reset.\n\nView upgrade options?`)) {
@@ -64,8 +64,8 @@ export default function UploadFab() {
         setProgress({ total: fileArray.length, current: i + 1, succeeded, failed });
 
         // Check limit before each file
-        if (currentUsage >= limit) {
-          const remainingFiles = fileArray.length - i;
+if (limit !== -1 && currentUsage >= limit) {
+            const remainingFiles = fileArray.length - i;
           const now = new Date();
           const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
           const daysRemaining = lastDay.getDate() - now.getDate();
@@ -77,13 +77,11 @@ export default function UploadFab() {
 
         try {
           let uploadFile = file;
-          try {
-            uploadFile = await convertHeicToJpg(file);
-          } catch {
-            failed++;
-            setProgress({ total: fileArray.length, current: i + 1, succeeded, failed });
-            continue;
-          }
+try {
+  uploadFile = await convertHeicToJpg(file);
+} catch {
+  uploadFile = file; // use original if conversion fails
+}
 
           const formData = new FormData();
           formData.append("file", uploadFile);
