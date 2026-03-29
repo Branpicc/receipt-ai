@@ -7,6 +7,7 @@ import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
 import RequestChangesModal from "@/components/RequestChangesModal";
+import ReceiptEditSection from "@/components/ReceiptEditSection";
 
 type Receipt = {
   id: string;
@@ -519,6 +520,11 @@ export default function ReceiptDetailPage(): JSX.Element {
                   </button>
                 )}
               </div>
+              <ReceiptEditSection
+  receipt={receipt}
+  taxes={taxes}
+  onSaved={() => window.location.reload()}
+/>
               {files.length > 0 && activePreviewType === 'image' && (
                 <select className="mt-3 w-full rounded-lg border px-3 py-2 text-sm" value={activeFile?.id ?? ""} onChange={(e) => setActiveFileId(e.target.value)}>
                   {files.map((f, idx) => (
