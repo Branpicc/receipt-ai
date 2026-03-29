@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import Link from "next/link";
-import { checkReceiptUploadLimit } from "@/lib/checkUsageLimits";
 import UsageStats from "@/components/UsageStats";
 import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import ClientSelector from "@/components/ClientSelector";
@@ -184,7 +183,7 @@ export default function DashboardHomePage() {
     }
   }
 
-  async function handleMultipleFiles(files: FileList | null) {
+async function handleMultipleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files);
 
@@ -193,19 +192,6 @@ export default function DashboardHomePage() {
       setUploadProgress({ total: fileArray.length, current: 0, currentFile: fileArray[0]?.name || "", succeeded: 0, failed: 0 });
 
       const firmId = await getMyFirmId();
-      const initialCheck = await checkReceiptUploadLimit(firmId);
-
-      if (!initialCheck.canUpload) {
-        const now = new Date();
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        const daysRemaining = lastDay.getDate() - now.getDate();
-        if (confirm(`📊 Monthly Limit Reached\n\nYou've used all ${initialCheck.limit} receipts on your ${initialCheck.plan} plan this month.\n\n${daysRemaining} days remaining until your limit resets.\n\nUpgrade to continue uploading receipts immediately!\n\nView upgrade options?`)) {
-          window.location.href = "/dashboard/settings";
-        }
-        setUploading(false);
-        setUploadProgress(null);
-        return;
-      }
 
       const { data: clients } = await supabase.from("clients").select("id, name").eq("firm_id", firmId).limit(1);
       if (!clients || clients.length === 0) {
@@ -217,32 +203,17 @@ export default function DashboardHomePage() {
 
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
-      const client = clients[0];
+      const client = selectedClient ? { id: selectedClient.id, name: selectedClient.name } : clients[0];
       let succeeded = 0;
       let failed = 0;
-      let limitReached = false;
-      let currentUsage = initialCheck.currentCount;
-      const limit = initialCheck.limit;
 
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
         setUploadProgress({ total: fileArray.length, current: i + 1, currentFile: file.name, succeeded, failed });
 
-        if (currentUsage >= limit) {
-          limitReached = true;
-          const remainingFiles = fileArray.length - i;
-          const now = new Date();
-          const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-          const daysRemaining = lastDay.getDate() - now.getDate();
-          if (confirm(`📊 Monthly Limit Reached\n\nSuccessfully uploaded ${succeeded} receipt${succeeded !== 1 ? "s" : ""}.\n${remainingFiles} file${remainingFiles !== 1 ? "s" : ""} not uploaded (limit reached).\n\nYou've used all ${limit} receipts on your ${initialCheck.plan} plan.\n${daysRemaining} days remaining until reset.\n\nUpgrade to upload the remaining receipts!\n\nView upgrade options?`)) {
-            window.location.href = "/dashboard/settings";
-          }
-          break;
-        }
-
         try {
           let uploadFile = file;
-          try { uploadFile = await convertHeicToJpg(file); } catch { failed++; continue; }
+          try { uploadFile = await convertHeicToJpg(file); } catch { uploadFile = file; }
           const formData = new FormData();
           formData.append("file", uploadFile);
           formData.append("firmId", firmId);
@@ -251,18 +222,15 @@ export default function DashboardHomePage() {
           const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
           if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
           succeeded++;
-          currentUsage++;
         } catch (err: any) {
           console.error(`Failed to upload ${file.name}:`, err);
           failed++;
         }
       }
 
-      if (!limitReached) {
-        if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded successfully!`);
-        else if (succeeded === 0) alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
-        else alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
-      }
+      if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded successfully!`);
+      else if (succeeded === 0) alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
+      else alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
 
       loadStats(userRole);
       setRefreshKey(prev => prev + 1);
@@ -274,13 +242,16 @@ export default function DashboardHomePage() {
     }
   }
 
+
   const isClient = userRole === "client";
   const isAccountant = userRole === "accountant";
   const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
 
-  if (!userRole) {
-    return <div className="p-8"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
-  }
+// Redirect clients to their dedicated dashboard
+if (userRole === 'client') {
+  window.location.href = '/dashboard/client';
+  return <div className="p-8"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
+}
 
   const completionRate = stats.totalReceipts > 0
     ? Math.round((stats.categorized / stats.totalReceipts) * 100)

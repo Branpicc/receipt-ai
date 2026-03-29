@@ -21,8 +21,10 @@ export default function DashboardLayout({
   const [teamOpen, setTeamOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [mounted, setMounted] = useState(false);
 
 useEffect(() => {
+  setMounted(true);
   loadUserRole();
   loadAndApplyTheme();
 }, []);
@@ -551,8 +553,8 @@ href="/dashboard/reports/clients"
           {children}
         </main>
               
-{/* Floating Upload Button */}
-        <UploadFab />
+{/* Floating Upload Button - accountants and firm admins only */}
+{mounted && (userRole === 'accountant' || userRole === 'firm_admin' || userRole === 'owner') && <UploadFab />}
       </div>
     </OnboardingWrapper>
   </ClientProvider>

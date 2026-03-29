@@ -222,11 +222,15 @@ export default function ClientDashboardPage() {
 
       let succeeded = 0;
       let failed = 0;
-      let limitReached = false;
+/* RECEIPT LIMITS - Re-enable for personal version
+let limitReached = false;
+*/
+
+/* RECEIPT LIMITS - Disabled for firm version, re-enable for personal version
 let currentUsage = 0;
 const limit = -1;
 console.log('🔍 Upload limits:', { limit, currentUsage });
-
+*/
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
 
@@ -237,7 +241,7 @@ console.log('🔍 Upload limits:', { limit, currentUsage });
           succeeded,
           failed,
         });
-
+/* RECEIPT LIMITS - Disabled for firm version, re-enable for personal version
 if (limit !== -1 && currentUsage >= limit) {
   limitReached = true;
   const remainingFiles = fileArray.length - i;
@@ -249,7 +253,7 @@ if (limit !== -1 && currentUsage >= limit) {
           }
           break;
         }
-
+*/
         try {
 let uploadFile = file;
 try {
@@ -273,19 +277,24 @@ try {
 
           if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
 
-          succeeded++;
-          currentUsage++;
+succeeded++;
+          // currentUsage++; // RECEIPT LIMITS - Re-enable for personal version
         } catch (err: any) {
           console.error(`Failed to upload ${file.name}:`, err);
           failed++;
         }
       }
 
-      if (!limitReached) {
-        if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded successfully!`);
-        else if (succeeded === 0) alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
-        else alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
-      }
+
+/* RECEIPT LIMITS - Re-enable for personal version
+if (!limitReached) {
+*/
+  if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded successfully!`);
+  else if (succeeded === 0) alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
+  else alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
+/* RECEIPT LIMITS - Re-enable for personal version
+}
+*/
 
       if (clientId) {
         const firmId = await getMyFirmId();
@@ -294,9 +303,10 @@ try {
         await loadBudgetStatus(clientId, firmId);
         setUsageRefreshKey(prev => prev + 1);
       }
-    } catch (err: any) {
-      alert("Upload process failed: " + err.message);
-    } finally {
+} catch (err: any) {
+  console.error("Upload process failed:", err);
+  alert("Upload process failed: " + err.message);
+     }finally {
       setUploading(false);
       setUploadProgress(null);
     }

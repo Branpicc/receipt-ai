@@ -98,96 +98,62 @@ useEffect(() => {
     startCamera();
   }
 
-  async function uploadReceipt() {
-    if (!capturedImage) return;
+async function uploadReceipt() {
+  if (!capturedImage) return;
 
-    try {
-      setUploading(true);
-      setError("");
+  try {
+    setUploading(true);
+    setError("");
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated");
 
-      const firmId = await getMyFirmId();
+    const firmId = await getMyFirmId();
 
-      // Get client_id
-      const { data: firmUser } = await supabase
-        .from("firm_users")
-        .select("id, client_id")
-        .eq("auth_user_id", user.id)
-        .eq("firm_id", firmId)
-        .single();
+    const { data: firmUser } = await supabase
+      .from("firm_users")
+      .select("id, client_id")
+      .eq("auth_user_id", user.id)
+      .eq("firm_id", firmId)
+      .single();
 
-      if (!firmUser?.client_id) {
-        throw new Error("Client not found");
-      }
+    if (!firmUser?.client_id) throw new Error("Client not found");
 
-      // Convert base64 to blob
-      const base64Data = capturedImage.split(",")[1];
-      const byteCharacters = atob(base64Data);
-      const byteArrays = [];
-
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteArrays.push(byteCharacters.charCodeAt(i));
-      }
-
-      const blob = new Blob([new Uint8Array(byteArrays)], { type: "image/jpeg" });
-      const fileName = `receipt-${Date.now()}.jpg`;
-
-      // Upload to storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("receipts")
-        .upload(`${firmId}/${fileName}`, blob);
-
-      if (uploadError) throw uploadError;
-
-      // Create receipt record
-      const { data: insertedReceipt, error: insertError } = await supabase
-        .from("receipts")
-        .insert({
-          firm_id: firmId,
-          client_id: firmUser.client_id,
-          uploaded_by: firmUser.id,
-          file_path: uploadData.path,
-          status: "pending",
-          source: "mobile_camera",
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error("Insert error details:", insertError);
-        throw insertError;
-      }
-
-      // Trigger OCR processing
-// Trigger OCR processing
-try {
-  await fetch('/api/process-existing-receipt', {
-              method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            receiptId: insertedReceipt.id,
-            filePath: uploadData.path,
-          }),
-        });
-      } catch (ocrErr) {
-        console.log('OCR processing queued');
-      }
-
-      // Success!
-      alert("✅ Receipt uploaded successfully!");
-      setCapturedImage(null);
-      startCamera();
-    } catch (err: any) {
-      console.error("Upload error:", err);
-      setError(err.message || "Failed to upload receipt");
-    } finally {
-      setUploading(false);
+    // Convert base64 to blob
+    const base64Data = capturedImage.split(",")[1];
+    const byteCharacters = atob(base64Data);
+    const byteArray = new Uint8Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteArray[i] = byteCharacters.charCodeAt(i);
     }
+    const blob = new Blob([byteArray], { type: "image/jpeg" });
+    const fileName = `receipt-${Date.now()}.jpg`;
+    const file = new File([blob], fileName, { type: "image/jpeg" });
+
+    // Use the same upload API as everything else
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("firmId", firmId);
+    formData.append("clientId", firmUser.client_id);
+    formData.append("userId", user.id);
+
+    const response = await fetch("/api/upload-receipt", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error("Upload failed");
+
+    alert("✅ Receipt uploaded successfully!");
+    setCapturedImage(null);
+    startCamera();
+  } catch (err: any) {
+    console.error("Upload error:", err);
+    setError(err.message || "Failed to upload receipt");
+  } finally {
+    setUploading(false);
   }
+}
 
   if (loading) {
     return (

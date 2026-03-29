@@ -108,17 +108,19 @@ export async function middleware(request: NextRequest) {
         }
 
         // ── CLIENT: allowed paths ────────────────────────────────────────────
-        const clientAllowedPaths = [
-          '/dashboard',
-          '/dashboard/client',
-          '/dashboard/category-dashboard',
-          '/dashboard/reports',
-          '/dashboard/receipts',
-          '/dashboard/budget-settings',
-          '/dashboard/settings',
-          '/dashboard/reports/clients',
-          // Note: /dashboard/billing intentionally excluded for clients
-        ];
+const clientAllowedPaths = [
+  '/dashboard/client',
+  '/dashboard/category-dashboard',
+  '/dashboard/receipts',
+  '/dashboard/budget-settings',
+  '/dashboard/settings',
+  '/dashboard/reports/clients',
+];
+
+// Redirect clients from /dashboard root to /dashboard/client
+if (role === 'client' && path === '/dashboard') {
+  return NextResponse.redirect(new URL('/dashboard/client', request.url));
+}
 
         const isClientAllowed = clientAllowedPaths.some(
           p => path === p || path.startsWith(p + '/')

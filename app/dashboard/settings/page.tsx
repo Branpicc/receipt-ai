@@ -675,11 +675,11 @@ setBillingInfo({
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm text-gray-600 dark:text-gray-400">Monthly Usage</div>
+                         <div className="text-sm text-gray-600 dark:text-gray-400">Client Usage</div>
                           <div className="text-xl font-bold text-gray-900 dark:text-white">
                             {billingInfo.receiptsUsed} / {billingInfo.receiptsLimit === -1 || billingInfo.receiptsLimit >= 999999 ? '∞' : billingInfo.receiptsLimit}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">receipts</div>
+                         <div className="text-xs text-gray-500 dark:text-gray-400">clients</div>
                         </div>
                       </div>
 
