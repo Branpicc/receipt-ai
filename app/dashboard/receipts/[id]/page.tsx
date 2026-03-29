@@ -27,6 +27,10 @@ type Receipt = {
   category_reasoning: string | null;
   file_path: string | null;
   folder_id: string | null;
+  payment_method?: string | null;
+  card_brand?: string | null;
+  card_last_four?: string | null;
+  card_entry_method?: string | null;
 };
 
 type Folder = {
@@ -310,7 +314,7 @@ export default function ReceiptDetailPage(): JSX.Element {
       try {
         const { data: r, error: rErr } = await supabase
           .from("receipts")
-          .select(`id, firm_id, client_id, vendor, receipt_date, total_cents, status, created_at, purpose_text, purpose_source, purpose_updated_at, suggested_category, category_confidence, approved_category, category_reasoning, file_path, folder_id`)
+          .select(`id, firm_id, client_id, vendor, receipt_date, total_cents, status, created_at, purpose_text, purpose_source, purpose_updated_at, suggested_category, category_confidence, approved_category, category_reasoning, file_path, folder_id, payment_method, card_brand, card_last_four, card_entry_method`)
           .eq("id", receiptId)
           .single();
         if (rErr) throw rErr;
@@ -579,12 +583,24 @@ export default function ReceiptDetailPage(): JSX.Element {
                   <span className="text-gray-500 dark:text-gray-400">Total</span>
                   <span className="font-medium text-gray-900 dark:text-white">{amountText}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">Status</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{receipt.status}</span>
-                </div>
+<div className="flex items-center justify-between">
+  <span className="text-gray-500 dark:text-gray-400">Status</span>
+  <span className="font-medium text-gray-900 dark:text-white">{receipt.status}</span>
+</div>
 
-                {/* ── FOLDER ASSIGNMENT ── */}
+{receipt.payment_method && (
+  <div className="flex items-center justify-between">
+    <span className="text-gray-500 dark:text-gray-400">Payment</span>
+    <span className="font-medium text-gray-900 dark:text-white">
+      {receipt.card_brand ? `${receipt.card_brand} ` : ""}
+      {receipt.payment_method}
+      {receipt.card_last_four ? ` ****${receipt.card_last_four}` : ""}
+      {receipt.card_entry_method ? ` · ${receipt.card_entry_method}` : ""}
+    </span>
+  </div>
+)}
+
+{/* ── FOLDER ASSIGNMENT ── */}
                 <div className="pt-3 border-t border-gray-100 dark:border-dark-border">
                   <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">📁 Project Folder</div>
                   {folders.length === 0 ? (

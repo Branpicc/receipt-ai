@@ -173,16 +173,20 @@ export async function POST(request: NextRequest) {
       vendorName = extracted.vendor || "Unknown vendor";
       totalCents = extracted.total_cents || 0;
 
-      await supabase
-        .from("receipts")
-        .update({
-          vendor: extracted.vendor,
-          receipt_date: extracted.date,
-          total_cents: extracted.total_cents,
-          extraction_status: "completed",
-          ocr_raw_text: extracted.raw_text,
-        })
-        .eq("id", receiptId);
+await supabase
+  .from("receipts")
+  .update({
+    vendor: extracted.vendor,
+    receipt_date: extracted.date,
+    total_cents: extracted.total_cents,
+    extraction_status: "completed",
+    ocr_raw_text: extracted.raw_text,
+    payment_method: extracted.payment_method,
+    card_brand: extracted.card_brand,
+    card_last_four: extracted.card_last_four,
+    card_entry_method: extracted.card_entry_method,
+  })
+  .eq("id", receiptId);
 
       console.log("✅ Receipt updated with OCR data");
 
