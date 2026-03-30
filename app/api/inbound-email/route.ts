@@ -226,6 +226,15 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
       },
     ]);
 
+// Trigger SMS if client has it enabled
+if (clientId) {
+  try {
+    const { triggerSms } = await import('@/lib/triggerSms');
+    await triggerSms(emailReceipt.id, clientId, firmId!, 'email');
+  } catch (smsErr) {
+    console.error('SMS trigger failed:', smsErr);
+  }
+}
     return NextResponse.json({ 
       success: true, 
       emailReceiptId: emailReceipt.id,

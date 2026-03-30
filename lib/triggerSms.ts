@@ -12,8 +12,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function triggerSms(receiptId: string, clientId: string, firmId: string) {
-  try {
+export async function triggerSms(receiptId: string, clientId: string, firmId: string, source: 'upload' | 'email' | 'camera' = 'upload') {
+    try {
     // Get client SMS preferences
     const { data: client, error: clientError } = await supabase
       .from('clients')
@@ -64,10 +64,11 @@ export async function triggerSms(receiptId: string, clientId: string, firmId: st
     const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : client.name;
     const suggestionText = suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n');
 
+const sourceText = source === 'email' ? 'via email' : source === 'camera' ? 'via camera' : 'uploaded';
     const message = client.sms_timing === 'end_of_day'
-      ? `${greeting}, ${lastName}. You submitted a receipt from ${vendor} for ${amount}. What was the purpose? Reply with the number or type your own:\n${suggestionText}`
-      : `${greeting}, ${lastName}. We received your receipt from ${vendor} submitted at ${timeStr} for ${amount}. What was the purpose of this expense?\n\n${suggestionText}\n\nReply with a number or describe in your own words.`;
-
+      ? `${greeting}, ${lastName}. You submitted a receipt ${sourceText} from ${vendor} for ${amount}. What was the purpose? Reply with the number or type your own:\n${suggestionText}`
+      : `${greeting}, ${lastName}. We received your receipt ${sourceText} from ${vendor} submitted at ${timeStr} for ${amount}. What was the purpose of this expense?\n\n${suggestionText}\n\nReply with a number or describe in your own words.`;
+      
     // Queue the SMS
     const { data: queueEntry, error: queueError } = await supabase
       .from('sms_queue')
