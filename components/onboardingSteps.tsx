@@ -861,10 +861,10 @@ function ClientIncomeTypeConfirmation() {
       setError("No income types selected. Please go back and select at least one.");
       throw new Error("No income types selected");
     }
-    if (primaryIncome.includes("other") && !otherIncomeText.trim()) {
-      setError("Please go back and specify your other income source.");
-      throw new Error("Other income text required");
-    }
+if (primaryIncome.includes("other") && !otherIncomeText.trim() && primaryIncome.length === 1) {
+  setError("Please go back and specify your other income source.");
+  throw new Error("Other income text required");
+}
     try {
       setSaving(true);
       const { data: { user } } = await supabase.auth.getUser();

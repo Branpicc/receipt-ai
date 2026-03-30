@@ -93,14 +93,8 @@ export async function POST(request: NextRequest) {
     console.log(`📎 Total attachments: ${attachmentCount}`);
 
     // Get subscription limits
-    const limits = {
-      free: 10,
-      starter: 100,
-      professional: 999999,
-    };
-    const monthlyLimit = limits[subscriptionTier as keyof typeof limits] || 10;
-
-    // Count receipts this month
+const monthlyLimit = 999999; // Unlimited for all paid plans
+//     // Count receipts this month
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
@@ -122,49 +116,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`📊 Usage: ${currentUsage}/${monthlyLimit} (${remainingSlots} remaining)`);
 
-    // Check limit
-    if (attachmentCount > remainingSlots) {
-      console.log('❌ LIMIT EXCEEDED - Rejecting email');
-
-      const { data: emailReceipt } = await supabase
-        .from('email_receipts')
-        .insert([{
-          firm_id: firmId,
-          client_id: clientId,
-          from_email: from,
-          subject: subject,
-          email_text: text,
-          email_html: html,
-          has_attachment: attachmentCount > 0,
-          attachment_count: attachmentCount,
-          status: 'rejected',
-          rejection_reason: `Monthly limit exceeded (${currentUsage}/${monthlyLimit}). This email has ${attachmentCount} attachment(s) but you only have ${remainingSlots} slot(s) remaining.`,
-          extraction_status: 'skipped',
-        }])
-        .select('id')
-        .single();
-
-      await supabase.from('notifications').insert([
-        {
-          firm_id: firmId,
-          client_id: clientId,
-          type: 'limit_exceeded',
-          title: 'Email receipt rejected - Limit exceeded',
-          message: `Email from ${from} with ${attachmentCount} attachment(s) was rejected. You've used ${currentUsage}/${monthlyLimit} receipts this month. Upgrade your plan to receive more receipts.`,
-          email_id: emailReceipt?.id,
-          read: false,
-        },
-      ]);
-
-      return NextResponse.json({ 
-        success: false,
-        error: 'Monthly limit exceeded',
-        currentUsage,
-        monthlyLimit,
-        attachmentCount,
-        remainingSlots,
-      }, { status: 429 });
-    }
+// Limit check disabled - all paid plans have unlimited receipts
 
     // Process attachments
     console.log('✅ Limit check passed - Processing attachments');

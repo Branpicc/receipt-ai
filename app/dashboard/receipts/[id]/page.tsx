@@ -92,6 +92,7 @@ export default function ReceiptDetailPage(): JSX.Element {
   const [lineItemsView, setLineItemsView] = useState<'table' | 'card'>('card');
   const [userRole, setUserRole] = useState<string | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [editHistory, setEditHistory] = useState<any[]>([]);
 
   // Folder state
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -111,6 +112,15 @@ export default function ReceiptDetailPage(): JSX.Element {
     return nonFood.some((w) => v.includes(w));
   }
 
+  async function loadEditHistory() {
+  const { data } = await supabase
+    .from("receipt_edits")
+    .select("id, edit_reason, changes, created_at, firm_users(display_name, role)")
+    .eq("receipt_id", receiptId)
+    .order("created_at", { ascending: false });
+  setEditHistory(data || []);
+}
+
   async function loadFlags() {
     if (!receiptId) return;
     const { data, error } = await supabase
@@ -118,7 +128,7 @@ export default function ReceiptDetailPage(): JSX.Element {
       .select("id,flag_type,severity,message,created_at,resolved_at")
       .eq("receipt_id", receiptId)
       .order("created_at", { ascending: false });
-    if (error) { console.warn("Failed to load flags", error.message); return; }
+if (error) { console.warn("Failed to load flags", error.message); return; }
     setFlags((data as ReceiptFlag[]) || []);
   }
 
@@ -322,6 +332,7 @@ export default function ReceiptDetailPage(): JSX.Element {
         setPurposeDraft(r?.purpose_text ?? "");
         setSelectedFolderId(r?.folder_id ?? "none");
         await loadFlags();
+        await loadEditHistory();
 
         const { data: itemRows, error: itemErr } = await supabase.from("receipt_items").select("id,description,quantity,unit_price_cents,total_cents").eq("receipt_id", receiptId).order("id", { ascending: true });
         if (itemErr) throw itemErr;
@@ -524,13 +535,8 @@ export default function ReceiptDetailPage(): JSX.Element {
                   </button>
                 )}
               </div>
-              <ReceiptEditSection
-  receipt={receipt}
-  taxes={taxes}
-  onSaved={() => window.location.reload()}
-/>
-              {files.length > 0 && activePreviewType === 'image' && (
-                <select className="mt-3 w-full rounded-lg border px-3 py-2 text-sm" value={activeFile?.id ?? ""} onChange={(e) => setActiveFileId(e.target.value)}>
+                  {files.length > 0 && activePreviewType === 'image' && (
+                  <select className="mt-3 w-full rounded-lg border px-3 py-2 text-sm" value={activeFile?.id ?? ""} onChange={(e) => setActiveFileId(e.target.value)}>
                   {files.map((f, idx) => (
                     <option key={f.id} value={f.id}>{idx + 1}. {f.original_filename || "file"}</option>
                   ))}
@@ -918,8 +924,45 @@ export default function ReceiptDetailPage(): JSX.Element {
         )}
       </div>
 
+<ReceiptEditSection
+          receipt={receipt}
+          taxes={taxes}
+          onSaved={() => window.location.reload()}
+        />
+
+        {editHistory.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface overflow-hidden">
+            <div className="p-4 border-b border-gray-200 dark:border-dark-border font-medium text-gray-900 dark:text-white">
+              📝 Edit History ({editHistory.length})
+            </div>
+            <div className="divide-y divide-gray-100 dark:divide-dark-border">
+              {editHistory.map((edit) => (
+                <div key={edit.id} className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      {edit.edit_reason}
+                    </div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                      {new Date(edit.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    {Object.entries(edit.changes || {}).map(([field, val]: [string, any]) => (
+                      <div key={field} className="text-xs text-gray-600 dark:text-gray-400">
+                        <span className="font-medium capitalize">{field.replace("_", " ")}:</span>{" "}
+                        <span className="text-red-500 line-through">{val.before}</span>{" "}
+                        <span className="text-green-600">→ {val.after}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       {showRequestModal && (
-        <RequestChangesModal receiptId={receiptId} onClose={() => setShowRequestModal(false)} onSuccess={() => { setShowRequestModal(false); alert("✅ Change request sent to accountant!"); }} />
+                <RequestChangesModal receiptId={receiptId} onClose={() => setShowRequestModal(false)} onSuccess={() => { setShowRequestModal(false); alert("✅ Change request sent to accountant!"); }} />
       )}
     </main>
   );

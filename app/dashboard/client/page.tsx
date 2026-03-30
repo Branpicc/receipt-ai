@@ -39,6 +39,15 @@ type MonthlyReport = {
   total_tax_cents: number;
 };
 
+type RecentEdit = {
+  id: string;
+  edit_reason: string;
+  changes: Record<string, { before: string; after: string }>;
+  created_at: string;
+  receipt_id: string;
+  receipts: { vendor: string | null } | null;
+};
+
 export default function ClientDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -57,6 +66,7 @@ export default function ClientDashboardPage() {
   const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([]);
   const [recentReports, setRecentReports] = useState<MonthlyReport[]>([]);
+  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
 
   useEffect(() => {
     loadClientInfo();
@@ -96,6 +106,7 @@ export default function ClientDashboardPage() {
         await loadRecentReceipts(firmUser.client_id);
         await loadBudgetStatus(firmUser.client_id, firmId);
         await loadRecentReports(firmUser.client_id, firmId);
+        await loadRecentEdits(firmUser.client_id, firmId);
       }
     } catch (error) {
       console.error("Failed to load client info:", error);
@@ -146,6 +157,20 @@ export default function ClientDashboardPage() {
 
     setRecentReceipts((data as RecentReceipt[]) || []);
   }
+
+async function loadRecentEdits(clientId: string, firmId: string) {
+  const { data } = await supabase
+    .from("receipt_edits")
+    .select("id, edit_reason, changes, created_at, receipt_id, receipts(vendor)")
+    .eq("firm_id", firmId)
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  const filtered = ((data || []) as unknown as RecentEdit[]).filter(
+    e => e.receipts !== null
+  );
+  setRecentEdits(filtered);
+}
 
   async function loadBudgetStatus(clientId: string, firmId: string) {
     const { data: budgets } = await supabase
@@ -535,6 +560,49 @@ if (!limitReached) {
           </div>
         </div>
       )}
+      
+{/* Edit History */}
+{recentEdits.length > 0 && (
+  <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden mt-8">
+    <div className="p-6 border-b border-gray-200 dark:border-dark-border flex items-center justify-between">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">✏️ Recent Edits</h2>
+      <Link href="/dashboard/reports/edits" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">
+        View All →
+      </Link>
+    </div>
+    <div className="divide-y divide-gray-200 dark:divide-dark-border">
+      {recentEdits.map((edit) => (
+        <Link
+          key={edit.id}
+          href={`/dashboard/receipts/${edit.receipt_id}`}
+          className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors block"
+        >
+          <div className="flex items-start justify-between mb-2">
+            <div className="font-medium text-gray-900 dark:text-white">
+              {edit.receipts?.vendor || "Unknown vendor"}
+            </div>
+            <div className="text-xs text-gray-400 dark:text-gray-500">
+              {new Date(edit.created_at).toLocaleDateString()}
+            </div>
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+            {edit.edit_reason}
+          </div>
+          <div className="space-y-1">
+            {Object.entries(edit.changes || {}).map(([field, val]) => (
+              <div key={field} className="text-xs flex items-center gap-2">
+                <span className="text-gray-500 dark:text-gray-400 capitalize">{field.replace("_", " ")}:</span>
+                <span className="text-red-500 line-through">{val.before}</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-green-600">{val.after}</span>
+              </div>
+            ))}
+          </div>
+        </Link>
+      ))}
+    </div>
+  </div>
+)}
 
       {/* Empty State */}
       {stats.totalReceipts === 0 && (

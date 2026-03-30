@@ -354,6 +354,20 @@ href="/dashboard/reports/clients"
     <span className="text-sm">Client Reports</span>
   </Link>
 </li>
+<li className="ml-4">
+  <Link
+    href="/dashboard/reports/edits"
+    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+      pathname.startsWith('/dashboard/reports/edits')
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+    }`}
+  >
+    <span className="text-lg">✏️</span>
+    <span className="text-sm">Edit History</span>
+  </Link>
+</li>
+
             </>
           )}
         </>
