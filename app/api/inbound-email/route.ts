@@ -229,10 +229,53 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
 // Trigger SMS if client has it enabled
 if (clientId) {
   try {
-    const { triggerSms } = await import('@/lib/triggerSms');
-    await triggerSms(emailReceipt.id, clientId, firmId!, 'email');
+    const { data: clientSms } = await supabase
+      .from('clients')
+      .select('name, phone_number, sms_enabled, sms_timing, sms_end_of_day_time, timezone')
+      .eq('id', clientId)
+      .single();
+
+    if (clientSms?.sms_enabled && clientSms?.phone_number) {
+      const { getGreeting, formatPhone, getScheduledTime, getSuggestedPurposes } = await import('@/lib/twilio');
+      const now = new Date();
+      const greeting = getGreeting(now.getHours());
+      const nameParts = clientSms.name.trim().split(' ');
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : clientSms.name;
+      const suggestions = getSuggestedPurposes(vendorName);
+      const suggestionText = suggestions.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
+      const amount = extractedData?.total_cents ? `$${(extractedData.total_cents / 100).toFixed(2)}` : 'an unknown amount';
+      const message = `${greeting}, ${lastName}. We received your receipt via email from ${vendorName} for ${amount}. What was the purpose of this expense?\n\n${suggestionText}\n\nReply with a number or describe in your own words.`;
+
+      const scheduledFor = getScheduledTime(
+        clientSms.sms_timing || 'instant',
+        clientSms.sms_end_of_day_time || '20:00',
+        clientSms.timezone || 'America/Toronto'
+      );
+
+      const { data: queueEntry } = await supabase.from('sms_queue').insert({
+        client_id: clientId,
+        firm_id: firmId,
+        receipt_id: null,
+        message,
+        suggested_purposes: suggestions,
+        status: 'pending',
+        scheduled_for: scheduledFor.toISOString(),
+      }).select().single();
+
+      if (clientSms.sms_timing === 'instant' && queueEntry) {
+        const twilio = await import('twilio');
+        const twilioClient = twilio.default(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
+        await twilioClient.messages.create({
+          body: message,
+          from: process.env.TWILIO_PHONE_NUMBER!,
+          to: formatPhone(clientSms.phone_number),
+        });
+        await supabase.from('sms_queue').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', queueEntry.id);
+        console.log('📱 Email SMS sent successfully');
+      }
+    }
   } catch (smsErr) {
-    console.error('SMS trigger failed:', smsErr);
+    console.error('📱 SMS trigger failed:', smsErr);
   }
 }
     return NextResponse.json({ 
