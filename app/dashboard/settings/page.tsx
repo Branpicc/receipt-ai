@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import LogoutButton from "@/components/LogoutButton";
 import { restartOnboarding } from "@/lib/useOnboarding";
+import ClientCardManager from "@/components/ClientCardManager";
 
 type UserInfo = {
   email: string;
@@ -553,7 +554,7 @@ setBillingInfo({
                     </div>
                   </div>
 
-                  <div>
+<div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Role
                     </label>
@@ -566,9 +567,16 @@ setBillingInfo({
                   </div>
                 </div>
               </div>
+
+              {/* Business Card Manager — clients only */}
+              {isClient && (
+                <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+                  <ClientCardManager />
+                </div>
+              )}
             </div>
           )}
-
+          
           {/* Notifications Tab */}
           {activeTab === "notifications" && (
             <div>

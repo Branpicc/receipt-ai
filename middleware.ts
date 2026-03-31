@@ -115,6 +115,7 @@ const clientAllowedPaths = [
   '/dashboard/budget-settings',
   '/dashboard/settings',
   '/dashboard/reports/clients',
+  '/dashboard/reports/edits',
 ];
 
 // Redirect clients from /dashboard root to /dashboard/client

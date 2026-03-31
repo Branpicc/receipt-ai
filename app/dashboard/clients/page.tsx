@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
+import Link from "next/link";
 
 type ClientRow = {
   id: string;
@@ -378,8 +379,10 @@ export default function ClientsPage() {
                   >
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                       <div className="flex-1">
-                        <div className="font-semibold text-gray-900 dark:text-white mb-1">{c.name}</div>
-                        
+<Link href={`/dashboard/clients/${c.id}`} className="font-semibold text-gray-900 dark:text-white hover:text-accent-600 dark:hover:text-accent-400 hover:underline mb-1 block">
+  {c.name}
+</Link>
+
                         {/* Email Alias Editor */}
                         {isEditing ? (
                           <div className="flex items-center gap-2 mb-1">

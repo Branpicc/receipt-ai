@@ -103,11 +103,11 @@ function parsePaymentInfo(lines: string[]): {
   let card_entry_method: string | null = null;
 
   const cardBrands = [
-    { pattern: /visa/i, name: "Visa" },
-    { pattern: /mastercard|master card/i, name: "Mastercard" },
-    { pattern: /amex|american express/i, name: "Amex" },
-    { pattern: /discover/i, name: "Discover" },
-    { pattern: /interac/i, name: "Interac" },
+    { pattern: /\bvisa\b|\bvis\b/i, name: "Visa" },
+    { pattern: /\bmc\b|\bmastercard\b|\bmaster card\b/i, name: "Mastercard" },
+    { pattern: /\bamex\b|\bamerican express\b/i, name: "Amex" },
+    { pattern: /\bdiscover\b/i, name: "Discover" },
+    { pattern: /\binterac\b/i, name: "Interac" },
   ];
 
   const paymentMethods = [
@@ -128,7 +128,7 @@ function parsePaymentInfo(lines: string[]): {
   ];
 
   for (const line of lines) {
-    const lastFourMatch = line.match(/[*x]{2,4}[\s-]?(\d{4})\b/i);
+const lastFourMatch = line.match(/[*x]{2,4}[\s-]?(\d{4})\b/i) || line.match(/\b(?:VIS|MC|AMX|AMEX|DISC)[:\s]+(\d{4})\b/i);
     if (lastFourMatch && !card_last_four) {
       card_last_four = lastFourMatch[1];
     }

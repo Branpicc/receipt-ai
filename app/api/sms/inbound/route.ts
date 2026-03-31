@@ -145,15 +145,16 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', queueEntry.id);
 
-    // Create notification for accountant
-    await supabase.from('notifications').insert({
-      firm_id: client.firm_id,
-      type: 'receipt_uploaded',
-      title: 'Receipt purpose received',
-      message: `${client.name} replied with purpose: "${purposeSummary}"`,
-      receipt_id: queueEntry.receipt_id,
-      read: false,
-    });
+// Create notification for accountant
+await supabase.from('notifications').insert({
+  firm_id: client.firm_id,
+  client_id: client.id,
+  type: 'receipt_uploaded',
+  title: 'Receipt purpose received',
+  message: `${client.name} replied with purpose: "${purposeSummary}"`,
+  receipt_id: queueEntry.receipt_id,
+  read: false,
+});
 
     console.log('✅ Purpose saved for receipt:', queueEntry.receipt_id, '-', purposeSummary);
 

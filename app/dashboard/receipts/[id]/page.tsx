@@ -82,6 +82,10 @@ export default function ReceiptDetailPage(): JSX.Element {
   const [savingPurpose, setSavingPurpose] = useState(false);
   const [flags, setFlags] = useState<ReceiptFlag[]>([]);
   const [resolvingFlagId, setResolvingFlagId] = useState<string | null>(null);
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolvingFlag, setResolvingFlag] = useState<ReceiptFlag | null>(null);
+  const [resolveNote, setResolveNote] = useState("");
+  const [selectedResolveReason, setSelectedResolveReason] = useState(""); 
 
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -299,16 +303,39 @@ if (error) { console.warn("Failed to load flags", error.message); return; }
     }
   }
 
-  async function resolveFlag(flagId: string) {
-    try {
-      setResolvingFlagId(flagId);
-      const { error } = await supabase.from("receipt_flags").update({ resolved_at: new Date().toISOString() }).eq("id", flagId);
-      if (error) throw error;
-      await loadFlags();
-    } finally {
-      setResolvingFlagId(null);
-    }
+function handleResolveClick(flag: ReceiptFlag) {
+  if (flag.flag_type === "personal_card_used" || flag.flag_type === "unrecognized_card") {
+    setResolvingFlag(flag);
+    setShowResolveModal(true);
+    setSelectedResolveReason("");
+    setResolveNote("");
+  } else {
+    resolveFlag(flag.id, "");
   }
+}
+
+async function resolveFlag(flagId: string, note: string) {
+  try {
+    setResolvingFlagId(flagId);
+    const { error } = await supabase
+      .from("receipt_flags")
+      .update({ 
+        resolved_at: new Date().toISOString(),
+        resolution_note: note || null,
+      })
+      .eq("id", flagId);
+    if (error) {
+      console.error("Failed to resolve flag:", error);
+      alert("Failed to resolve: " + error.message);
+      return;
+    }
+    await loadFlags();
+    setShowResolveModal(false);
+    setResolvingFlag(null);
+  } finally {
+    setResolvingFlagId(null);
+  }
+}
 
   const activeFile = useMemo(() => {
     if (!files.length) return null;
@@ -405,10 +432,11 @@ if (error) { console.warn("Failed to load flags", error.message); return; }
   const subtotalCents = receipt.total_cents != null ? receipt.total_cents - taxTotalCents : null;
   const subtotalText = subtotalCents == null ? "—" : `$${(subtotalCents / 100).toFixed(2)} CAD`;
 
-  const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
+const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
+  console.log("Current role:", userRole, "isFirmAdmin:", isFirmAdmin);
 
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
+        <main className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-5xl mx-auto">
         <a href="/dashboard/receipts" className="text-sm underline text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
           ← Back to receipts
@@ -442,7 +470,7 @@ if (error) { console.warn("Failed to load flags", error.message); return; }
             {flags.filter(f => !f.resolved_at).map((flag) => (
               <div
                 key={flag.id}
-                className={`rounded-lg border p-4 ${flag.severity === "high" ? "bg-red-50 border-red-200" : flag.severity === "warn" ? "bg-yellow-50 border-yellow-200" : "bg-blue-50 border-blue-200"}`}
+                className={`rounded-lg border p-4 ${flag.severity === "high" ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : flag.severity === "warn" ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800" : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -458,9 +486,13 @@ if (error) { console.warn("Failed to load flags", error.message); return; }
                         Split Items
                       </button>
                     )}
-                    <button onClick={() => resolveFlag(flag.id)} disabled={resolvingFlagId === flag.id} className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 underline">
-                      {resolvingFlagId === flag.id ? "..." : "Resolve"}
-                    </button>
+                    
+<button onClick={() => handleResolveClick(flag)}
+  disabled={resolvingFlagId === flag.id} 
+  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 underline"
+>
+  {resolvingFlagId === flag.id ? "..." : "Resolve"}
+</button>
                   </div>
                 </div>
               </div>
@@ -960,6 +992,77 @@ if (error) { console.warn("Failed to load flags", error.message); return; }
             </div>
           </div>
         )}
+        
+{showResolveModal && resolvingFlag && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white dark:bg-dark-surface rounded-xl shadow-xl w-full max-w-md p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+        Resolve Flag
+      </h2>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        {resolvingFlag.flag_type === "personal_card_used"
+          ? "Why was a personal card used for this business expense?"
+          : "Why is this unrecognized card acceptable for this expense?"}
+      </p>
+
+      <div className="space-y-2 mb-4">
+        {[
+          "Client reimbursement — will be paid back",
+          "Business card was unavailable",
+          "Mixed purchase — partially personal",
+          "This is a business card — adding it to my cards",
+          "One-time exception",
+          "Other",
+        ].map((reason) => (
+          <button
+            key={reason}
+            onClick={() => setSelectedResolveReason(reason)}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm border transition-colors ${
+              selectedResolveReason === reason
+                ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300"
+                : "border-gray-200 dark:border-dark-border text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover"
+            }`}
+          >
+            {reason}
+          </button>
+        ))}
+      </div>
+
+      {selectedResolveReason === "Other" && (
+        <textarea
+          value={resolveNote}
+          onChange={(e) => setResolveNote(e.target.value)}
+          placeholder="Describe the reason..."
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white mb-4"
+        />
+      )}
+
+      <div className="flex gap-3 mt-4">
+        <button
+          onClick={() => {
+            setShowResolveModal(false);
+            setResolvingFlag(null);
+          }}
+          className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            const note = selectedResolveReason === "Other" ? resolveNote : selectedResolveReason;
+            if (!note.trim()) { alert("Please select a reason."); return; }
+            resolveFlag(resolvingFlag.id, note);
+          }}
+          disabled={!selectedResolveReason || (selectedResolveReason === "Other" && !resolveNote.trim())}
+          className="flex-1 px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          Confirm & Resolve
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {showRequestModal && (
                 <RequestChangesModal receiptId={receiptId} onClose={() => setShowRequestModal(false)} onSuccess={() => { setShowRequestModal(false); alert("✅ Change request sent to accountant!"); }} />

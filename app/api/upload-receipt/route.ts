@@ -203,6 +203,64 @@ await supabase
         console.log("✅ Tax saved:", extracted.tax_cents);
       }
 
+      // 7. Check payment card against registered client cards
+      if (extracted.card_last_four && extracted.card_brand) {
+        try {
+          const { data: clientCards } = await supabase
+            .from("client_cards")
+            .select("id, card_brand, last_four, card_type, nickname")
+            .eq("client_id", clientId);
+
+          if (clientCards && clientCards.length > 0) {
+            const matchedCard = clientCards.find(
+              (c) =>
+                c.last_four === extracted.card_last_four &&
+                c.card_brand.toLowerCase() === (extracted.card_brand || "").toLowerCase()
+            );
+
+            if (matchedCard) {
+              if (matchedCard.card_type === "personal") {
+                // Personal card used — create high severity flag
+                await supabase.from("receipt_flags").insert([{
+                  receipt_id: receiptId,
+                  firm_id: firmId,
+                  flag_type: "personal_card_used",
+                  severity: "high",
+                  message: `Personal card detected: ${matchedCard.card_brand} ****${matchedCard.last_four}${matchedCard.nickname ? ` (${matchedCard.nickname})` : ""}. Please verify if this is a business expense.`,
+                }]);
+
+                await supabase.from("notifications").insert([{
+                  firm_id: firmId,
+                  client_id: clientId,
+                  type: "receipt_flagged",
+                  title: "⚠️ Personal card used",
+                  message: `${vendorName} receipt was paid with a personal card (${matchedCard.card_brand} ****${matchedCard.last_four}). Please review.`,
+                  receipt_id: receiptId,
+                  read: false,
+                }]);
+
+                console.log("🚩 Personal card flag created");
+              } else {
+                console.log("✅ Business card matched:", matchedCard.card_brand, matchedCard.last_four);
+              }
+            } else {
+              // Card not in registered cards — create warning flag
+              await supabase.from("receipt_flags").insert([{
+                receipt_id: receiptId,
+                firm_id: firmId,
+                flag_type: "unrecognized_card",
+                severity: "warn",
+                message: `Unrecognized card: ${extracted.card_brand} ****${extracted.card_last_four}. This card is not registered as a business card. Please verify.`,
+              }]);
+
+              console.log("⚠️ Unrecognized card flag created");
+            }
+          }
+        } catch (cardCheckError: any) {
+          console.error("❌ Card check failed:", cardCheckError.message);
+        }
+      }
+      
       if (extracted.line_items && extracted.line_items.length > 0) {
         const lineItemsToInsert = extracted.line_items.map((item, index) => ({
           receipt_id: receiptId,
