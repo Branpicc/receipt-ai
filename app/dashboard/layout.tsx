@@ -143,7 +143,7 @@ return (
               <span className="font-medium">Quick Capture</span>
             </Link>
           </li>
-          <li>
+<li>
             <Link
               href="/dashboard/budget-settings"
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -156,6 +156,20 @@ return (
               <span className="font-medium">Budget</span>
             </Link>
           </li>
+<li>
+  <Link
+    href="/dashboard/conversations"
+    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+      pathname.startsWith('/dashboard/conversations')
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+    }`}
+  >
+    <span className="text-xl">💬</span>
+    <span className="font-medium">Messages</span>
+  </Link>
+</li>
+
         </>
       )}
 
@@ -269,6 +283,21 @@ return (
                   <span className="text-sm">Clients</span>
                 </Link>
               </li>
+
+              <li>
+  <Link
+    href="/dashboard/conversations"
+    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+      pathname.startsWith('/dashboard/conversations')
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+    }`}
+  >
+    <span className="text-lg">💬</span>
+    <span className="text-sm">Messages</span>
+  </Link>
+</li>
+
               <li className="ml-4">
                 <Link
                   href="/dashboard/approval-requests"
@@ -449,20 +478,6 @@ href="/dashboard/reports/clients"
         </>
       )}
 
-      <li>
-  <Link
-    href="/dashboard/category-dashboard"
-    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-      pathname === '/dashboard/category-dashboard'
-        ? 'bg-accent-500 text-white'
-        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
-    }`}
-  >
-    <span className="text-xl">📊</span>
-    <span className="font-medium">My Spending</span>
-  </Link>
-</li>
-
       {/* Accountant/Firm Admin icons */}
       {(isAccountant || isFirmAdmin) && (
         <>
@@ -568,7 +583,7 @@ href="/dashboard/reports/clients"
         </main>
               
 {/* Floating Upload Button - accountants and firm admins only */}
-{mounted && (userRole === 'accountant' || userRole === 'firm_admin' || userRole === 'owner') && <UploadFab />}
+{mounted && (userRole === 'firm_admin' || userRole === 'owner') && <UploadFab />}
       </div>
     </OnboardingWrapper>
   </ClientProvider>

@@ -33,8 +33,9 @@ const plans: Plan[] = [
       "Tax code mapping (GST/HST/PST)",
       "Project folders",
       "Email receipt forwarding",
+      "SMS purpose collection",
       "CSV export",
-      "Email support",
+      "In-app AI support chat",
     ],
   },
   {
@@ -48,12 +49,13 @@ const plans: Plan[] = [
     recommended: true,
     features: [
       "Everything in Starter",
-      "Priority support",
-      "Advanced reports",
-      "API access",
+      "Advanced reports & edit history",
       "Budget tracking & alerts",
       "Monthly client reports",
+      "Business card fraud detection",
+      "Client detail profiles",
       "Multi-user collaboration",
+      "Receipt edit tracking",
     ],
   },
   {
@@ -68,10 +70,11 @@ const plans: Plan[] = [
     features: [
       "Everything in Professional",
       "Unlimited clients & users",
-      "Dedicated account manager",
-      "Custom integrations",
+      "Training & onboarding modules",
+      "Priority onboarding call with founder",
+      "Custom feature requests",
       "SLA guarantee",
-      "Onboarding & training",
+      "Dedicated support channel",
     ],
   },
 ];

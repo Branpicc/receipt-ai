@@ -113,6 +113,7 @@ const clientAllowedPaths = [
   '/dashboard/category-dashboard',
   '/dashboard/receipts',
   '/dashboard/budget-settings',
+  '/dashboard/conversations',
   '/dashboard/settings',
   '/dashboard/reports/clients',
   '/dashboard/reports/edits',
