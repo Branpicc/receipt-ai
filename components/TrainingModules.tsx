@@ -1,11 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { getMyFirmId } from "@/lib/getFirmId";
+
+// ── TYPES ─────────────────────────────────────────────────────────────────────
+type InteractiveType =
+  | "upload_receipt"
+  | "create_folder"
+  | "set_budget"
+  | "invite_client"
+  | "invite_accountant"
+  | "add_client";
 
 type Step = {
   title: string;
   content: string;
   tip?: string;
+  interactive?: InteractiveType;
 };
 
 type Module = {
@@ -46,14 +58,26 @@ const clientModules: Module[] = [
   {
     id: "client-uploading",
     title: "Uploading Receipts",
-    description: "Three easy ways to submit your receipts",
+    description: "Try uploading a real receipt right now",
     icon: "📸",
-    duration: "4 min",
+    duration: "5 min",
     steps: [
       {
         title: "Option 1: Upload from Your Device",
         content: "The easiest way to upload from your phone or computer:\n\n1. Go to your **Dashboard**\n2. Tap or click the upload area that says 'Click to upload or drag here'\n3. Select one or more receipt images from your camera roll or files\n4. Wait a few seconds — our AI extracts all the details automatically\n\nSupported formats: JPG, PNG, PDF, HEIC",
         tip: "You can select multiple receipts at once to save time.",
+      },
+      {
+        title: "Try It Now — Upload a Real Receipt",
+        content: "Let's upload a real receipt right now. Select a receipt photo from your device below — it will be saved to your actual account so you can find it in your Receipts list after this training.\n\nIf SMS is enabled on your account, you'll also receive a text message asking for the purpose!",
+        tip: "Use any receipt you have handy — the AI will extract the details automatically.",
+        interactive: "upload_receipt",
+      },
+      {
+        title: "Create a Folder for Your Receipts",
+        content: "You can organize your receipts into folders — great for grouping by project, client, or month.\n\nLet's create your first training folder right now. It will appear in your Receipts section and you can assign receipts to it.",
+        tip: "Good folder names: 'Office Expenses', 'Vehicle', 'Client Projects', or the current month.",
+        interactive: "create_folder",
       },
       {
         title: "Option 2: Quick Camera Capture",
@@ -104,9 +128,9 @@ const clientModules: Module[] = [
   {
     id: "client-budget",
     title: "Budget Tracking",
-    description: "Set limits and monitor your spending",
+    description: "Set a real budget limit right now",
     icon: "💰",
-    duration: "3 min",
+    duration: "4 min",
     steps: [
       {
         title: "Why Set a Budget?",
@@ -114,9 +138,10 @@ const clientModules: Module[] = [
         tip: "Even rough budgets are better than none — you can always adjust them later.",
       },
       {
-        title: "Setting Your Budgets",
-        content: "To set monthly spending limits:\n\n1. Click **Budget** (💰) in the sidebar\n2. You'll see spending categories like Meals, Fuel, Office Supplies\n3. Enter a monthly dollar limit for each category\n4. Click Save\n\nYour dashboard will then show how much you've spent vs. your limit for the current month.",
-        tip: "Start with your biggest expense categories first.",
+        title: "Set Your First Budget Right Now",
+        content: "Let's set a real monthly budget for one of your expense categories. This will immediately appear on your dashboard so you can track your spending against it.\n\nChoose a category and enter a monthly limit below:",
+        tip: "Start with your biggest expense category — Meals, Office Supplies, or Vehicle are common choices.",
+        interactive: "set_budget",
       },
       {
         title: "Reading Your Budget Status",
@@ -180,7 +205,7 @@ const accountantModules: Module[] = [
   {
     id: "accountant-clients",
     title: "Adding & Managing Clients",
-    description: "How to add clients and set them up",
+    description: "Add a real client and invite them right now",
     icon: "👥",
     duration: "5 min",
     steps: [
@@ -190,14 +215,16 @@ const accountantModules: Module[] = [
         tip: "Set the province correctly — it affects which tax rates apply to their receipts.",
       },
       {
-        title: "Setting Up the Client Email Alias",
-        content: "Each client gets a unique email address for forwarding receipts:\n\n1. Go to **Clients** and find the client\n2. Click the ✏️ Edit button next to their email alias\n3. Set a custom alias like 'johnsmith' → johnsmith@receipts.example.com\n4. Click Save\n\nShare this email address with your client so they can forward receipts to it.",
-        tip: "Set a memorable alias early — clients use this address for all their email forwarding.",
+        title: "Try It — Add a Client Right Now",
+        content: "Let's add a real client to your account. Fill in the details below and we'll create them instantly. You'll see them appear in your Clients list right away.\n\nDon't worry — you can always edit the details later.",
+        tip: "You can use a test client name like 'Training Client' if you're not ready to add a real one.",
+        interactive: "add_client",
       },
       {
-        title: "Inviting the Client to Log In",
-        content: "To give your client access to their own dashboard:\n\n1. Go to **Team & Clients → Team**\n2. Click **Invite User**\n3. Enter the client's email address\n4. Select **Client** as their role\n5. Assign them to the correct client account\n6. Click Send Invitation\n\nThe client will receive an email with a link to set up their account.",
+        title: "Invite the Client to Log In",
+        content: "Now let's invite your client so they can access their own dashboard:\n\n1. Go to **Team & Clients → Team**\n2. Click **Invite User**\n3. Enter the client's email address\n4. Select **Client** as their role\n5. Assign them to the correct client account\n6. Click Send Invitation\n\nOr use the quick invite below:",
         tip: "Walk clients through the onboarding tour the first time they log in.",
+        interactive: "invite_client",
       },
       {
         title: "Viewing Client Details",
@@ -235,7 +262,7 @@ const accountantModules: Module[] = [
       },
       {
         title: "Line Items",
-        content: "For receipts with multiple items (e.g. a Staples receipt with office supplies and a printer):\n\n• View line items in the **Digital Receipt** section\n• Switch between Card view and Table view\n• Click **+ Add Item** to add missing items\n• Edit quantities and prices in Table view\n• Click **Save Items** when done\n\nIf items belong to different categories, use the **Split Items** feature when a flag is raised.",
+        content: "For receipts with multiple items:\n\n• View line items in the **Digital Receipt** section\n• Switch between Card view and Table view\n• Click **+ Add Item** to add missing items\n• Edit quantities and prices in Table view\n• Click **Save Items** when done\n\nIf items belong to different categories, use the **Split Items** feature when a flag is raised.",
         tip: "Accurate line items help catch category mismatches automatically.",
       },
     ],
@@ -249,22 +276,22 @@ const accountantModules: Module[] = [
     steps: [
       {
         title: "What are Flags?",
-        content: "Flags are automatic alerts raised when something looks wrong or needs attention:\n\n• 🔴 **Personal card used** — Client paid with a registered personal card\n• ⚠️ **Unrecognized card** — Card not registered as business or personal\n• ⚠️ **Purpose mismatch** — Description doesn't match the vendor type\n• ⚠️ **Line item mismatch** — Total doesn't match sum of individual items\n\nGo to **Operations → Flags** to see all unresolved flags across all clients.",
+        content: "Flags are automatic alerts raised when something looks wrong:\n\n• 🔴 **Personal card used** — Client paid with a registered personal card\n• ⚠️ **Unrecognized card** — Card not registered as business or personal\n• ⚠️ **Purpose mismatch** — Description doesn't match the vendor type\n• ⚠️ **Line item mismatch** — Total doesn't match sum of individual items\n\nGo to **Operations → Flags** to see all unresolved flags across all clients.",
         tip: "Check the Flags page at least once a week.",
       },
       {
         title: "Resolving Flags",
-        content: "To resolve a flag:\n\n1. Open the receipt with the flag\n2. Review the flag message at the top of the page\n3. For card flags — click **Resolve** and select a reason:\n   • 'Client reimbursement — will be paid back'\n   • 'Business card was unavailable'\n   • 'This is a business card — adding to client cards'\n4. For other flags — click **Resolve** to dismiss\n\nAll resolution notes are saved permanently to the audit trail.",
+        content: "To resolve a flag:\n\n1. Open the receipt with the flag\n2. Review the flag message at the top of the page\n3. For card flags — click **Resolve** and select a reason\n4. For other flags — click **Resolve** to dismiss\n\nAll resolution notes are saved permanently to the audit trail.",
         tip: "Never resolve a flag without understanding why it was raised.",
       },
       {
         title: "Card Flags Explained",
-        content: "Card flags are raised when a receipt's payment card doesn't match the client's registered business cards:\n\n• Ask your client to register their business cards in **Settings → Profile → My Business Cards**\n• Once registered, business card purchases won't trigger flags\n• Personal card purchases will always flag — review each one carefully\n\nPatterns matter: if a client regularly uses personal cards, discuss it with them.",
+        content: "Card flags are raised when a receipt's payment card doesn't match the client's registered business cards:\n\n• Ask your client to register their business cards in **Settings → Profile → My Business Cards**\n• Once registered, business card purchases won't trigger flags\n• Personal card purchases will always flag — review each one carefully",
         tip: "Encourage all clients to register their cards during onboarding.",
       },
       {
         title: "Splitting Mismatched Items",
-        content: "When a receipt has items from different categories (e.g. a restaurant that also sold office supplies):\n\n1. Open the flagged receipt\n2. See the 'Line item mismatch' flag\n3. Click **Split Items**\n4. Confirm the split — ReceiptAI creates two separate receipts\n5. Each receipt gets its own category and tax calculation\n6. A PDF documentation record is generated automatically\n\nThis keeps your records clean and defensible.",
+        content: "When a receipt has items from different categories:\n\n1. Open the flagged receipt\n2. See the 'Line item mismatch' flag\n3. Click **Split Items**\n4. Confirm the split — ReceiptAI creates two separate receipts\n5. Each receipt gets its own category and tax calculation\n6. A PDF documentation record is generated automatically",
         tip: "Split receipts are the cleanest way to handle mixed-category purchases.",
       },
     ],
@@ -278,17 +305,17 @@ const accountantModules: Module[] = [
     steps: [
       {
         title: "How Email Receipts Work",
-        content: "Clients can forward receipt emails to their unique inbox address (e.g. johnsmith@receipts.example.com). These appear in your **Email Inbox** for review.\n\nThe system automatically:\n• Extracts attachments (PDF, images)\n• Runs OCR to extract vendor, date, and total\n• Creates a pending email receipt record\n• Sends the client an SMS asking for the purpose",
+        content: "Clients forward receipt emails to their unique inbox address. These appear in your **Email Inbox** for review.\n\nThe system automatically:\n• Extracts attachments (PDF, images)\n• Runs OCR to extract vendor, date, and total\n• Creates a pending email receipt record\n• Sends the client an SMS asking for the purpose",
         tip: "Email receipts are great for online purchases where there's no paper receipt.",
       },
       {
         title: "Approving or Rejecting",
-        content: "To process email receipts:\n\n1. Go to **Operations → Email Inbox**\n2. Review each pending email receipt\n3. Check the extracted data — vendor, date, total\n4. Click **Approve** to add it as a full receipt\n5. Or click **Reject** if it's not a valid business receipt\n\nApproved emails become full receipts that appear in the Receipts list.",
+        content: "To process email receipts:\n\n1. Go to **Operations → Email Inbox**\n2. Review each pending email receipt\n3. Check the extracted data — vendor, date, total\n4. Click **Approve** to add it as a full receipt\n5. Or click **Reject** if it's not a valid business receipt",
         tip: "Rejected emails are still logged — clients can see their submission was received.",
       },
       {
         title: "When Extraction Fails",
-        content: "Sometimes OCR can't extract data from an email (e.g. if the receipt is in an unusual format):\n\n• The email receipt will show blank vendor/amount\n• Approve it anyway and then manually enter the details in the receipt detail\n• Or use the Edit Details feature to correct the extracted data\n\nThis is rare but happens with some bank statements or custom receipt formats.",
+        content: "Sometimes OCR can't extract data from an email:\n\n• The email receipt will show blank vendor/amount\n• Approve it anyway and manually enter the details in the receipt detail\n• Or use the Edit Details feature to correct the extracted data",
         tip: "Ask clients to forward the original receipt email, not a screenshot.",
       },
     ],
@@ -300,24 +327,24 @@ const accountantModules: Module[] = [
     icon: "📊",
     duration: "4 min",
     steps: [
-      {
-        title: "Tax Codes (T2125)",
-        content: "Go to **Reports → Tax Codes** to see a T2125 summary:\n\n• Every approved category is mapped to a CRA T2125 line number\n• The summary shows total spending per line for the year\n• Filter by client and date range\n• Export to CSV for use in tax software\n\nThis is the most important report for self-employed clients filing their taxes.",
-        tip: "Run the T2125 report before every client meeting during tax season.",
-      },
+{
+  title: "Tax Codes — Know Your Client's Form",
+  content: "The tax form that applies depends on each client's **income type** set on their account:\n\n• **Self-employed / Incorporated** → T2125 — Business & Professional Income\n• **Rental Property** → T776 — Statement of Real Estate Rentals\n• **Employed (home office/vehicle)** → T2200 — Employment Expenses (requires employer-signed T2200 form)\n\nGo to **Reports → Tax Codes** and select a client — the page automatically shows the correct form tabs and maps every receipt to the right CRA line number.\n\nAlways verify the client's income type is set correctly on their profile — a wrong income type means wrong tax form and wrong line numbers.",
+  tip: "Set the income type when creating a client — it determines which CRA form applies to all their receipts.",
+},
       {
         title: "Client Monthly Reports",
-        content: "Go to **Reports → Client Reports** to see monthly summaries:\n\n• Total spend, tax, and receipt count per month\n• Category breakdown with pie chart\n• Budget vs actual comparison\n• Month-over-month trends\n\nClients can also see their own reports from their dashboard.",
+        content: "Go to **Reports → Client Reports** to see monthly summaries:\n\n• Total spend, tax, and receipt count per month\n• Category breakdown with pie chart\n• Budget vs actual comparison\n• Month-over-month trends",
         tip: "Share monthly reports with clients to keep them informed and build trust.",
       },
       {
         title: "Edit History Report",
-        content: "Go to **Reports → Edit History** to see all receipt edits:\n\n• Filter by client and date range\n• See exactly what was changed, by whom, and why\n• Before/after values for every field\n• Direct link to the receipt\n\nThis is your audit trail — keep it clean by always providing accurate edit reasons.",
+        content: "Go to **Reports → Edit History** to see all receipt edits:\n\n• Filter by client and date range\n• See exactly what was changed, by whom, and why\n• Before/after values for every field\n• Direct link to the receipt",
         tip: "Review edit history before tax season to catch any data quality issues.",
       },
       {
         title: "Exporting Data",
-        content: "To export receipts to CSV:\n\n1. Go to **Settings → Advanced**\n2. Click **Export Receipts (CSV)**\n3. The file downloads with date, vendor, amount, category, payment method, and status\n\nYou can open this in Excel or import it into accounting software.",
+        content: "To export receipts to CSV:\n\n1. Go to **Settings → Advanced**\n2. Click **Export Receipts (CSV)**\n3. The file downloads with date, vendor, amount, category, payment method, and status",
         tip: "Export monthly for your own records, especially for clients on paper filing.",
       },
     ],
@@ -331,17 +358,17 @@ const accountantModules: Module[] = [
     steps: [
       {
         title: "How Client SMS Works",
-        content: "After every receipt upload, ReceiptAI texts the client asking for the purpose:\n\n1. Client uploads a receipt\n2. AI extracts vendor, amount, date\n3. Client receives: 'Hi [Name], we received your receipt from [Vendor] for $X. What was the purpose?'\n4. Client replies with a number or plain text\n5. AI saves the purpose to the receipt automatically\n\nThis eliminates the need for you to chase clients for expense descriptions.",
+        content: "After every receipt upload, ReceiptAI texts the client asking for the purpose:\n\n1. Client uploads a receipt\n2. AI extracts vendor, amount, date\n3. Client receives a text asking for the purpose\n4. Client replies with a number or plain text\n5. AI saves the purpose to the receipt automatically",
         tip: "Clients who use SMS consistently make your job significantly easier.",
       },
       {
         title: "Helping Clients Set Up SMS",
-        content: "If a client isn't receiving SMS messages, walk them through setup:\n\n1. Client logs in and goes to **Settings → Profile**\n2. Scroll down to SMS Notifications\n3. Toggle it on and enter their mobile number\n4. Choose preferred timing (Instant is recommended)\n5. Save\n\nAlternatively, during the onboarding tour, the SMS setup step handles this automatically.",
+        content: "If a client isn't receiving SMS messages, walk them through setup:\n\n1. Client logs in and goes to **Settings → Profile**\n2. Scroll down to SMS Notifications\n3. Toggle it on and enter their mobile number\n4. Choose preferred timing (Instant is recommended)\n5. Save",
         tip: "Do this during the initial client onboarding call — it takes 2 minutes.",
       },
       {
         title: "SMS Timing Options",
-        content: "Clients can choose when they receive texts:\n\n• **Instant** — Right after upload (best for accuracy)\n• **5 or 30 minutes** — Short delay\n• **1 or 4 hours** — Batch responses\n• **End of day** — One summary at a set time (good for busy clients)\n\nYou can see each client's SMS settings in their Client Detail profile under Overview.",
+        content: "Clients can choose when they receive texts:\n\n• **Instant** — Right after upload (best for accuracy)\n• **5 or 30 minutes** — Short delay\n• **1 or 4 hours** — Batch responses\n• **End of day** — One summary at a set time\n\nYou can see each client's SMS settings in their Client Detail profile under Overview.",
         tip: "Recommend 'Instant' for most clients — replies are more accurate when fresh.",
       },
     ],
@@ -369,7 +396,7 @@ const firmAdminModules: Module[] = [
       },
       {
         title: "Requesting Changes",
-        content: "If you spot an issue on a receipt, you can't edit it directly — but you can request a change:\n\n1. Open the receipt\n2. Click **📝 Request Changes** button\n3. Describe what needs to be fixed\n4. Your accountant receives a notification\n5. They make the change and mark it resolved\n\nThis keeps a clean record of all review decisions.",
+        content: "If you spot an issue on a receipt, you can't edit it directly — but you can request a change:\n\n1. Open the receipt\n2. Click **📝 Request Changes** button\n3. Describe what needs to be fixed\n4. Your accountant receives a notification\n5. They make the change and mark it resolved",
         tip: "Be specific in your change requests — 'Category should be Vehicle Expenses, not Office Supplies' is better than 'Category is wrong'.",
       },
     ],
@@ -377,19 +404,21 @@ const firmAdminModules: Module[] = [
   {
     id: "admin-setup",
     title: "Setting Up Your Firm",
-    description: "Adding clients, inviting accountants, and getting organized",
+    description: "Add your first client and invite your first accountant",
     icon: "⚙️",
     duration: "6 min",
     steps: [
       {
-        title: "Step 1: Add Your Clients",
-        content: "Start by adding all your clients:\n\n1. Go to **Team & Clients → Clients**\n2. Enter the client name, province, and timezone\n3. Click **Create Client**\n4. Set a custom email alias (e.g. 'johnsmith')\n5. Repeat for each client\n\nEach client gets a unique email address for forwarding receipts automatically.",
+        title: "Step 1: Add Your First Client",
+        content: "Let's add your first client right now. Fill in the details below — they'll appear in your Clients list immediately after. You can edit any details later.",
         tip: "Add all clients before inviting accountants — you'll need them for assignment.",
+        interactive: "add_client",
       },
       {
-        title: "Step 2: Invite Your Accountants",
-        content: "Add your accounting team:\n\n1. Go to **Team & Clients → Team**\n2. Click **Invite User**\n3. Enter the accountant's email address\n4. Select **Accountant** as their role\n5. Click Send Invitation\n\nThey'll receive an email to set up their account. The firm admin account does NOT count against your accountant seat limit.",
+        title: "Step 2: Invite Your First Accountant",
+        content: "Now let's invite an accountant to join your firm. They'll receive an email with a link to set up their account.\n\nRemember: the firm admin account does NOT count against your accountant seat limit.",
         tip: "Invite all accountants before assigning clients to them.",
+        interactive: "invite_accountant",
       },
       {
         title: "Step 3: Assign Clients to Accountants",
@@ -398,8 +427,9 @@ const firmAdminModules: Module[] = [
       },
       {
         title: "Step 4: Invite Your Clients",
-        content: "Give clients access to their own dashboard:\n\n1. Go to **Team & Clients → Team**\n2. Click **Invite User**\n3. Enter the client's email\n4. Select **Client** as their role\n5. Assign to their client account\n\nClients can then upload receipts, reply to SMS, and view their own data without seeing anyone else's.",
+        content: "Give clients access to their own dashboard:\n\n1. Go to **Team & Clients → Team**\n2. Click **Invite User**\n3. Enter the client's email\n4. Select **Client** as their role\n5. Assign to their client account\n\nClients can then upload receipts, reply to SMS, and view their own data.",
         tip: "Walk clients through their first login — 5 minutes of onboarding saves hours of questions later.",
+        interactive: "invite_client",
       },
       {
         title: "Step 5: Set Up Email Aliases",
@@ -422,17 +452,17 @@ const firmAdminModules: Module[] = [
       },
       {
         title: "Client Detail Profiles",
-        content: "Click any client name to open their full profile — your most powerful oversight tool:\n\n• **Overview** — Stats, recent receipts, income type, SMS status\n• **Flags** — Every flag ever raised with resolution notes\n• **Cards** — Registered business/personal cards\n• **Edit History** — Every change made to their receipts\n\nLook for patterns: frequent personal card use, repeated edits to the same fields, unresolved flags.",
+        content: "Click any client name to open their full profile:\n\n• **Overview** — Stats, recent receipts, income type, SMS status\n• **Flags** — Every flag ever raised with resolution notes\n• **Cards** — Registered business/personal cards\n• **Edit History** — Every change made to their receipts\n\nLook for patterns: frequent personal card use, repeated edits, unresolved flags.",
         tip: "Review client profiles quarterly to catch issues before they compound.",
       },
       {
         title: "Flags Overview",
-        content: "Go to **Operations → Flags** to see all active flags:\n\n• Filter by severity (high, warn, info)\n• Filter by flag type\n• See which receipts need attention\n• Track resolution progress\n\nHigh severity flags (personal card used) should be reviewed within 24 hours. Warning flags can be batched weekly.",
+        content: "Go to **Operations → Flags** to see all active flags:\n\n• Filter by severity (high, warn, info)\n• Filter by flag type\n• See which receipts need attention\n• Track resolution progress\n\nHigh severity flags should be reviewed within 24 hours.",
         tip: "A firm with 0 unresolved flags at tax time is a firm that had a smooth year.",
       },
       {
         title: "Edit History Report",
-        content: "Go to **Reports → Edit History** to see all receipt changes across the firm:\n\n• Filter by client or date range\n• See who made each change and why\n• Before/after values for every field\n• Spot patterns of data quality issues\n\nIf you see the same field being corrected repeatedly for a client, the OCR might need help — encourage better photo quality.",
+        content: "Go to **Reports → Edit History** to see all receipt changes:\n\n• Filter by client or date range\n• See who made each change and why\n• Before/after values for every field\n• Spot patterns of data quality issues",
         tip: "Share edit history with accountants in team meetings to improve data quality.",
       },
     ],
@@ -456,7 +486,7 @@ const firmAdminModules: Module[] = [
       },
       {
         title: "Upgrading or Cancelling",
-        content: "To change your plan:\n\n• Click **Change Plan** on the Billing page\n• Select your new plan and complete checkout via Stripe\n• Upgrades take effect immediately\n• Downgrades take effect at the next billing cycle\n\nIf you want to cancel, click **Cancel Plan** — you may be offered a retention discount first.",
+        content: "To change your plan:\n\n• Click **Change Plan** on the Billing page\n• Select your new plan and complete checkout via Stripe\n• Upgrades take effect immediately\n• Downgrades take effect at the next billing cycle",
         tip: "Contact support before cancelling — we may be able to resolve your concerns.",
       },
     ],
@@ -475,19 +505,456 @@ const firmAdminModules: Module[] = [
       },
       {
         title: "Messaging Accountants",
-        content: "To send a message to an accountant:\n\n1. Go to **Messages → Clients** tab\n2. Click **+ New Conversation**\n3. Select the accountant's client\n4. Enter a subject\n5. Start the conversation\n\nUse this for specific receipt feedback, workload discussions, or quality reviews.",
+        content: "To send a message to an accountant:\n\n1. Go to **Messages → Clients** tab\n2. Click **+ New Conversation**\n3. Select the accountant's client\n4. Enter a subject\n5. Start the conversation",
         tip: "Be constructive in messages — they're part of the permanent record.",
       },
       {
         title: "Getting Support",
-        content: "For help with ReceiptAI:\n\n1. Go to **Messages → Support** tab\n2. Start a new conversation with your question\n3. Our AI responds immediately with step-by-step help\n4. If unresolved, click **Escalate to Support** for human assistance\n\nOur team responds to escalations within 24 hours.",
+        content: "For help with ReceiptAI:\n\n1. Go to **Messages → Support** tab\n2. Start a new conversation with your question\n3. Our AI responds immediately with step-by-step help\n4. If unresolved, click **Escalate to Support** for human assistance",
         tip: "The AI knows the entire ReceiptAI platform — try it before escalating.",
       },
     ],
   },
 ];
 
-// ── COMPONENT ─────────────────────────────────────────────────────────────────
+// ── INTERACTIVE WIDGETS ───────────────────────────────────────────────────────
+
+function UploadReceiptWidget({ onComplete }: { onComplete: () => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  setUploading(true);
+  setError("");
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated");
+    const firmId = await getMyFirmId();
+    const { data: firmUser } = await supabase
+      .from("firm_users")
+      .select("client_id")
+      .eq("auth_user_id", user.id)
+      .single();
+    if (!firmUser?.client_id) throw new Error("Client not found");
+
+    // Convert HEIC if needed
+    let uploadFile = file;
+    try {
+      const { convertHeicToJpg } = await import("@/lib/convertHeicClient");
+      uploadFile = await convertHeicToJpg(file);
+    } catch {
+      uploadFile = file;
+    }
+
+    const formData = new FormData();
+    formData.append("file", uploadFile);
+    formData.append("firmId", firmId);
+    formData.append("clientId", firmUser.client_id);
+    formData.append("userId", user.id);
+
+    const res = await fetch("/api/upload-receipt", { method: "POST", body: formData });
+    if (!res.ok) throw new Error("Upload failed");
+
+    setDone(true);
+    setTimeout(onComplete, 2000);
+  } catch (err: any) {
+    setError(err.message + " — try a JPG or PNG instead of HEIC on local dev");
+  } finally {
+    setUploading(false);
+  }
+}
+
+  if (done) {
+    return (
+      <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+        <div className="text-3xl mb-2">✅</div>
+        <p className="text-green-700 dark:text-green-300 font-medium">Receipt uploaded successfully!</p>
+        <p className="text-sm text-green-600 dark:text-green-400 mt-1">Check your Receipts list — it's there now. If SMS is enabled, you'll get a text shortly!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <input ref={fileRef} type="file" accept="image/*,application/pdf,.heic,.heif" className="hidden" onChange={handleFile} />
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="w-full py-4 border-2 border-dashed border-accent-300 dark:border-accent-600 rounded-xl text-center hover:border-accent-500 hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all disabled:opacity-50"
+      >
+        {uploading ? (
+          <div>
+            <div className="text-2xl mb-1">⏳</div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Uploading and extracting data...</p>
+          </div>
+        ) : (
+          <div>
+            <div className="text-2xl mb-1">📸</div>
+            <p className="text-sm font-medium text-accent-600 dark:text-accent-400">Tap to select a receipt photo</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">JPG, PNG, PDF, HEIC supported</p>
+          </div>
+        )}
+      </button>
+      {error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>}
+    </div>
+  );
+}
+
+function CreateFolderWidget({ onComplete }: { onComplete: () => void }) {
+  const [folderName, setFolderName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCreate() {
+    if (!folderName.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const firmId = await getMyFirmId();
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id")
+        .eq("auth_user_id", user.id)
+        .single();
+
+      const { error: insertError } = await supabase.from("receipt_folders").insert({
+        firm_id: firmId,
+        client_id: firmUser?.client_id || null,
+        name: folderName.trim(),
+      });
+      if (insertError) throw insertError;
+      setDone(true);
+      setTimeout(onComplete, 2000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+        <div className="text-3xl mb-2">📁</div>
+        <p className="text-green-700 dark:text-green-300 font-medium">Folder "{folderName}" created!</p>
+        <p className="text-sm text-green-600 dark:text-green-400 mt-1">You can now assign receipts to this folder from the receipt detail page.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <input
+        type="text"
+        value={folderName}
+        onChange={(e) => setFolderName(e.target.value)}
+        placeholder="e.g. Office Expenses, Vehicle, Client Projects"
+        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+      />
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      <button
+        onClick={handleCreate}
+        disabled={saving || !folderName.trim()}
+        className="w-full py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {saving ? "Creating..." : "📁 Create Folder"}
+      </button>
+    </div>
+  );
+}
+
+function SetBudgetWidget({ onComplete }: { onComplete: () => void }) {
+  const categories = ["Meals & Entertainment", "Office Supplies", "Vehicle Expenses", "Professional Fees", "Advertising", "Travel", "Utilities"];
+  const [category, setCategory] = useState(categories[0]);
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    if (!amount || parseFloat(amount) <= 0) return;
+    setSaving(true);
+    setError("");
+    try {
+      const firmId = await getMyFirmId();
+      const { error: upsertError } = await supabase.from("category_budgets").upsert({
+        firm_id: firmId,
+        category,
+        monthly_budget_cents: Math.round(parseFloat(amount) * 100),
+      }, { onConflict: "firm_id,category" });
+      if (upsertError) throw upsertError;
+      setDone(true);
+      setTimeout(onComplete, 2000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+        <div className="text-3xl mb-2">💰</div>
+        <p className="text-green-700 dark:text-green-300 font-medium">${amount}/month budget set for {category}!</p>
+        <p className="text-sm text-green-600 dark:text-green-400 mt-1">Check your dashboard — your budget tracker is now active.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+        >
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Monthly Limit ($)</label>
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="e.g. 500"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+        />
+      </div>
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      <button
+        onClick={handleSave}
+        disabled={saving || !amount || parseFloat(amount) <= 0}
+        className="w-full py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {saving ? "Saving..." : "💰 Set Budget"}
+      </button>
+    </div>
+  );
+}
+
+function AddClientWidget({ onComplete }: { onComplete: () => void }) {
+  const [name, setName] = useState("");
+  const [province, setProvince] = useState("ON");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [incomeType, setIncomeType] = useState("self_employed");
+
+  async function handleAdd() {
+    if (!name.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const firmId = await getMyFirmId();
+      const clientCode = "c_" + Math.random().toString(36).slice(2, 10);
+const { error: insertError } = await supabase.from("clients").insert({
+  firm_id: firmId,
+  name: name.trim(),
+  client_code: clientCode,
+  province,
+  timezone: "America/Toronto",
+  income_type: incomeType,
+  is_active: true,
+});
+      if (insertError) throw insertError;
+      setDone(true);
+      setTimeout(onComplete, 2000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+        <div className="text-3xl mb-2">✅</div>
+        <p className="text-green-700 dark:text-green-300 font-medium">"{name}" added as a client!</p>
+        <p className="text-sm text-green-600 dark:text-green-400 mt-1">They now appear in your Clients list. Next, invite them to log in.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Client Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. John Smith Plumbing"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+        />
+      </div>
+<div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Province</label>
+        <select
+          value={province}
+          onChange={(e) => setProvince(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+        >
+          {["ON","BC","AB","QC","MB","SK","NS","NB","NL","PE","NT","NU","YT"].map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Income Type</label>
+        <select
+          value={incomeType}
+          onChange={(e) => setIncomeType(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+        >
+          <option value="self_employed">Self-Employed (T2125)</option>
+          <option value="incorporated">Incorporated (T2125)</option>
+          <option value="rental_property">Rental Property (T776)</option>
+          <option value="employed">Employed (T2200)</option>
+          <option value="other">Other (T2125)</option>
+        </select>
+      </div>
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            <button
+        onClick={handleAdd}
+        disabled={saving || !name.trim()}
+        className="w-full py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {saving ? "Adding..." : "➕ Add Client"}
+      </button>
+    </div>
+  );
+}
+
+
+function InviteWidget({ role, onComplete }: { role: "client" | "accountant"; onComplete: () => void }) {
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [selectedClient, setSelectedClient] = useState("");
+
+  useState(() => {
+    if (role === "client") {
+      getMyFirmId().then(firmId => {
+        supabase.from("clients").select("id, name").eq("firm_id", firmId).then(({ data }) => {
+          setClients(data || []);
+          if (data?.[0]) setSelectedClient(data[0].id);
+        });
+      });
+    }
+  });
+
+  async function handleInvite() {
+    if (!email.trim()) return;
+    setSending(true);
+    setError("");
+    try {
+      const firmId = await getMyFirmId();
+const { data: { session } } = await supabase.auth.getSession();
+const res = await fetch("/api/invite-user", {
+  method: "POST",
+  headers: { 
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${session?.access_token}`,
+  },
+  body: JSON.stringify({
+    email: email.trim(),
+    role,
+    firmId,
+    clientId: role === "client" ? selectedClient : undefined,
+  }),
+});
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Invite failed");
+      }
+      setDone(true);
+      setTimeout(onComplete, 2000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+        <div className="text-3xl mb-2">📧</div>
+        <p className="text-green-700 dark:text-green-300 font-medium">Invitation sent to {email}!</p>
+        <p className="text-sm text-green-600 dark:text-green-400 mt-1">They'll receive an email with a link to set up their account.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+          {role === "client" ? "Client's Email Address" : "Accountant's Email Address"}
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="email@example.com"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+        />
+      </div>
+      {role === "client" && clients.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Assign to Client Account</label>
+          <select
+            value={selectedClient}
+            onChange={(e) => setSelectedClient(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+          >
+            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      )}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      <button
+        onClick={handleInvite}
+        disabled={sending || !email.trim()}
+        className="w-full py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {sending ? "Sending..." : `📧 Send Invitation`}
+      </button>
+      <button
+        onClick={onComplete}
+        className="w-full py-2 border border-gray-300 dark:border-dark-border text-gray-600 dark:text-gray-400 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+      >
+        Skip for now
+      </button>
+    </div>
+  );
+}
+
+function InteractiveWidget({ type, onComplete }: { type: InteractiveType; onComplete: () => void }) {
+  switch (type) {
+    case "upload_receipt": return <UploadReceiptWidget onComplete={onComplete} />;
+    case "create_folder": return <CreateFolderWidget onComplete={onComplete} />;
+    case "set_budget": return <SetBudgetWidget onComplete={onComplete} />;
+    case "add_client": return <AddClientWidget onComplete={onComplete} />;
+    case "invite_client": return <InviteWidget role="client" onComplete={onComplete} />;
+    case "invite_accountant": return <InviteWidget role="accountant" onComplete={onComplete} />;
+    default: return null;
+  }
+}
+
+// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 type TrainingModulesProps = {
   userRole: string;
   isPlanEnterprise: boolean;
@@ -496,7 +963,13 @@ type TrainingModulesProps = {
 export default function TrainingModules({ userRole, isPlanEnterprise }: TrainingModulesProps) {
   const [activeModule, setActiveModule] = useState<Module | null>(null);
   const [activeStep, setActiveStep] = useState(0);
-  const [completedModules, setCompletedModules] = useState<string[]>([]);
+const [completedModules, setCompletedModules] = useState<string[]>(() => {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(`training_completed_${userRole}`) || "[]");
+  } catch { return []; }
+});
+  const [interactiveDone, setInteractiveDone] = useState(false);
 
   function getModules(): Module[] {
     if (userRole === "client") return clientModules;
@@ -510,22 +983,35 @@ export default function TrainingModules({ userRole, isPlanEnterprise }: Training
   function openModule(module: Module) {
     setActiveModule(module);
     setActiveStep(0);
+    setInteractiveDone(false);
   }
 
   function nextStep() {
     if (!activeModule) return;
     if (activeStep < activeModule.steps.length - 1) {
       setActiveStep(prev => prev + 1);
+      setInteractiveDone(false);
     } else {
-      setCompletedModules(prev => [...new Set([...prev, activeModule.id])]);
+setCompletedModules(prev => {
+  const updated = [...new Set([...prev, activeModule.id])];
+  localStorage.setItem(`training_completed_${userRole}`, JSON.stringify(updated));
+  return updated;
+});
       setActiveModule(null);
       setActiveStep(0);
     }
   }
 
   function prevStep() {
-    if (activeStep > 0) setActiveStep(prev => prev - 1);
+    if (activeStep > 0) {
+      setActiveStep(prev => prev - 1);
+      setInteractiveDone(false);
+    }
   }
+
+  const currentStep = activeModule?.steps[activeStep];
+  const hasInteractive = !!currentStep?.interactive;
+  const canProceed = !hasInteractive || interactiveDone;
 
   if (!isPlanEnterprise) {
     return (
@@ -545,8 +1031,7 @@ export default function TrainingModules({ userRole, isPlanEnterprise }: Training
     );
   }
 
-  if (activeModule) {
-    const step = activeModule.steps[activeStep];
+  if (activeModule && currentStep) {
     const isLastStep = activeStep === activeModule.steps.length - 1;
 
     return (
@@ -578,9 +1063,9 @@ export default function TrainingModules({ userRole, isPlanEnterprise }: Training
         </div>
 
         <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6 mb-4">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{step.title}</h3>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{currentStep.title}</h3>
           <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
-            {step.content.split('\n').map((line, i) => {
+            {currentStep.content.split('\n').map((line, i) => {
               const parts = line.split('**');
               return (
                 <p key={i} className={line === '' ? 'mt-3' : 'mb-1'}>
@@ -593,10 +1078,27 @@ export default function TrainingModules({ userRole, isPlanEnterprise }: Training
               );
             })}
           </div>
-          {step.tip && (
+
+          {/* Interactive widget */}
+          {hasInteractive && (
+            <div className="mt-4 border-t border-gray-100 dark:border-dark-border pt-4">
+              {interactiveDone ? (
+                <div className="text-center text-green-600 dark:text-green-400 text-sm font-medium">
+                  ✅ Done! Click Next to continue.
+                </div>
+              ) : (
+                <InteractiveWidget
+                  type={currentStep.interactive!}
+                  onComplete={() => setInteractiveDone(true)}
+                />
+              )}
+            </div>
+          )}
+
+          {currentStep.tip && (
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                💡 <strong>Tip:</strong> {step.tip}
+                💡 <strong>Tip:</strong> {currentStep.tip}
               </p>
             </div>
           )}
@@ -612,45 +1114,93 @@ export default function TrainingModules({ userRole, isPlanEnterprise }: Training
           </button>
           <button
             onClick={nextStep}
-            className="flex-1 px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
+            disabled={!canProceed}
+            className="flex-1 px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
           >
-            {isLastStep ? "✓ Complete Module" : "Next →"}
+            {isLastStep ? "✓ Complete Module" : hasInteractive && !interactiveDone ? "Complete the task above to continue" : "Next →"}
           </button>
         </div>
       </div>
     );
   }
 
+const allDone = completedModules.length === modules.length && modules.length > 0;
+
+  function handleRestart() {
+    if (!confirm("Restart all training modules? Your progress will be reset.")) return;
+    localStorage.removeItem(`training_completed_${userRole}`)
+    setCompletedModules([]);
+  }
+
   return (
     <div>
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Training Modules</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Step-by-step guides tailored to your role
-        </p>
-        {completedModules.length > 0 && (
-          <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-            ✅ {completedModules.length} of {modules.length} modules completed
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Training Modules</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Step-by-step guides tailored to your role — including real hands-on tasks
           </p>
+          {completedModules.length > 0 && (
+            <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+              ✅ {completedModules.length} of {modules.length} modules completed
+            </p>
+          )}
+        </div>
+        {completedModules.length > 0 && (
+          <button
+            onClick={handleRestart}
+            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline flex-shrink-0"
+          >
+            🔄 Restart Training
+          </button>
         )}
       </div>
 
+      {allDone && (
+        <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+          <div className="text-4xl mb-2">🎉</div>
+          <p className="font-semibold text-green-800 dark:text-green-200">Training Complete!</p>
+          <p className="text-sm text-green-700 dark:text-green-300 mt-1">You've completed all training modules. You're ready to use ReceiptAI like a pro!</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {modules.map(module => {
+{modules.map(module => {
           const isCompleted = completedModules.includes(module.id);
+          const hasInteractiveSteps = module.steps.some(s => s.interactive);
+
+          if (isCompleted) {
+            return (
+              <button
+                key={module.id}
+                onClick={() => openModule(module)}
+                className="text-left p-3 rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10 flex items-center gap-3 hover:bg-green-100 dark:hover:bg-green-900/20 transition-colors"
+              >
+                <span className="text-xl">{module.icon}</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{module.title}</span>
+                    <span className="text-xs text-green-600 dark:text-green-400">✓ Done</span>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Review →</span>
+              </button>
+            );
+          }
+
           return (
             <button
               key={module.id}
               onClick={() => openModule(module)}
-              className={`text-left p-5 rounded-xl border-2 transition-all hover:shadow-md ${
-                isCompleted
-                  ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                  : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:border-accent-300 dark:hover:border-accent-600"
-              }`}
+              className="text-left p-5 rounded-xl border-2 border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:border-accent-300 dark:hover:border-accent-600 hover:shadow-md transition-all"
             >
               <div className="flex items-start justify-between mb-2">
                 <span className="text-3xl">{module.icon}</span>
-                {isCompleted && <span className="text-green-600 dark:text-green-400 text-sm font-medium">✓ Done</span>}
+                {hasInteractiveSteps && (
+                  <span className="text-xs px-2 py-0.5 bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 rounded-full">
+                    ✋ Hands-on
+                  </span>
+                )}
               </div>
               <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{module.title}</h4>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{module.description}</p>
@@ -662,7 +1212,7 @@ export default function TrainingModules({ userRole, isPlanEnterprise }: Training
             </button>
           );
         })}
-      </div>
+              </div>
     </div>
   );
 }

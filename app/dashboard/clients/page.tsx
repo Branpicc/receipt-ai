@@ -65,6 +65,7 @@ export default function ClientsPage() {
   const [newTimezone, setNewTimezone] = useState("America/Toronto");
   const [newProvince, setNewProvince] = useState("ON");
   const [creating, setCreating] = useState(false);
+  const [newIncomeType, setNewIncomeType] = useState("self_employed");
 
   const sortedClients = useMemo(() => {
     return [...clients].sort((a, b) => a.name.localeCompare(b.name));
@@ -86,26 +87,25 @@ export default function ClientsPage() {
     setClients((data as ClientRow[]) || []);
   }
 
-  async function loadAccountants(fId: string) {
-    const { data, error } = await supabase
-      .from("firm_users")
-      .select("id, auth_user_id, role")
-      .eq("firm_id", fId)
-      .eq("role", "accountant");
+async function loadAccountants(fId: string) {
+  const { data, error } = await supabase
+    .from("firm_users")
+    .select("id, auth_user_id, role, display_name")
+    .eq("firm_id", fId)
+    .eq("role", "accountant");
 
-    if (error) {
-      console.error("Failed to load accountants:", error);
-      return;
-    }
-
-    // Use auth_user_id as placeholder for email
-    const accountantsWithEmail = (data || []).map(acc => ({
-      ...acc,
-      email: acc.auth_user_id, // Placeholder - would need server function for real emails
-    }));
-
-    setAccountants(accountantsWithEmail as Accountant[]);
+  if (error) {
+    console.error("Failed to load accountants:", error);
+    return;
   }
+
+  const accountantsWithEmail = (data || []).map(acc => ({
+    ...acc,
+    email: acc.display_name || acc.auth_user_id,
+  }));
+
+  setAccountants(accountantsWithEmail as Accountant[]);
+}
 
   async function assignClient(clientId: string, accountantId: string | null) {
     try {
@@ -235,16 +235,17 @@ export default function ClientsPage() {
 
     const client_code = makeClientCode();
 
-    const { error } = await supabase.from("clients").insert([
-      {
-        firm_id: firmId,
-        name: newName.trim(),
-        client_code,
-        province: newProvince,
-        timezone: newTimezone,
-        is_active: true,
-      },
-    ]);
+const { error } = await supabase.from("clients").insert([
+  {
+    firm_id: firmId,
+    name: newName.trim(),
+    client_code,
+    province: newProvince,
+    timezone: newTimezone,
+    income_type: newIncomeType,
+    is_active: true,
+  },
+]);
 
     if (error) {
       setErr(error.message);
@@ -253,6 +254,7 @@ export default function ClientsPage() {
     }
 
     setNewName("");
+    setNewIncomeType("self_employed");
     await loadClients(firmId);
     setCreating(false);
   };
@@ -306,8 +308,8 @@ export default function ClientsPage() {
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Client</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <input
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <input
               className="rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg text-gray-900 dark:text-white px-4 py-3"
               placeholder="Client name (e.g., ACME Plumbing)"
               value={newName}
@@ -336,12 +338,21 @@ export default function ClientsPage() {
               <option value="NU">NU</option>
               <option value="YT">YT</option>
             </select>
-            <input
-              className="rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg text-gray-900 dark:text-white px-4 py-3"
-              placeholder="Timezone"
-              value={newTimezone}
-              onChange={(e) => setNewTimezone(e.target.value)}
-            />
+<select
+  className="rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg text-gray-900 dark:text-white px-4 py-3"
+  value={newIncomeType}
+  onChange={(e) => setNewIncomeType(e.target.value)}
+>
+  <option value="self_employed">Self-Employed (T2125)</option>
+  <option value="incorporated">Incorporated (T2125)</option>
+  <option value="partnership">Partnership (T2125)</option>
+  <option value="rental_property">Rental Property (T776)</option>
+  <option value="employed">Employed (T2200)</option>
+  <option value="retired">Retired (T1)</option>
+  <option value="investment">Investment (T1)</option>
+  <option value="student">Student (T1)</option>
+  <option value="other">Other (T2125)</option>
+</select>
 
             <button
               onClick={createClient}

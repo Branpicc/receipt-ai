@@ -52,12 +52,26 @@ export function ClientProvider({ children, userRole }: { children: ReactNode; us
     try {
       const firmId = await getMyFirmId();
 
-      const { data: clientsData, error } = await supabase
-        .from("clients")
-        .select("id, name, email_alias, assigned_accountant_id")
-        .eq("firm_id", firmId)
-        .eq("is_active", true)
-        .order("name", { ascending: true });
+const { data: { user } } = await supabase.auth.getUser();
+const { data: firmUser } = await supabase
+  .from("firm_users")
+  .select("id, role")
+  .eq("auth_user_id", user?.id)
+  .single();
+
+let clientQuery = supabase
+  .from("clients")
+  .select("id, name, email_alias, assigned_accountant_id")
+  .eq("firm_id", firmId)
+  .eq("is_active", true)
+  .order("name", { ascending: true });
+
+// Accountants only see their assigned clients
+if (firmUser?.role === "accountant") {
+  clientQuery = clientQuery.eq("assigned_accountant_id", firmUser.id);
+}
+
+const { data: clientsData, error } = await clientQuery;
 
       if (error) throw error;
 

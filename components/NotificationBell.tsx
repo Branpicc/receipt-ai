@@ -62,18 +62,16 @@ export default function NotificationBell() {
       const firmId = await getMyFirmId();
 
       // Load notifications with receipt info so we can filter by client
-      const { data: notifs, error } = await supabase
-        .from("notifications")
-        .select(`
-          *,
-          receipts!receipt_id (
-            client_id
-          )
-        `)
-        .eq("firm_id", firmId)
-        .order("read", { ascending: true })
-        .order("created_at", { ascending: false })
-        .limit(100);
+// Also filter by client_id directly on notifications table if set
+let notifQuery = supabase
+  .from("notifications")
+  .select(`*, receipts!receipt_id (client_id)`)
+  .eq("firm_id", firmId)
+  .order("read", { ascending: true })
+  .order("created_at", { ascending: false })
+  .limit(100);
+
+const { data: notifs, error } = await notifQuery;
 
       if (error) throw error;
 

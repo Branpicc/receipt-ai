@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
-import { CRA_TAX_CODES, getTaxCodeForCategory, type TaxCode } from "../../../lib/taxCodes";
+import {
+  CRA_TAX_CODES,
+  getTaxCodeForCategory,
+  getFormsForIncomeType,
+  getCodesForForm,
+  getFormLabel,
+  type TaxCode,
+  type TaxForm,
+} from "../../../lib/taxCodes";
 import Link from "next/link";
+import { useClientContext } from "@/lib/ClientContext";
 
 type Receipt = {
   id: string;
@@ -23,35 +32,65 @@ type TaxCodeSummary = {
   deductible_cents: number;
 };
 
-type CategoryBreakdown = {
-  category: string;
-  total_cents: number;
-  tax_cents: number;
-  deductible_cents: number;
-  deductible_percent: number;
-  receipt_count: number;
-  receipts: Receipt[];
-};
-
 export default function TaxCodesPage() {
+  const { selectedClient } = useClientContext();
+  const selectedClientId = selectedClient?.id || null;
   const [summaries, setSummaries] = useState<TaxCodeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<"all" | "month" | "quarter" | "year">("year");
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
+  const [activeForm, setActiveForm] = useState<TaxForm>("T2125");
+  const [availableForms, setAvailableForms] = useState<TaxForm[]>(["T2125"]);
+  const [clientName, setClientName] = useState<string | null>(null);
+  const [incomeType, setIncomeType] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadClientInfo();
+  }, [selectedClientId]);
 
   useEffect(() => {
     loadTaxCodes();
-  }, [dateRange]);
+  }, [dateRange, selectedClientId, activeForm]);
+
+  async function loadClientInfo() {
+    try {
+      const firmId = await getMyFirmId();
+      const clientId = selectedClientId;
+
+      if (!clientId) {
+        setAvailableForms(["T2125"]);
+        setActiveForm("T2125");
+        setClientName(null);
+        setIncomeType(null);
+        return;
+      }
+
+      const { data: client } = await supabase
+        .from("clients")
+        .select("name, income_type")
+        .eq("id", clientId)
+        .single();
+
+      if (client) {
+        setClientName(client.name);
+        setIncomeType(client.income_type);
+        const forms = getFormsForIncomeType(client.income_type);
+        setAvailableForms(forms);
+        setActiveForm(forms[0]);
+      }
+    } catch (err) {
+      console.error("Failed to load client info:", err);
+    }
+  }
 
   async function loadTaxCodes() {
     try {
       setLoading(true);
       const firmId = await getMyFirmId();
-      
+
       let startDate: string | null = null;
       const now = new Date();
-      
+
       if (dateRange === "month") {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       } else if (dateRange === "quarter") {
@@ -65,14 +104,17 @@ export default function TaxCodesPage() {
         .from("receipts")
         .select("id, vendor, receipt_date, total_cents, approved_category, suggested_category")
         .eq("firm_id", firmId)
-        .not("approved_category", "is", null)
-      
+        .not("approved_category", "is", null);
+
+      if (selectedClientId) {
+        query = query.eq("client_id", selectedClientId);
+      }
+
       if (startDate) {
         query = query.gte("receipt_date", startDate);
       }
 
       const { data: receiptsData, error: receiptsError } = await query;
-      
       if (receiptsError) throw receiptsError;
 
       const receiptIds = receiptsData?.map(r => r.id) || [];
@@ -86,9 +128,11 @@ export default function TaxCodesPage() {
         taxMap.set(t.receipt_id, (taxMap.get(t.receipt_id) || 0) + t.amount_cents);
       });
 
+      // Get codes for the active form only
+      const formCodes = getCodesForForm(activeForm);
       const taxCodeMap = new Map<string, TaxCodeSummary>();
 
-      CRA_TAX_CODES.forEach(tc => {
+      formCodes.forEach(tc => {
         taxCodeMap.set(tc.code, {
           taxCode: tc,
           receipts: [],
@@ -102,9 +146,12 @@ export default function TaxCodesPage() {
         const category = receipt.approved_category || receipt.suggested_category;
         if (!category) return;
 
-        const taxCode = getTaxCodeForCategory(category);
+        const taxCode = getTaxCodeForCategory(category, activeForm);
         if (!taxCode) {
-          const otherCode = CRA_TAX_CODES.find(tc => tc.code === "9936");
+          // Put in other expenses for this form
+          const otherCode = formCodes.find(tc =>
+            tc.name.toLowerCase().includes("other")
+          );
           if (otherCode) {
             const summary = taxCodeMap.get(otherCode.code)!;
             summary.receipts.push(receipt);
@@ -117,26 +164,27 @@ export default function TaxCodesPage() {
             );
           }
         } else {
-          const summary = taxCodeMap.get(taxCode.code)!;
-          summary.receipts.push(receipt);
-          const total = receipt.total_cents || 0;
-          const tax = taxMap.get(receipt.id) || 0;
-          summary.total_cents += total;
-          summary.tax_cents += tax;
-          summary.deductible_cents += Math.round(
-            (total - tax) * (taxCode.deductible_percent / 100)
-          );
+          const summary = taxCodeMap.get(taxCode.code);
+          if (summary) {
+            summary.receipts.push(receipt);
+            const total = receipt.total_cents || 0;
+            const tax = taxMap.get(receipt.id) || 0;
+            summary.total_cents += total;
+            summary.tax_cents += tax;
+            summary.deductible_cents += Math.round(
+              (total - tax) * (taxCode.deductible_percent / 100)
+            );
+          }
         }
       });
 
       const summaryArray = Array.from(taxCodeMap.values())
         .filter(s => s.receipts.length > 0)
         .sort((a, b) => b.deductible_cents - a.deductible_cents);
-      
+
       setSummaries(summaryArray);
     } catch (err: any) {
       console.error("Failed to load tax codes:", err);
-      alert(err.message);
     } finally {
       setLoading(false);
     }
@@ -146,36 +194,11 @@ export default function TaxCodesPage() {
   const totalAmount = summaries.reduce((sum, s) => sum + s.total_cents, 0);
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
 
-  // Group by category for breakdown
-  const categoryBreakdown: CategoryBreakdown[] = summaries.flatMap(summary => 
-    summary.taxCode.categories.map(category => {
-      const categoryReceipts = summary.receipts.filter(r => 
-        (r.approved_category || r.suggested_category) === category
-      );
-      
-      const categoryTotal = categoryReceipts.reduce((sum, r) => sum + (r.total_cents || 0), 0);
-      const categoryTax = categoryReceipts.reduce((sum, r) => {
-        // Get tax for this receipt from summary
-        const receiptTax = (summary.tax_cents / summary.receipts.length); // Approximate
-        return sum + receiptTax;
-      }, 0);
-      
-      return {
-        category,
-        total_cents: categoryTotal,
-        tax_cents: categoryTax,
-        deductible_cents: Math.round((categoryTotal - categoryTax) * (summary.taxCode.deductible_percent / 100)),
-        deductible_percent: summary.taxCode.deductible_percent,
-        receipt_count: categoryReceipts.length,
-        receipts: categoryReceipts,
-      };
-    })
-  ).filter(cb => cb.receipt_count > 0)
-    .sort((a, b) => b.deductible_cents - a.deductible_cents);
+  function exportSummary() {
+    const formName = activeForm;
+    let csv = `${formName} Tax Summary\n`;
+    csv += "Tax Code,Line Number,Description,Amount,Deductible Amount\n";
 
-  function exportT2125() {
-    let csv = "CRA Tax Code,Line Number,Description,Amount,Deductible Amount\n";
-    
     summaries.forEach(s => {
       csv += `${s.taxCode.code},${s.taxCode.line},"${s.taxCode.name}",${(s.total_cents / 100).toFixed(2)},${(s.deductible_cents / 100).toFixed(2)}\n`;
     });
@@ -184,7 +207,7 @@ export default function TaxCodesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `T2125-tax-summary-${Date.now()}.csv`;
+    a.download = `${formName}-tax-summary-${Date.now()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -194,11 +217,19 @@ export default function TaxCodesPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">CRA Tax Codes (T2125)</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">Expenses grouped by Canada Revenue Agency tax codes</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">CRA Tax Codes</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Expenses grouped by Canada Revenue Agency tax form lines
+              {clientName && (
+                <span className="ml-2 text-accent-600 dark:text-accent-400 font-medium">
+                  — {clientName}
+                </span>
+              )}
+            </p>
           </div>
           <Link
             href="/dashboard/receipts"
@@ -208,58 +239,81 @@ export default function TaxCodesPage() {
           </Link>
         </div>
 
-        {/* Date Range Filter */}
-        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-4 mb-6 flex items-center justify-between border border-transparent dark:border-dark-border">
-          <div className="flex gap-2">
+        {/* Income type note */}
+        {incomeType && (
+          <div className="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              📋 Client income type: <strong className="capitalize">{incomeType.replace(/_/g, " ")}</strong> — showing applicable tax forms below
+            </p>
+          </div>
+        )}
+
+        {!selectedClientId && (
+          <div className="mb-6 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-sm text-yellow-800 dark:text-yellow-300">
+              ⚠️ No client selected — select a client from the dashboard to see their applicable tax forms. Showing T2125 by default.
+            </p>
+          </div>
+        )}
+
+        {/* Form Tabs */}
+        {availableForms.length > 1 && (
+          <div className="flex gap-2 mb-6 flex-wrap">
+            {availableForms.map(form => (
+              <button
+                key={form}
+                onClick={() => setActiveForm(form)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeForm === form
+                    ? "bg-accent-500 text-white"
+                    : "bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover"
+                }`}
+              >
+                {form}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Active form label */}
+        <div className="mb-6 p-4 bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900 dark:text-white text-lg">
+                {getFormLabel(activeForm)}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                {activeForm === "T2125" && "Statement of Business or Professional Activities"}
+                {activeForm === "T776" && "Statement of Real Estate Rentals"}
+                {activeForm === "T2200" && "Declaration of Conditions of Employment — signed by employer required"}
+                {activeForm === "T1" && "Personal Income Tax Return"}
+              </p>
+            </div>
             <button
-              onClick={() => setDateRange("month")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "month"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
+              onClick={exportSummary}
+              disabled={summaries.length === 0}
+              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
-              This Month
-            </button>
-            <button
-              onClick={() => setDateRange("quarter")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "quarter"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              This Quarter
-            </button>
-            <button
-              onClick={() => setDateRange("year")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "year"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              This Year
-            </button>
-            <button
-              onClick={() => setDateRange("all")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                dateRange === "all"
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
-              }`}
-            >
-              All Time
+              📥 Export {activeForm} CSV
             </button>
           </div>
+        </div>
 
-          <button
-            onClick={exportT2125}
-            className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
-            disabled={summaries.length === 0}
-          >
-            📥 Export T2125 Summary
-          </button>
+        {/* Date Range Filter */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(["month", "quarter", "year", "all"] as const).map(range => (
+            <button
+              key={range}
+              onClick={() => setDateRange(range)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                dateRange === range
+                  ? "bg-accent-500 text-white"
+                  : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
+              }`}
+            >
+              {range === "month" ? "This Month" : range === "quarter" ? "This Quarter" : range === "year" ? "This Year" : "All Time"}
+            </button>
+          ))}
         </div>
 
         {/* Summary Cards */}
@@ -281,95 +335,11 @@ export default function TaxCodesPage() {
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
               ${(totalTax / 100).toFixed(2)}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Input Tax Credits
-            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Input Tax Credits</div>
           </div>
         </div>
 
-        {/* Deduction Breakdown Section */}
-        {!loading && categoryBreakdown.length > 0 && (
-          <div className="mb-8 bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden">
-            <button
-              onClick={() => setBreakdownOpen(!breakdownOpen)}
-              className="w-full p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
-            >
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                📊 Deduction Breakdown by Category
-              </h2>
-              <span className="text-2xl text-gray-400 dark:text-gray-500">
-                {breakdownOpen ? '▼' : '▶'}
-              </span>
-            </button>
-
-            {breakdownOpen && (
-              <div className="border-t border-gray-200 dark:border-dark-border">
-                {categoryBreakdown.map((breakdown) => (
-                  <div key={breakdown.category} className="border-b border-gray-200 dark:border-dark-border last:border-b-0">
-                    <button
-                      onClick={() => setSelectedBreakdown(
-                        selectedBreakdown === breakdown.category ? null : breakdown.category
-                      )}
-                      className="w-full p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors text-left"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-1">
-                            <h3 className="font-semibold text-gray-900 dark:text-white">
-                              {breakdown.category}
-                            </h3>
-                            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs font-medium rounded">
-                              {breakdown.deductible_percent}% deductible
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Expenses: ${(breakdown.total_cents / 100).toFixed(2)} → Deductible: ${(breakdown.deductible_cents / 100).toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="text-right ml-4">
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {breakdown.receipt_count} receipt{breakdown.receipt_count !== 1 ? 's' : ''}
-                          </div>
-                          <span className="text-xs text-accent-600 dark:text-accent-400">
-                            {selectedBreakdown === breakdown.category ? 'Hide' : 'View'} receipts →
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-
-                    {selectedBreakdown === breakdown.category && (
-                      <div className="px-4 pb-4 bg-gray-50 dark:bg-dark-bg">
-                        <div className="space-y-2">
-                          {breakdown.receipts.map(receipt => (
-                            <Link
-                              key={receipt.id}
-                              href={`/dashboard/receipts/${receipt.id}`}
-                              className="block p-3 rounded-lg bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 transition-all"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {receipt.vendor || "Unknown"}
-                                </span>
-                                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                                  ${((receipt.total_cents || 0) / 100).toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                {receipt.receipt_date || "No date"}
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Loading State */}
+        {/* Tax Code Lines */}
         {loading ? (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">Loading tax codes...</p>
@@ -387,7 +357,7 @@ export default function TaxCodesPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <span className="text-lg font-bold text-gray-900 dark:text-white">
                         {summary.taxCode.line}
                       </span>
@@ -405,12 +375,14 @@ export default function TaxCodesPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                       {summary.taxCode.description}
                     </p>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Categories: {summary.taxCode.categories.join(", ") || "Other"}
-                    </div>
+                    {summary.taxCode.categories.length > 0 && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Categories: {summary.taxCode.categories.join(", ")}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right ml-6">
                     <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -425,7 +397,6 @@ export default function TaxCodesPage() {
                   </div>
                 </div>
 
-                {/* Receipt List */}
                 <details className="mt-4">
                   <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-900 dark:hover:text-gray-200">
                     View receipts ({summary.receipts.length})

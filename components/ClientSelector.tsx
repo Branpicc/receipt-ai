@@ -64,24 +64,38 @@ function ClientCard({
   );
 }
 
-export default function ClientSelector() {
+export default function ClientSelector({ accountantFilter }: { accountantFilter?: string | null }) {
   const { selectedClient, setSelectedClient, clients, loadingClients, isFiltered } = useClientContext();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Filter clients by selected accountant if provided
+  const filteredClients = accountantFilter
+    ? clients.filter(c => c.assigned_accountant_id === accountantFilter)
+    : clients;
 
   if (loadingClients) {
-    return (
+        return (
       <div className="mb-6 p-4 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border">
         <p className="text-sm text-gray-500 dark:text-gray-400">Loading clients...</p>
       </div>
     );
   }
 
-  if (clients.length === 0) return null;
+if (filteredClients.length === 0) {
+    if (accountantFilter) {
+      return (
+        <div className="mb-6 p-4 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border">
+          <p className="text-sm text-gray-500 dark:text-gray-400">No clients assigned to this accountant yet.</p>
+        </div>
+      );
+    }
+    return null;
+  }
 
-  const totalPendingTasks = clients.reduce((sum, c) => sum + c.flagged + c.uncategorized, 0);
-  const visibleClients = clients.slice(0, MAX_VISIBLE);
-  const overflowClients = clients.slice(MAX_VISIBLE);
-  const hasOverflow = overflowClients.length > 0;
+  const totalPendingTasks = filteredClients.reduce((sum, c) => sum + c.flagged + c.uncategorized, 0);
+  const visibleClients = filteredClients.slice(0, MAX_VISIBLE);
+  const overflowClients = filteredClients.slice(MAX_VISIBLE);
+    const hasOverflow = overflowClients.length > 0;
 
   function handleSelect(client: ClientOption) {
     setSelectedClient(selectedClient?.id === client.id ? null : client);

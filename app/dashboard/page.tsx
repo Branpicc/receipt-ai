@@ -45,7 +45,9 @@ export default function DashboardHomePage() {
   });
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
 
-  const { selectedClient, isFiltered } = useClientContext();
+const { selectedClient, isFiltered } = useClientContext();
+const [selectedAccountantId, setSelectedAccountantId] = useState<string | null>(null);
+const [accountants, setAccountants] = useState<{ id: string; display_name: string | null; auth_user_id: string }[]>([]);
 
   useEffect(() => {
     loadRole();
@@ -56,12 +58,29 @@ export default function DashboardHomePage() {
     if (userRole) loadStats(userRole);
   }, [selectedClient]);
 
-  async function loadRole() {
-    const role = await getUserRole();
-    setUserRole(role);
-    loadStats(role);
-    updateLastSeen();
+async function loadRole() {
+  const role = await getUserRole();
+  setUserRole(role);
+  loadStats(role);
+  updateLastSeen();
+  if (role === "firm_admin" || role === "owner") {
+    loadAccountants();
   }
+}
+
+async function loadAccountants() {
+  try {
+    const firmId = await getMyFirmId();
+    const { data } = await supabase
+      .from("firm_users")
+      .select("id, display_name, auth_user_id")
+      .eq("firm_id", firmId)
+      .eq("role", "accountant");
+    setAccountants(data || []);
+  } catch (err) {
+    console.error("Failed to load accountants:", err);
+  }
+}
 
   async function updateLastSeen() {
     try {
@@ -272,8 +291,39 @@ if (userRole === 'client') {
         )}
       </div>
 
-      {/* Client Selector — accountants and firm admins only */}
-      {(isFirmAdmin || isAccountant) && <ClientSelector />}
+{/* Accountant Selector — firm admins only */}
+{isFirmAdmin && accountants.length > 0 && (
+  <div className="mb-4 flex items-center gap-3">
+    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+      👤 Accountant:
+    </label>
+    <select
+      value={selectedAccountantId || ""}
+      onChange={(e) => setSelectedAccountantId(e.target.value || null)}
+      className="px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+    >
+      <option value="">All Accountants</option>
+      {accountants.map(acc => (
+        <option key={acc.id} value={acc.id}>
+          {acc.display_name || acc.auth_user_id}
+        </option>
+      ))}
+    </select>
+    {selectedAccountantId && (
+      <button
+        onClick={() => setSelectedAccountantId(null)}
+        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
+      >
+        Clear
+      </button>
+    )}
+  </div>
+)}
+
+{/* Client Selector — accountants and firm admins only */}
+{(isFirmAdmin || isAccountant) && (
+  <ClientSelector accountantFilter={selectedAccountantId} />
+)}
 
       {/* Firm Admin Comprehensive Overview */}
       {isFirmAdmin ? (
