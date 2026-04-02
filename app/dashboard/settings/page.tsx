@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import LogoutButton from "@/components/LogoutButton";
 import { restartOnboarding } from "@/lib/useOnboarding";
 import ClientCardManager from "@/components/ClientCardManager";
+import TrainingModules from "@/components/TrainingModules";
 
 type UserInfo = {
   email: string;
@@ -22,7 +23,7 @@ type UserPreferences = {
   weeklyDigest: boolean;
 };
 
-type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "advanced";
+type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "advanced" | "training";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -448,6 +449,7 @@ setBillingInfo({
     ...(isClient ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
     { id: "security" as Tab, label: "Security", icon: "🔒" },
     { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
+    { id: "training" as Tab, label: "Training", icon: "🎓" },
   ];
 
   const planNames: Record<string, string> = {
@@ -990,7 +992,7 @@ if (eligibility.eligible) {
                   placeholder="Confirm new password"
                   className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
                 />
-              </div>
+</div>
 
               <button
                 onClick={changePassword}
@@ -1001,7 +1003,7 @@ if (eligibility.eligible) {
               </button>
 
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Password must be at least 8 characters long
+                                Password must be at least 8 characters long
               </p>
             </div>
           </div>
@@ -1067,6 +1069,14 @@ if (eligibility.eligible) {
             <LogoutButton className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" />
           </div>
         </div>
+      )}
+
+      {/* Training Tab */}
+      {activeTab === "training" && (
+        <TrainingModules
+          userRole={user.role}
+          isPlanEnterprise={billingInfo?.plan === "enterprise"}
+        />
       )}
     </div>
   </div>
