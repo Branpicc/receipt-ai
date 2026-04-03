@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import Link from "next/link";
+import { useClientContext } from "@/lib/ClientContext";
 
 type EmailReceipt = {
   id: string;
@@ -27,11 +28,12 @@ export default function EmailInboxPage() {
   const [emailReceipts, setEmailReceipts] = useState<EmailReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [emailAddress, setEmailAddress] = useState("");
+  const { selectedClient, isFiltered } = useClientContext();
 
-  useEffect(() => {
+useEffect(() => {
     loadEmailReceipts();
     loadEmailAddress();
-  }, [activeTab]);
+  }, [activeTab, selectedClient]);
 
   async function loadEmailAddress() {
     try {
@@ -55,12 +57,18 @@ export default function EmailInboxPage() {
       setLoading(true);
       const firmId = await getMyFirmId();
 
-      const { data, error } = await supabase
+let emailQuery = supabase
         .from("email_receipts")
         .select("*")
         .eq("firm_id", firmId)
         .eq("status", activeTab)
         .order("received_at", { ascending: false });
+
+      if (isFiltered && selectedClient) {
+        emailQuery = emailQuery.eq("client_id", selectedClient.id);
+      }
+
+      const { data, error } = await emailQuery;
 
       if (error) throw error;
 
@@ -258,6 +266,18 @@ export default function EmailInboxPage() {
       <p className="text-gray-600 dark:text-gray-400 mb-6">
         Review receipts received via email
       </p>
+      
+{/* Client filter banner */}
+      {isFiltered && selectedClient && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-700 rounded-lg">
+          <span className="text-sm text-accent-700 dark:text-accent-300 font-medium">
+            📁 Showing emails for: <strong>{selectedClient.name}</strong>
+          </span>
+          <span className="text-xs text-accent-500 dark:text-accent-400">
+            — To see all clients, clear the filter on the dashboard
+          </span>
+        </div>
+      )}
 
       {/* Email Address Display */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">

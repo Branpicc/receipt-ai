@@ -407,11 +407,40 @@ async function resolveFlag(flagId: string, note: string) {
     load();
   }, [receiptId]);
 
-  const isFirmAdmin = userRole === "firm_admin";
+const isFirmAdmin = userRole === "firm_admin";
   const canEdit = userRole === "accountant" || userRole === "owner" || userRole === "client";
+
+  function exportReceiptCSV() {
+    if (!receipt) return;
+    const taxTotal = taxes.reduce((sum, t) => sum + (t.amount_cents ?? 0), 0);
+    const subtotal = (receipt.total_cents ?? 0) - taxTotal;
+    const rows = [
+      ["Field", "Value"],
+      ["Date", receipt.receipt_date || ""],
+      ["Vendor", receipt.vendor || ""],
+      ["Description", receipt.purpose_text || ""],
+      ["Account", receipt.approved_category || receipt.suggested_category || "Uncategorized"],
+      ["Amount", ((receipt.total_cents ?? 0) / 100).toFixed(2)],
+      ["Tax Amount", (taxTotal / 100).toFixed(2)],
+      ["Subtotal", (subtotal / 100).toFixed(2)],
+      ["Payment Method", receipt.payment_method || ""],
+      ["Card", receipt.card_brand ? `${receipt.card_brand} ****${receipt.card_last_four}` : ""],
+      ["Status", receipt.status || ""],
+      ["Receipt ID", receipt.id],
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Receipt-${receipt.vendor?.replace(/\s+/g, "-")}-${receipt.receipt_date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     if (!receipt?.purpose_text) return;
+        if (!receipt?.purpose_text) return;
     const pdfMatch = receipt.purpose_text.match(/\[(?:Split documentation|Documentation): ([^\]]+)\]/);
     if (pdfMatch && pdfMatch[1]) {
       const pdfPath = pdfMatch[1];
@@ -460,10 +489,18 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
               )}
             </div>
           </div>
-          <div className="text-xs text-gray-400 dark:text-gray-500">
-            Created: {new Date(receipt.created_at).toLocaleString()}
+<div className="flex items-center gap-3">
+            <div className="text-xs text-gray-400 dark:text-gray-500">
+              Created: {new Date(receipt.created_at).toLocaleString()}
+            </div>
+            <button
+              onClick={exportReceiptCSV}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              📥 Export CSV
+            </button>
           </div>
-        </div>
+                  </div>
 
         {flags.filter(f => !f.resolved_at).length > 0 && (
           <div className="mt-4 space-y-2">

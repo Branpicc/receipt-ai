@@ -6,6 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useClientContext } from "@/lib/ClientContext";
 
 type Flag = {
   id: string;
@@ -38,16 +39,17 @@ export default function FlagsPage() {
   const [statusFilter, setStatusFilter] = useState<FilterType>("unresolved");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [flagTypeFilter, setFlagTypeFilter] = useState<FlagTypeFilter>("all");
+  const { selectedClient, isFiltered } = useClientContext();
 
   useEffect(() => {
     checkAccess();
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (userRole) {
       loadFlags();
     }
-  }, [statusFilter, severityFilter, flagTypeFilter, userRole]);
+  }, [statusFilter, severityFilter, flagTypeFilter, userRole, selectedClient]);
 
   async function checkAccess() {
     const role = await getUserRole();
@@ -86,8 +88,25 @@ export default function FlagsPage() {
           )
         `)
         .eq("firm_id", firmId)
-        .order("created_at", { ascending: false });
+        // Filter by selected client if one is chosen
+query = query.order("created_at", { ascending: false });
 
+      if (isFiltered && selectedClient) {
+        const { data: clientReceiptIds } = await supabase
+          .from("receipts")
+          .select("id")
+          .eq("firm_id", firmId)
+          .eq("client_id", selectedClient.id);
+        const ids = clientReceiptIds?.map(r => r.id) || [];
+        if (ids.length > 0) {
+          query = query.in("receipt_id", ids);
+        } else {
+          setFlags([]);
+          setLoading(false);
+          return;
+        }
+      }
+      
       // Status filter
       if (statusFilter === "unresolved") {
         query = query.is("resolved_at", null);
@@ -220,6 +239,18 @@ setFlags(transformedFlags as Flag[]);
             Review and resolve receipt issues across your firm
           </p>
         </div>
+
+        {/* Client filter banner */}
+        {isFiltered && selectedClient && (
+          <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-700 rounded-lg">
+            <span className="text-sm text-accent-700 dark:text-accent-300 font-medium">
+              📁 Showing flags for: <strong>{selectedClient.name}</strong>
+            </span>
+            <span className="text-xs text-accent-500 dark:text-accent-400">
+              — To see all clients, clear the filter on the dashboard
+            </span>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

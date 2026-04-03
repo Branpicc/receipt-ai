@@ -194,26 +194,40 @@ export default function TaxCodesPage() {
   const totalAmount = summaries.reduce((sum, s) => sum + s.total_cents, 0);
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
 
-  function exportSummary() {
+function exportSummary() {
     const formName = activeForm;
-    let csv = `${formName} Tax Summary\n`;
-    csv += "Tax Code,Line Number,Description,Amount,Deductible Amount\n";
+    const headers = ["Date", "Description", "Account", "Debit", "Tax Amount", "Memo", "Name"];
+    const rows: string[][] = [];
 
     summaries.forEach(s => {
-      csv += `${s.taxCode.code},${s.taxCode.line},"${s.taxCode.name}",${(s.total_cents / 100).toFixed(2)},${(s.deductible_cents / 100).toFixed(2)}\n`;
+      s.receipts.forEach(r => {
+        rows.push([
+          r.receipt_date || "",
+          s.taxCode.name,
+          s.taxCode.name,
+          ((r.total_cents || 0) / 100).toFixed(2),
+          "",
+          r.vendor || "",
+          r.vendor || "",
+        ]);
+      });
     });
+
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${formName}-tax-summary-${Date.now()}.csv`;
+    a.download = `${formName}-QuickBooks-${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
-
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">

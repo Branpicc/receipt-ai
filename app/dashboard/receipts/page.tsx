@@ -310,6 +310,28 @@ function ReceiptsPageContent() {
     setDateFilter("any");
   }
 
+function exportQuickBooksCSV() {
+    if (receipts.length === 0) { alert("No receipts to export."); return; }
+    const headers = ["Date", "Description", "Account", "Amount", "Tax Amount", "Memo", "Vendor"];
+    const rows = receipts.map(r => [
+      r.receipt_date || "",
+      r.approved_category || r.suggested_category || "Uncategorized",
+      r.approved_category || r.suggested_category || "Uncategorized",
+      ((r.total_cents || 0) / 100).toFixed(2),
+      "",
+      r.vendor || "",
+      r.vendor || "",
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `QuickBooks-Receipts-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handleDateFilterChange(value: DateFilter) {
     setDateFilter(value);
     setShowCustomRange(value === "custom");
@@ -515,13 +537,22 @@ function ReceiptsPageContent() {
                 : `${folders.length} folder${folders.length !== 1 ? "s" : ""}`}
             </p>
           </div>
-          <Link
-            href="/dashboard"
-            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
-          >
-            ← Back to Dashboard
-          </Link>
-        </div>
+<div className="flex items-center gap-3">
+            <button
+              onClick={exportQuickBooksCSV}
+              disabled={receipts.length === 0}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              📥 Export QuickBooks CSV
+            </button>
+            <Link
+              href="/dashboard"
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
+            >
+              ← Back to Dashboard
+            </Link>
+          </div>
+                  </div>
 
         {/* Client filter banner */}
         {isFiltered && selectedClient && (
