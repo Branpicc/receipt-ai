@@ -93,14 +93,13 @@ export async function extractReceiptData(
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
-/** Remove spaces within a number like "21. 44" -> "21.44" */
 function cleanNumber(str: string): string {
   return str.replace(/(\d+)\s*\.\s*(\d+)/, "$1.$2").replace(/,/g, "");
 }
 
-/** Parse a dollar amount string to cents */
 function parseCents(str: string): number | null {
-  const cleaned = cleanNumber(str.replace(/[$CAD\s]/g, ""));
+  // Handle CDN$, CA$, CAD$, C$
+  const cleaned = cleanNumber(str.replace(/[$\s]|CAD|CDN|CA\b|C\b/gi, ""));
   const num = parseFloat(cleaned);
   if (isNaN(num) || num <= 0 || num > 100000) return null;
   return Math.round(num * 100);
@@ -110,25 +109,31 @@ function parseCents(str: string): number | null {
 
 const KNOWN_VENDORS = [
   "FORTINOS", "SHOPPERS DRUG MART", "SHOPPERS", "HARVEY'S", "HARVEYS",
-  "TIM HORTONS", "STARBUCKS", "MCDONALDS", "SUBWAY", "WALMART", "COSTCO",
-  "CANADIAN TIRE", "STAPLES", "HOME DEPOT", "BEST BUY", "AMAZON",
-  "SHELL", "ESSO", "PETRO-CANADA", "PETRO CANADA", "CHEVRON",
+  "TIM HORTONS", "TIM HORTON", "STARBUCKS", "MCDONALDS", "MCDONALD'S",
+  "SUBWAY", "WALMART", "COSTCO", "CANADIAN TIRE", "STAPLES",
+  "HOME DEPOT", "BEST BUY", "AMAZON", "SHELL", "ESSO",
+  "PETRO-CANADA", "PETRO CANADA", "HUSKY", "CHEVRON",
   "ROGERS", "BELL", "TELUS", "LOBLAWS", "SOBEYS", "METRO",
   "NO FRILLS", "FOOD BASICS", "FRESHCO", "DOLLARAMA", "RONA",
   "LCBO", "THE BEER STORE", "SECOND CUP", "A&W", "BURGER KING",
   "PIZZA PIZZA", "DOMINOS", "KFC", "POPEYES", "WENDY'S",
+  "NINTENDO", "META", "FACEBOOK", "GOOGLE", "MICROSOFT", "APPLE",
+  "NETFLIX", "SPOTIFY", "ADOBE", "DROPBOX", "ZOOM", "SLACK",
 ];
 
 function extractVendor(lines: string[]): string | null {
   const nonEmpty = lines.filter(l => l.trim().length > 2);
 
-  // Check first 5 lines for known vendors
-  for (let i = 0; i < Math.min(5, nonEmpty.length); i++) {
+  // Check first 6 lines for known vendors
+  for (let i = 0; i < Math.min(6, nonEmpty.length); i++) {
     const upper = nonEmpty[i].toUpperCase();
     for (const vendor of KNOWN_VENDORS) {
       if (upper.includes(vendor)) {
-        return vendor === "HARVEY'S" ? "HARVEY'S" :
-          vendor.split(" ").map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
+        if (vendor === "HARVEY'S" || vendor === "HARVEYS") return "HARVEY'S";
+        if (vendor === "TIM HORTON" || vendor === "TIM HORTONS") return "Tim Hortons";
+        if (vendor === "PETRO-CANADA" || vendor === "PETRO CANADA") return "Petro-Canada";
+        if (vendor === "SHOPPERS DRUG MART" || vendor === "SHOPPERS") return "Shoppers Drug Mart";
+        return vendor.split(" ").map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(" ");
       }
     }
   }
@@ -141,9 +146,10 @@ function extractVendor(lines: string[]): string | null {
     /^\d{4}[-/]\d{2}[-/]\d{2}/,
     /^[*=\-_]{3,}/,
     /receipt|invoice|tax|hst|gst|total|subtotal/i,
+    /^(take\s+out|drive\s+thru|dine\s+in|order\s*#)/i,
   ];
 
-  for (let i = 0; i < Math.min(5, nonEmpty.length); i++) {
+  for (let i = 0; i < Math.min(6, nonEmpty.length); i++) {
     const line = nonEmpty[i].trim();
     if (skipPatterns.some(p => p.test(line))) continue;
     if (line.length >= 3 && line.length <= 50 && /[a-zA-Z]/.test(line)) {
@@ -165,7 +171,27 @@ function extractDate(lines: string[]): string | null {
   };
 
   for (const line of lines) {
-    // Named month: "Apr 03, 2026" or "Apr03'26" or "Apr04'26 04:11P"
+    // "DATE: 2021-05-08" or "Transaction Date: 02/23/2026"
+    const labeledDate = line.match(/(?:date|placed\s+on)[:\s]+(.+)/i);
+    if (labeledDate) {
+      const datePart = labeledDate[1].trim();
+      // Try to parse the date part
+      const isoInLabel = datePart.match(/(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})/);
+      if (isoInLabel) {
+        return `${isoInLabel[1]}-${isoInLabel[2].padStart(2, "0")}-${isoInLabel[3].padStart(2, "0")}`;
+      }
+      const numInLabel = datePart.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
+      if (numInLabel) {
+        return `${numInLabel[3]}-${numInLabel[2].padStart(2, "0")}-${numInLabel[1].padStart(2, "0")}`;
+      }
+      const namedInLabel = datePart.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})/i);
+      if (namedInLabel) {
+        const month = monthMap[namedInLabel[1].toLowerCase().slice(0, 3)];
+        return `${namedInLabel[3]}-${month}-${namedInLabel[2].padStart(2, "0")}`;
+      }
+    }
+
+    // Named month: "Apr 03, 2026" or "March 12, 2026" or "Apr04'26"
     const namedMatch = line.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s']*(\d{1,2})[,\s']*(\d{2,4})/i);
     if (namedMatch) {
       const month = monthMap[namedMatch[1].toLowerCase().slice(0, 3)];
@@ -175,7 +201,13 @@ function extractDate(lines: string[]): string | null {
       return `${year}-${month}-${day}`;
     }
 
-    // YY/MM/DD (Fortinos: "26/04/03", Shoppers: "26/04/03")
+    // YYYY-MM-DD or YYYY/MM/DD (Petro-Canada: "2021-05-08")
+    const isoMatch = line.match(/\b(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})\b/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
+    }
+
+    // YY/MM/DD (Fortinos/Shoppers: "26/04/03")
     const yymmdd = line.match(/\b(\d{2})[/](\d{2})[/](\d{2})\b/);
     if (yymmdd) {
       const year = "20" + yymmdd[1];
@@ -186,20 +218,14 @@ function extractDate(lines: string[]): string | null {
       }
     }
 
-    // DD/MM/YYYY
-    const numMatch = line.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b/);
-    if (numMatch) {
-      const month = numMatch[2].padStart(2, "0");
-      const day = numMatch[1].padStart(2, "0");
+    // MM/DD/YYYY (Nintendo: "02/23/2026")
+    const usDate = line.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b/);
+    if (usDate) {
+      const month = usDate[1].padStart(2, "0");
+      const day = usDate[2].padStart(2, "0");
       if (parseInt(month) <= 12 && parseInt(day) <= 31) {
-        return `${numMatch[3]}-${month}-${day}`;
+        return `${usDate[3]}-${month}-${day}`;
       }
-    }
-
-    // YYYY-MM-DD
-    const isoMatch = line.match(/\b(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})\b/);
-    if (isoMatch) {
-      return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
     }
   }
 
@@ -212,48 +238,60 @@ function extractTotal(lines: string[]): number | null {
   let bestTotal: number | null = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/subtotal/i.test(line)) continue;
+    const line = lines[i].trim();
+    if (/subtotal|sub total|sub-total|before\s+tax|item\s+subtotal/i.test(line)) continue;
 
-    // "TOTAL   21. 44" or "TOTAL: $21.44" — same line with possible spaces in number
-    if (/^total/i.test(line)) {
-      // Extract all number-like sequences from the line
+    // "Grand Total:   $9.23" or "Grand Total: CDN$ 11.29"
+    if (/grand\s+total/i.test(line)) {
       const nums = line.match(/[\d]+\s*\.?\s*[\d]*/g);
       if (nums) {
         for (const n of nums) {
           const cents = parseCents(n);
-          if (cents && cents > 100 && (!bestTotal || cents > bestTotal)) {
-            bestTotal = cents;
-          }
+          if (cents && cents > 50 && (!bestTotal || cents > bestTotal)) bestTotal = cents;
         }
       }
-      // Also check next line
       if (!bestTotal && i + 1 < lines.length) {
         const cents = parseCents(lines[i + 1]);
-        if (cents && cents > 100) bestTotal = cents;
+        if (cents && cents > 50) bestTotal = cents;
       }
       if (bestTotal) break;
     }
 
-    // "CAD$ 21.44" or "CAD$21.44"
-    const cadMatch = line.match(/CAD\$?\s*([\d\s,.]+)/i);
-    if (cadMatch && !bestTotal) {
-      const cents = parseCents(cadMatch[1]);
-      if (cents && cents > 100) bestTotal = cents;
+    // "TOTAL   CAD $   59.43" or "TOTAL: $21.44" or "Total: $28.24"
+    if (/^total[:\s]/i.test(line) && !/subtotal/i.test(line)) {
+      const nums = line.match(/[\d]+\s*\.?\s*[\d]*/g);
+      if (nums) {
+        for (const n of nums) {
+          const cents = parseCents(n);
+          if (cents && cents > 50 && (!bestTotal || cents > bestTotal)) bestTotal = cents;
+        }
+      }
+      if (!bestTotal && i + 1 < lines.length) {
+        const cents = parseCents(lines[i + 1]);
+        if (cents && cents > 50) bestTotal = cents;
+      }
+      if (bestTotal) break;
     }
 
-    // "$30.83" alone on a line near TOTAL context
-    if (/^\$[\d,.]+$/.test(line.trim())) {
-      const cents = parseCents(line.trim());
-      if (cents && cents > 100 && !bestTotal) bestTotal = cents;
+    // "CA$6.78" or "CDN$ 11.29" or "CAD$ 59.43"
+    const cadMatch = line.match(/(?:CA|CDN|CAD)\$?\s*([\d\s,.]+)/i);
+    if (cadMatch && !bestTotal) {
+      const cents = parseCents(cadMatch[1]);
+      if (cents && cents > 50) bestTotal = cents;
+    }
+
+    // "$30.83" alone on a line
+    if (/^\$[\d,.]+$/.test(line)) {
+      const cents = parseCents(line);
+      if (cents && cents > 50 && !bestTotal) bestTotal = cents;
     }
   }
 
-  // Harvey's style: standalone amount in bottom half of receipt
+  // Harvey's/restaurant fallback: standalone amount in bottom half
   if (!bestTotal) {
     for (let i = Math.floor(lines.length * 0.5); i < lines.length; i++) {
       const line = lines[i].trim();
-      if (/subtotal|tax|hst|gst|rounded|survey|feedback|cash|change|optimum|points/i.test(line)) continue;
+      if (/subtotal|tax|hst|gst|rounded|survey|feedback|cash|change|optimum|points|tip|balance/i.test(line)) continue;
       const standalone = line.match(/^([\d]+\.\d{2})$/);
       if (standalone) {
         const cents = parseCents(standalone[1]);
@@ -273,37 +311,72 @@ function extractTax(lines: string[]): number | null {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
 
-    // H=HST 13%   7.98 @ 13.000%   1.04 — take last number on line
+    // H=HST 13%   7.98 @ 13.000%   1.04
     const hstAtRate = line.match(/(?:h=hst|hst|gst|pst)[^@]*@\s*[\d.]+%\s+([\d\s.]+)$/i);
     if (hstAtRate) {
       const cents = parseCents(hstAtRate[1]);
       if (cents && cents > 0 && cents < 10000) { taxAmounts.push(cents); continue; }
     }
 
-    // PPD FD1   10.99 @ 13.000%   1.43
+    // PPD FD1   10.99 @ 13.000%   1.43 (Fortinos food tax)
     const ppdMatch = line.match(/ppd\s+fd\d[^@]*@\s*[\d.]+%\s+([\d\s.]+)$/i);
     if (ppdMatch) {
       const cents = parseCents(ppdMatch[1]);
       if (cents && cents > 0 && cents < 10000) { taxAmounts.push(cents); continue; }
     }
 
-    // "HST :   3.18" or "HST:3.18" or "HST   3.18" — same line
-    const simpleTaxMatch = line.match(/^(?:hst|gst|pst|qst|tax)[:\s=]+\$?\s*([\d\s,.]+)$/i);
-    if (simpleTaxMatch) {
-      const cents = parseCents(simpleTaxMatch[1]);
+    // "FHST INCLUDED IN FUEL 2.63" or "PHST INCLUDED IN FUEL 4.21" (Petro-Canada)
+    const fuelTax = line.match(/^[FPB]HST\s+INCLUDED\s+IN\s+FUEL\s+([\d.]+)/i);
+    if (fuelTax) {
+      const cents = parseCents(fuelTax[1]);
+      if (cents && cents > 0 && cents < 10000) { taxAmounts.push(cents); continue; }
+    }
+
+    // "Tax Collected:   CDN$ 1.30" (Amazon)
+    const taxCollected = line.match(/tax\s+collected[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
+    if (taxCollected) {
+      const cents = parseCents(taxCollected[1]);
       if (cents && cents > 0 && cents < 10000) return cents;
     }
 
-    // "HST" alone on line, amount on next line
+    // "Tax   (13%) CA$0.78" (Meta)
+    const taxWithPercent = line.match(/^tax\s+\(\d+%\)\s+(?:ca\$?|cdn\$?|cad\$?)?\s*([\d,.]+)/i);
+    if (taxWithPercent) {
+      const cents = parseCents(taxWithPercent[1]);
+      if (cents && cents > 0 && cents < 10000) return cents;
+    }
+
+    // "Total Tax:   $1.06" (Tim Hortons)
+    const totalTax = line.match(/total\s+tax[:\s]+\$?\s*([\d,.]+)/i);
+    if (totalTax) {
+      const cents = parseCents(totalTax[1]);
+      if (cents && cents > 0 && cents < 10000) return cents;
+    }
+
+    // "HST1:   $0.65" or "HST:   $0.41" (Tim Hortons multiple HST lines)
+    const hstNumbered = line.match(/^hst\d*[:\s]+\$?\s*([\d,.]+)$/i);
+    if (hstNumbered) {
+      const cents = parseCents(hstNumbered[1]);
+      if (cents && cents > 0 && cents < 10000) { taxAmounts.push(cents); continue; }
+    }
+
+    // "HST :   3.18" or "HST:3.18" or "HST   3.18"
+    const simpleTax = line.match(/^(?:hst|gst|pst|qst|tax)[:\s=]+\$?\s*([\d\s,.]+)$/i);
+    if (simpleTax) {
+      const cents = parseCents(simpleTax[1]);
+      if (cents && cents > 0 && cents < 10000) return cents;
+    }
+
+    // "HST" alone on line, amount on next line (Harvey's)
     if (/^hst\s*$/i.test(line) && i + 1 < lines.length) {
       const cents = parseCents(lines[i + 1].trim());
       if (cents && cents > 0 && cents < 10000) return cents;
     }
 
-    // "HST" with amount elsewhere on line
-    const hstEndLine = line.match(/^(?:hst|gst|tax)\s+([\d,.]+)$/i);
-    if (hstEndLine) {
-      const cents = parseCents(hstEndLine[1]);
+    // "HST   4.29" with spaces
+    const hstSpaced = line.match(/^(?:hst|gst|tax)\s+([\d,.]+)$/i);
+    if (hstSpaced) {
+      const cents = parseCents(hstSpaced[1]);
       if (cents && cents > 0 && cents < 10000) return cents;
     }
   }
@@ -330,7 +403,7 @@ function parsePaymentInfo(lines: string[]): {
 
   const cardBrands = [
     { pattern: /\bvisa\b|\bvis\b/i, name: "Visa" },
-    { pattern: /\bmc\b|\bmastercard\b|\bmaster card\b/i, name: "Mastercard" },
+    { pattern: /\bmc\b|\bmastercard\b|\bmaster\s*card\b/i, name: "Mastercard" },
     { pattern: /\bamex\b|\bamerican express\b/i, name: "Amex" },
     { pattern: /\bdiscover\b/i, name: "Discover" },
     { pattern: /\binterac\b/i, name: "Interac" },
@@ -338,11 +411,11 @@ function parsePaymentInfo(lines: string[]): {
 
   const paymentMethods = [
     { pattern: /\bcash\b/i, name: "Cash" },
-    { pattern: /\bdebit\b/i, name: "Debit" },
+    { pattern: /\bdebit\b|\bchequing\b|\bchecking\b/i, name: "Debit" },
     { pattern: /\bcredit\b/i, name: "Credit" },
     { pattern: /\be-?transfer\b/i, name: "E-Transfer" },
     { pattern: /\bcheque\b|\bcheck\b/i, name: "Cheque" },
-    { pattern: /\bgift card\b/i, name: "Gift Card" },
+    { pattern: /\bgift\s*card\b/i, name: "Gift Card" },
     { pattern: /contactless/i, name: "Contactless" },
   ];
 
@@ -354,12 +427,14 @@ function parsePaymentInfo(lines: string[]): {
   ];
 
   for (const line of lines) {
+    // Various last-four formats including "MasterCard ···· 2054" (Nintendo/Meta)
     const lastFourMatch =
-      line.match(/[*xX]{2,}\s*(\d{4})\s*[P\s]?$/i) ||
-      line.match(/[*xX]{4,}(\d{4})/i) ||
-      line.match(/card\s+number[:\s]+[*xX]+(\d{4})/i) ||
+      line.match(/[*·xX]{2,}\s*(\d{4})\s*[P\s]?$/i) ||
+      line.match(/[*·xX]{4,}(\d{4})/i) ||
+      line.match(/card\s+(?:number|#)[:\s]+[*·xX\s]+(\d{4})/i) ||
       line.match(/\b(?:VIS|MC|AMX|AMEX|DISC)[:\s]+(\d{4})\b/i) ||
-      line.match(/ending\s+(?:in\s+)?(\d{4})/i);
+      line.match(/ending\s+(?:in\s+)?(\d{4})/i) ||
+      line.match(/[·.]{4}\s*(\d{4})$/);
 
     if (lastFourMatch && !card_last_four) card_last_four = lastFourMatch[1];
 
@@ -386,32 +461,36 @@ function parsePaymentInfo(lines: string[]): {
 // ── LINE ITEM SKIP RULES ──────────────────────────────────────────────────────
 
 const GLOBAL_SKIP_PATTERNS = [
-  /^(subtotal|sub total|sub-total)/i,
-  /^(total|order total|amount due|balance due)/i,
-  /^(hst|gst|pst|qst|tax|h=hst|ppd\s+fd)/i,
+  /^(subtotal|sub\s*total|sub-total|item\s+subtotal|total\s+before\s+tax)/i,
+  /^(total|grand\s+total|order\s+total|amount\s+due|balance\s+due)/i,
+  /^(hst|gst|pst|qst|tax|h=hst|ppd\s+fd|fhst|phst)/i,
   /^(cash|change|tender|payment|credit|debit|visa|mastercard|amex|interac)/i,
   /^(thank|visit|receipt|invoice|transaction|balance|approved|auth)/i,
   /^(register|cashier|clerk|store|phone|business\s+number)/i,
   /^(customer|retain|important|copy|records|expr|date.?time|reference)/i,
   /^(contactless|purchase|tip|gratuity|emv|terminal|application)/i,
-  /^(card\s+number|card\s+type|acct|account|trans|ref\.?\s*#)/i,
-/^(rounded|survey|certificate|contest|optimum|pc\s+financial|pc\s+optimum|you\s+could|earn|points\s+with)/i,
+  /^(card\s+number|card\s+type|acct|account|trans|ref\.?\s*#|systrace)/i,
+  /^(rounded|survey|certificate|contest|optimum|pc\s+financial|pc\s+optimum|you\s+could|earn|points\s+with|petro-?points|loyalty)/i,
   /^(www\.|http|tel:|fax:|\*{3,}|={3,}|-{5,})/i,
-  /^cad\$?$/i,
+  /^(fuel|pump\s+\d|regular|premium|diesel|litre|liter)/i,
+  /^(take\s+out|drive\s+thru|order\s*#|chk\s*\d|check\s+closed|check\s+open)/i,
+  /^(sold\s+by|transaction\s+id|transaction\s+date|remaining\s+balance|associated|billing\s+reason|product\s+type|payment\s+method|reference\s+number|date\s+range|amount\s+billed|campaign|results|impressions)/i,
+  /^cad\$?$|^cdn\$?$|^ca\$?$/i,
   /^\d{10,}$/,
-  /^[*=\-_]{3,}$/,
+  /^[*=\-_·]{3,}$/,
   /^\d+\s+items?\b/i,
-  // Shoppers price duplicate: "4.49 GP" or "6.99 S"
   /^\$?[\d,.]+\s+[A-Z]{1,2}$/,
-  // Fortinos category headers: "27-PRODUCE" or "36-HOME MEAL REPLACEMENT"
   /^\d{2}-[A-Z\s]+$/,
+  /^[LF]\s*\(L\)|^\(\$\/L\)/,
+  /^points\s+earned$/i,
+  /^toasted$|^butter$|^milk$/i,
 ];
 
 const TOPPING_KEYWORDS = [
   "pickle", "onion", "lettuce", "harvsauce", "hot sauce", "light harvsauce",
-  "mg bun", "bun", "ketchup", "mustard", "tomato", "bacon", "mushroom",
+  "mg bun", "ketchup", "mustard", "tomato", "bacon", "mushroom",
   "no ", "add ", "sub ", "w/ ", "w.o.", "rings -", "ftn pop",
-  "diet pepsi", "diet coke", "diet", "slushie", "frz lemon",
+  "diet pepsi", "diet coke", "frz lemon", "rg ftn", "lg slushie",
 ];
 
 function shouldSkipLine(line: string): boolean {
@@ -423,7 +502,7 @@ function shouldSkipLine(line: string): boolean {
   }
   const lower = trimmed.toLowerCase();
   for (const t of TOPPING_KEYWORDS) {
-    if (lower.startsWith(t)) return true;
+    if (lower.startsWith(t) || lower === t.trim()) return true;
   }
   return false;
 }
@@ -456,7 +535,7 @@ function extractLineItems(lines: string[], expectedSubtotal: number | null): Lin
       candidates.push(item);
     }
   }
-  
+
   if (expectedSubtotal && candidates.length > 0) {
     const sum = candidates.reduce((t, i) => t + i.total_cents, 0);
     const pctOff = Math.abs(sum - expectedSubtotal) / expectedSubtotal;
@@ -477,11 +556,10 @@ function extractLineItems(lines: string[], expectedSubtotal: number | null): Lin
   return candidates;
 }
 
-
 function parseLineItem(line: string): LineItem | null {
   let match: RegExpMatchArray | null;
 
-  // Shoppers style: "GATORADE DRINK   4.49 GP   4.49" — name, price, code, price
+  // Shoppers double price: "GATORADE DRINK   4.49 GP   4.49"
   const shoppersDouble = /^([A-Z][A-Z\s]{2,30}?)\s+([\d,.]+)\s+[A-Z]{1,2}\s+([\d,.]+)$/;
   match = line.match(shoppersDouble);
   if (match) {
@@ -492,7 +570,7 @@ function parseLineItem(line: string): LineItem | null {
     }
   }
 
-  // Shoppers also: "HYDROSILK RAZO   12.99 GP" — name, price, code (no second price)
+  // Shoppers single price: "HYDROSILK RAZO   12.99 GP"
   const shoppersSimple = /^([A-Z][A-Z\s]{2,30}?)\s+([\d,.]+)\s+[A-Z]{1,2}$/;
   match = line.match(shoppersSimple);
   if (match) {
@@ -503,9 +581,9 @@ function parseLineItem(line: string): LineItem | null {
     }
   }
 
-  //   // Harvey's style: "1 Apple Pie   1.89" or "1 Grill Ckn Cb   13.29"
-  const harveyStyle = /^(\d+)\s+(.{2,40}?)\s{2,}([\d\s,.]+)$/;
-  match = line.match(harveyStyle);
+  // Harvey's / Tim Hortons style: "1 Apple Pie   1.89" or "1 H Specialty Tea   $2.19"
+  const qtyDescPrice = /^(\d+)\s+(.{2,40}?)\s{2,}\$?([\d,.]+)$/;
+  match = line.match(qtyDescPrice);
   if (match) {
     const qty = parseInt(match[1]);
     const desc = match[2].trim();
@@ -515,18 +593,35 @@ function parseLineItem(line: string): LineItem | null {
     }
   }
 
-  // Shoppers style: "GATORADE DRINK   4.49 GP   4.49" — take first price, ignore suffix
-  const shoppersStyle = /^([A-Z][A-Z\s]+?)\s+([\d,.]+)\s+[A-Z]{1,2}\s+([\d,.]+)$/;
-  match = line.match(shoppersStyle);
+  // Tim Hortons flexible: "1 Bgl - Four Cheese   $3.29"
+  const timHortonsStyle = /^(\d)\s+(.{3,40}?)\s+\$?([\d,.]+)$/;
+  match = line.match(timHortonsStyle);
+  if (match) {
+    const qty = parseInt(match[1]);
+    const desc = match[2].trim();
+    const total = parseCents(match[3]);
+    if (total && qty > 0 && /[a-zA-Z]{2,}/.test(desc) && !shouldSkipLine(desc)) {
+      return { description: desc, quantity: qty, unit_price_cents: Math.round(total / qty), total_cents: total };
+    }
+  }
+
+  // Email receipt style: "Prime Membership Fee   CDN$ 9.99" or "Meta ads   CA$6.00"
+  const emailStyle = /^(.{3,60}?)\s+(?:CDN|CA|CAD)?\$?\s*([\d,.]+)$/i;
+  match = line.match(emailStyle);
   if (match) {
     const desc = match[1].trim();
     const price = parseCents(match[2]);
-    if (price && /[a-zA-Z]{2,}/.test(desc) && !shouldSkipLine(desc)) {
+    if (
+      price && price >= 25 && price < 100000 &&
+      /[a-zA-Z]{3,}/.test(desc) &&
+      !shouldSkipLine(desc) &&
+      !/^\d+$/.test(desc)
+    ) {
       return { description: desc, quantity: 1, unit_price_cents: price, total_cents: price };
     }
   }
 
-  // Generic with 2+ spaces separator: "DESCRIPTION   price"
+  // Generic 2+ spaces: "DESCRIPTION   price"
   const genericPattern = /^(.{2,50}?)\s{2,}\$?([\d\s,.]+)$/;
   match = line.match(genericPattern);
   if (match) {
@@ -542,7 +637,7 @@ function parseLineItem(line: string): LineItem | null {
     }
   }
 
-  // Simple end: "DESCRIPTION price" with single space
+  // Simple end: "DESCRIPTION price"
   const simpleEnd = /^(.{3,60}?)\s+\$?([\d,]+\.\d{2})$/;
   match = line.match(simpleEnd);
   if (match) {
@@ -564,17 +659,16 @@ function parseLineItem(line: string): LineItem | null {
 function parseMultiLineItem(line1: string, line2: string, line3?: string): LineItem | null {
   if (shouldSkipLine(line1)) return null;
 
-// Fortinos style: "(2)62911830001 GH GINGER 60ML HMRJ" + "2 @ $3.99   7.98"
+  // Fortinos: "(2)62911830001 GH GINGER 60ML HMRJ" + "2 @ $3.99   7.98"
   const fortinosQty = line2.match(/^(\d+)\s*@\s*\$?([\d\s,.]+)\s+([\d\s,.]+)$/);
   if (fortinosQty) {
     const qty = parseInt(fortinosQty[1]);
     const unit = parseCents(fortinosQty[2]);
     const total = parseCents(fortinosQty[3]);
-    // Strip barcode prefix: "(2)62911830001 " or just long number prefix
     const desc = line1
       .replace(/^\(\d+\)\d+\s+/, "")
       .replace(/^\d{8,}\s+/, "")
-      .replace(/\s+\d+MRJ\s*$/i, "")  // strip trailing codes like "1MRJ"
+      .replace(/\s+\d+MRJ\s*$/i, "")
       .replace(/\s+HMRJ\s*$/i, "")
       .trim();
     if (unit && total && qty > 0 && desc.length >= 2 && /[a-zA-Z]/.test(desc)) {
@@ -592,7 +686,7 @@ function parseMultiLineItem(line1: string, line2: string, line3?: string): LineI
       !shouldSkipLine(line1) &&
       line1.length >= 3 && line1.length <= 60
     ) {
-      const notProduct = /^(date|time|order|register|store|phone|address|thank|customer)/i;
+      const notProduct = /^(date|time|order|register|store|phone|address|thank|customer|fuel|pump)/i;
       if (notProduct.test(line1)) return null;
       return { description: line1.trim(), quantity: 1, unit_price_cents: price, total_cents: price };
     }
