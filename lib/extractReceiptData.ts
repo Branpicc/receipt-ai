@@ -249,6 +249,19 @@ function extractTotal(lines: string[]): number | null {
     }
   }
 
+  // Harvey's style: standalone amount in bottom half of receipt
+  if (!bestTotal) {
+    for (let i = Math.floor(lines.length * 0.5); i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (/subtotal|tax|hst|gst|rounded|survey|feedback|cash|change|optimum|points/i.test(line)) continue;
+      const standalone = line.match(/^([\d]+\.\d{2})$/);
+      if (standalone) {
+        const cents = parseCents(standalone[1]);
+        if (cents && cents > 500) { bestTotal = cents; break; }
+      }
+    }
+  }
+
   return bestTotal;
 }
 
@@ -256,37 +269,50 @@ function extractTotal(lines: string[]): number | null {
 
 function extractTax(lines: string[]): number | null {
   const taxAmounts: number[] = [];
-  let simpleTax: number | null = null;
 
-  for (const line of lines) {
-    // H=HST 13%   7.98 @ 13.000%   1.04 — take last number
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // H=HST 13%   7.98 @ 13.000%   1.04 — take last number on line
     const hstAtRate = line.match(/(?:h=hst|hst|gst|pst)[^@]*@\s*[\d.]+%\s+([\d\s.]+)$/i);
     if (hstAtRate) {
       const cents = parseCents(hstAtRate[1]);
       if (cents && cents > 0 && cents < 10000) { taxAmounts.push(cents); continue; }
     }
 
-    // PPD FD1   10.99 @ 13.000%   1.43 (Fortinos food tax)
+    // PPD FD1   10.99 @ 13.000%   1.43
     const ppdMatch = line.match(/ppd\s+fd\d[^@]*@\s*[\d.]+%\s+([\d\s.]+)$/i);
     if (ppdMatch) {
       const cents = parseCents(ppdMatch[1]);
       if (cents && cents > 0 && cents < 10000) { taxAmounts.push(cents); continue; }
     }
 
-    // "HST :   3.18" or "HST   4.29" or "HST: 3.18"
+    // "HST :   3.18" or "HST:3.18" or "HST   3.18" — same line
     const simpleTaxMatch = line.match(/^(?:hst|gst|pst|qst|tax)[:\s=]+\$?\s*([\d\s,.]+)$/i);
     if (simpleTaxMatch) {
       const cents = parseCents(simpleTaxMatch[1]);
-      if (cents && cents > 0 && cents < 10000) { simpleTax = cents; }
+      if (cents && cents > 0 && cents < 10000) return cents;
+    }
+
+    // "HST" alone on line, amount on next line
+    if (/^hst\s*$/i.test(line) && i + 1 < lines.length) {
+      const cents = parseCents(lines[i + 1].trim());
+      if (cents && cents > 0 && cents < 10000) return cents;
+    }
+
+    // "HST" with amount elsewhere on line
+    const hstEndLine = line.match(/^(?:hst|gst|tax)\s+([\d,.]+)$/i);
+    if (hstEndLine) {
+      const cents = parseCents(hstEndLine[1]);
+      if (cents && cents > 0 && cents < 10000) return cents;
     }
   }
 
-  // Fortinos has multiple tax lines — sum them
   if (taxAmounts.length > 0) {
     return taxAmounts.reduce((sum, t) => sum + t, 0);
   }
 
-  return simpleTax;
+  return null;
 }
 
 // ── PAYMENT INFO ──────────────────────────────────────────────────────────────
@@ -369,7 +395,7 @@ const GLOBAL_SKIP_PATTERNS = [
   /^(customer|retain|important|copy|records|expr|date.?time|reference)/i,
   /^(contactless|purchase|tip|gratuity|emv|terminal|application)/i,
   /^(card\s+number|card\s+type|acct|account|trans|ref\.?\s*#)/i,
-  /^(rounded|survey|certificate|contest|optimum|pc\s+financial)/i,
+/^(rounded|survey|certificate|contest|optimum|pc\s+financial|pc\s+optimum|you\s+could|earn|points\s+with)/i,
   /^(www\.|http|tel:|fax:|\*{3,}|={3,}|-{5,})/i,
   /^cad\$?$/i,
   /^\d{10,}$/,
@@ -430,7 +456,7 @@ function extractLineItems(lines: string[], expectedSubtotal: number | null): Lin
       candidates.push(item);
     }
   }
-
+  
   if (expectedSubtotal && candidates.length > 0) {
     const sum = candidates.reduce((t, i) => t + i.total_cents, 0);
     const pctOff = Math.abs(sum - expectedSubtotal) / expectedSubtotal;
@@ -451,10 +477,35 @@ function extractLineItems(lines: string[], expectedSubtotal: number | null): Lin
   return candidates;
 }
 
+
 function parseLineItem(line: string): LineItem | null {
-  // Harvey's style: "1 Apple Pie   1.89" or "1 Grill Ckn Cb   13.29"
+  let match: RegExpMatchArray | null;
+
+  // Shoppers style: "GATORADE DRINK   4.49 GP   4.49" — name, price, code, price
+  const shoppersDouble = /^([A-Z][A-Z\s]{2,30}?)\s+([\d,.]+)\s+[A-Z]{1,2}\s+([\d,.]+)$/;
+  match = line.match(shoppersDouble);
+  if (match) {
+    const desc = match[1].trim();
+    const price = parseCents(match[2]);
+    if (price && /[a-zA-Z]{2,}/.test(desc) && !shouldSkipLine(desc)) {
+      return { description: desc, quantity: 1, unit_price_cents: price, total_cents: price };
+    }
+  }
+
+  // Shoppers also: "HYDROSILK RAZO   12.99 GP" — name, price, code (no second price)
+  const shoppersSimple = /^([A-Z][A-Z\s]{2,30}?)\s+([\d,.]+)\s+[A-Z]{1,2}$/;
+  match = line.match(shoppersSimple);
+  if (match) {
+    const desc = match[1].trim();
+    const price = parseCents(match[2]);
+    if (price && /[a-zA-Z]{2,}/.test(desc) && !shouldSkipLine(desc)) {
+      return { description: desc, quantity: 1, unit_price_cents: price, total_cents: price };
+    }
+  }
+
+  //   // Harvey's style: "1 Apple Pie   1.89" or "1 Grill Ckn Cb   13.29"
   const harveyStyle = /^(\d+)\s+(.{2,40}?)\s{2,}([\d\s,.]+)$/;
-  let match = line.match(harveyStyle);
+  match = line.match(harveyStyle);
   if (match) {
     const qty = parseInt(match[1]);
     const desc = match[2].trim();
@@ -513,15 +564,20 @@ function parseLineItem(line: string): LineItem | null {
 function parseMultiLineItem(line1: string, line2: string, line3?: string): LineItem | null {
   if (shouldSkipLine(line1)) return null;
 
-  // Fortinos style: "(2)barcode GH GINGER 60ML" + "2 @ $3.99   7.98"
+// Fortinos style: "(2)62911830001 GH GINGER 60ML HMRJ" + "2 @ $3.99   7.98"
   const fortinosQty = line2.match(/^(\d+)\s*@\s*\$?([\d\s,.]+)\s+([\d\s,.]+)$/);
   if (fortinosQty) {
     const qty = parseInt(fortinosQty[1]);
     const unit = parseCents(fortinosQty[2]);
     const total = parseCents(fortinosQty[3]);
-    // Strip barcode prefix from description
-    const desc = line1.replace(/^\(\d+\)\d+\s+/, "").replace(/\d{8,}\s+/, "").trim();
-    if (unit && total && qty > 0 && desc.length >= 2) {
+    // Strip barcode prefix: "(2)62911830001 " or just long number prefix
+    const desc = line1
+      .replace(/^\(\d+\)\d+\s+/, "")
+      .replace(/^\d{8,}\s+/, "")
+      .replace(/\s+\d+MRJ\s*$/i, "")  // strip trailing codes like "1MRJ"
+      .replace(/\s+HMRJ\s*$/i, "")
+      .trim();
+    if (unit && total && qty > 0 && desc.length >= 2 && /[a-zA-Z]/.test(desc)) {
       return { description: desc, quantity: qty, unit_price_cents: unit, total_cents: total };
     }
   }
