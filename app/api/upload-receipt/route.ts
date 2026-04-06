@@ -310,13 +310,21 @@ await supabase
 
 // 6. Trigger SMS to client if they have SMS enabled
     try {
+      const batchId = formData.get("batchId") as string | null;
+      const batchIndex = parseInt(formData.get("batchIndex") as string || "1");
+      const batchTotal = parseInt(formData.get("batchTotal") as string || "1");
+      const source = (formData.get("source") as 'upload' | 'email' | 'camera') || 'upload';
+
       const { triggerSms } = await import('@/lib/triggerSms');
-      const smsResult = await triggerSms(receiptId, clientId, firmId);
+      const smsResult = await triggerSms(
+        receiptId, clientId, firmId, source,
+        batchId || undefined, batchIndex, batchTotal
+      );
       console.log('📱 SMS result:', smsResult);
     } catch (smsError: any) {
       console.error("❌ SMS trigger failed (non-blocking):", smsError.message);
     }
-
+    
     return NextResponse.json({
       success: true,
       receiptId,

@@ -226,19 +226,27 @@ async function handleMultipleFiles(files: FileList | null) {
       let succeeded = 0;
       let failed = 0;
 
+      const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
+
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
-        setUploadProgress({ total: fileArray.length, current: i + 1, currentFile: file.name, succeeded, failed });
+                setUploadProgress({ total: fileArray.length, current: i + 1, currentFile: file.name, succeeded, failed });
 
         try {
           let uploadFile = file;
           try { uploadFile = await convertHeicToJpg(file); } catch { uploadFile = file; }
+// Generate a shared batch ID for this upload session
+          const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
+
           const formData = new FormData();
           formData.append("file", uploadFile);
           formData.append("firmId", firmId);
           formData.append("clientId", client.id);
           if (userId) formData.append("userId", userId);
-          const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
+          if (batchId) formData.append("batchId", batchId);
+          formData.append("batchIndex", String(i + 1));
+          formData.append("batchTotal", String(fileArray.length));
+                    const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
           if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
           succeeded++;
         } catch (err: any) {
