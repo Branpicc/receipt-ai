@@ -378,14 +378,21 @@ export default function ClientDashboardPage() {
             <div className="text-xs text-gray-500 dark:text-gray-400">Set limits</div>
           </div>
         </Link>
-        <Link href="/dashboard/conversations" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+<Link href="/dashboard/conversations" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <span className="text-2xl">💬</span>
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Messages</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Chat with accountant</div>
           </div>
         </Link>
-        <Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+        <Link href="/dashboard/category-dashboard" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+          <span className="text-2xl">📊</span>
+          <div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">My Spending</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Charts & categories</div>
+          </div>
+        </Link>
+                <Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <span className="text-2xl">⚙️</span>
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Settings</div>

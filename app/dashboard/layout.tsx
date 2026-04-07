@@ -458,7 +458,7 @@ href="/dashboard/reports/clients"
               <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
             </div>
           </li>
-          <li className="relative group">
+<li className="relative group">
             <Link
               href="/dashboard/budget-settings"
               className={`flex items-center justify-center w-12 h-12 rounded-lg transition-colors ${
@@ -474,9 +474,25 @@ href="/dashboard/reports/clients"
               <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
             </div>
           </li>
+          <li className="relative group">
+            <Link
+              href="/dashboard/conversations"
+              className={`flex items-center justify-center w-12 h-12 rounded-lg transition-colors ${
+                pathname.startsWith('/dashboard/conversations')
+                  ? 'bg-accent-500 text-white'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+              }`}
+            >
+              💬
+            </Link>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
+              Messages
+              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+            </div>
+          </li>
         </>
       )}
-
+      
       {/* Accountant/Firm Admin icons */}
       {(isAccountant || isFirmAdmin) && (
         <>

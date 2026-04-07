@@ -174,25 +174,26 @@ export default function BudgetSettingsPage() {
             </h2>
           </div>
 
-          <div className="divide-y divide-gray-200 dark:divide-dark-border">
+<div className="divide-y divide-gray-200 dark:divide-dark-border">
             {AVAILABLE_CATEGORIES.map(category => (
               <div key={category} className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900 dark:text-white mb-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 dark:text-white mb-1 truncate">
                       {category}
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Monthly spending limit
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Monthly limit
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-gray-400 text-lg">$</span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-gray-500 dark:text-gray-400">$</span>
                     <input
-                      type="text"
+                      type="number"
+                      inputMode="decimal"
                       value={editingValues[category] || ""}
                       onFocus={(e) => !isFirmAdmin && e.target.select()}
-                      onChange={(e) => {
+                                            onChange={(e) => {
                         if (isFirmAdmin) return; // Prevent editing
                         const value = e.target.value;
                         if (/^\d*\.?\d{0,2}$/.test(value)) {
@@ -216,8 +217,8 @@ export default function BudgetSettingsPage() {
                         }));
                       }}
                       disabled={isFirmAdmin}
-                      className={`w-32 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-right text-gray-900 dark:text-white bg-white dark:bg-dark-bg focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors ${
-                        isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
+                          className={`w-24 md:w-32 px-2 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-right text-gray-900 dark:text-white bg-white dark:bg-dark-bg focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors ${
+                          isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       placeholder="0.00"
                     />

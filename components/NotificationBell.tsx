@@ -188,7 +188,7 @@ const { data: notifs, error } = await notifQuery;
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-dark-surface rounded-lg shadow-xl border border-gray-200 dark:border-dark-border z-50 max-h-[600px] overflow-hidden flex flex-col">
+      <div className="fixed md:absolute right-0 md:right-0 top-16 md:top-auto mt-0 md:mt-2 w-screen md:w-96 bg-white dark:bg-dark-surface rounded-none md:rounded-lg shadow-xl border-0 md:border border-gray-200 dark:border-dark-border z-50 max-h-[80vh] md:max-h-[600px] overflow-hidden flex flex-col">
 
           {/* Header */}
           <div className="p-4 border-b border-gray-200 dark:border-dark-border flex items-center justify-between">
@@ -258,12 +258,12 @@ const { data: notifs, error } = await notifQuery;
                         <div className={`text-sm ${!notification.read ? 'font-semibold' : 'font-medium'} text-gray-900 dark:text-white`}>
                           {notification.title}
                         </div>
-                        {notification.message && (
-                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                           {notification.message && (
+                          <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
                             {notification.message}
                           </div>
                         )}
-                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                           {formatTimeAgo(notification.created_at)}
                         </div>
                       </div>
