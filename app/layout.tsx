@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ReceiptAI - Smart Receipt Management",
-  description: "AI-powered receipt management and expense tracking",
-  manifest: "/manifest.json",
+title: "Receipture",
+  description: "Smart receipt management for accounting firms",
+    manifest: "/manifest.json",
   themeColor: "#3B82F6",
 };
 
@@ -28,9 +28,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
+<link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#3B82F6" />
-      </head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Receipture" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icon-192.svg" />
+              </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 dark:bg-dark-bg transition-colors`}
       >

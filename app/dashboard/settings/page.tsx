@@ -1059,6 +1059,33 @@ if (eligibility.eligible) {
             </button>
           </div>
 
+<div className="border-t border-gray-200 dark:border-dark-border pt-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              📲 Install Receipture App
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Add Receipture to your home screen for quick access — no App Store needed.
+            </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-3">
+              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">🍎 iPhone / iPad (Safari)</p>
+              <ol className="text-sm text-gray-700 dark:text-gray-300 space-y-1 list-decimal list-inside">
+                <li>Open this page in <strong>Safari</strong></li>
+                <li>Tap the <strong>Share</strong> button (□↑) at the bottom</li>
+                <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
+                <li>Tap <strong>Add</strong> — done!</li>
+              </ol>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">🤖 Android (Chrome)</p>
+              <ol className="text-sm text-gray-700 dark:text-gray-300 space-y-1 list-decimal list-inside">
+                <li>Open this page in <strong>Chrome</strong></li>
+                <li>Tap the <strong>⋮ menu</strong> in the top right</li>
+                <li>Tap <strong>"Add to Home Screen"</strong></li>
+                <li>Tap <strong>Add</strong> — done!</li>
+              </ol>
+            </div>
+          </div>
+
           <div className="border-t border-gray-200 dark:border-dark-border pt-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Sign Out
