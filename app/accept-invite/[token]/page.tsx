@@ -49,8 +49,7 @@ const { data: invite, error: inviteError } = await supabase
     status, 
     expires_at, 
     client_id, 
-    assigned_accountant_id,
-    firms (name)
+    assigned_accountant_id
   `)
   .eq("token", token)
   .single();
@@ -75,9 +74,16 @@ const { data: invite, error: inviteError } = await supabase
         return;
       }
 
+      // Separately fetch firm name
+      const { data: firm } = await supabase
+        .from("firms")
+        .select("name")
+        .eq("id", invite.firm_id)
+        .single();
+
 setInvitation({
   ...invite,
-  firm_name: (invite as any).firms?.name || "Unknown Firm",
+  firm_name: firm?.name || "Your Accounting Firm",
 });
     } catch (err: any) {
       setError("Failed to load invitation");

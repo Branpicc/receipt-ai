@@ -188,17 +188,19 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
       } catch (ocrError) {
         console.error('❌ OCR failed:', ocrError);
       }
-    } else if (text) {
+} else if (text || html) {
       try {
-        extractedData = parseEmailText(text);
-        vendorName = extractedData.vendor || vendorName;
+        // Strip HTML tags for text parsing
+        const emailContent = text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+        extractedData = parseEmailText(emailContent);
+                vendorName = extractedData.vendor || vendorName;
         console.log('✅ Parsed from text:', extractedData);
       } catch (parseError) {
         console.error('❌ Parsing failed:', parseError);
       }
     }
 
-    if (extractedData) {
+if (extractedData) {
       await supabase
         .from('email_receipts')
         .update({
@@ -211,6 +213,19 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
         .eq('id', emailReceipt.id);
     }
 
+// Save tax if extracted
+    if (extractedData?.tax_cents && extractedData.tax_cents > 0 && emailReceipt.id) {
+      try {
+        await supabase.from('receipt_taxes').insert([{
+          receipt_id: emailReceipt.id,
+          firm_id: firmId,
+          tax_type: 'HST',
+          rate: 0.13,
+          amount_cents: extractedData.tax_cents,
+        }]);
+      } catch {} // non-blocking
+    }
+    
     // Create notification
     await supabase.from('notifications').insert([
       {
@@ -297,41 +312,134 @@ if (clientId) {
 }
 
 function parseEmailText(text: string): any {
-  const lines = text.split('\n').map(l => l.trim());
-  
-  let vendor = null;
-  let date = null;
-  let total = null;
+  // Use the same extraction logic as image OCR
+  // but feed it the email text directly
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
-    if (lines[i].length > 3 && lines[i].length < 50) {
-      vendor = lines[i];
+  // Vendor detection from known senders
+  const KNOWN_EMAIL_VENDORS: Record<string, string> = {
+    'amazon': 'Amazon',
+    'meta': 'Meta',
+    'facebook': 'Meta',
+    'nintendo': 'Nintendo',
+    'google': 'Google',
+    'microsoft': 'Microsoft',
+    'apple': 'Apple',
+    'netflix': 'Netflix',
+    'spotify': 'Spotify',
+    'adobe': 'Adobe',
+    'dropbox': 'Dropbox',
+    'zoom': 'Zoom',
+    'shopify': 'Shopify',
+    'stripe': 'Stripe',
+    'paypal': 'PayPal',
+  };
+
+  let vendor: string | null = null;
+  for (const [key, name] of Object.entries(KNOWN_EMAIL_VENDORS)) {
+    if (text.toLowerCase().includes(key)) {
+      vendor = name;
       break;
     }
   }
 
-  const totalRegex = /(?:total|amount|balance).*?\$?\s*(\d+\.?\d{0,2})/i;
+  // Date patterns
+  const monthMap: Record<string, string> = {
+    january: '01', february: '02', march: '03', april: '04',
+    may: '05', june: '06', july: '07', august: '08',
+    september: '09', october: '10', november: '11', december: '12',
+    jan: '01', feb: '02', mar: '03', apr: '04',
+    jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  };
+
+  let date: string | null = null;
   for (const line of lines) {
-    const match = line.match(totalRegex);
-    if (match) {
-      total = Math.round(parseFloat(match[1]) * 100);
+    // "March 12, 2026" or "January 7, 2026"
+    const namedMatch = line.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{1,2}),?\s+(\d{4})/i);
+    if (namedMatch) {
+      const month = monthMap[namedMatch[1].toLowerCase()];
+      const day = namedMatch[2].padStart(2, '0');
+      date = `${namedMatch[3]}-${month}-${day}`;
+      break;
+    }
+    // "02/23/2026"
+    const numMatch = line.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b/);
+    if (numMatch) {
+      date = `${numMatch[3]}-${numMatch[1].padStart(2, '0')}-${numMatch[2].padStart(2, '0')}`;
+      break;
+    }
+    // "2026-01-07"
+    const isoMatch = line.match(/\b(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})\b/);
+    if (isoMatch) {
+      date = `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
       break;
     }
   }
 
-  const dateRegex = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})|(\w+ \d{1,2},? \d{4})/;
+  // Total patterns
+  let total_cents: number | null = null;
   for (const line of lines) {
-    const match = line.match(dateRegex);
-    if (match) {
-      date = match[0];
+    // "Grand Total: CDN$ 11.29" or "Total: $28.24" or "CA$6.78"
+    const grandTotal = line.match(/grand\s+total[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
+    if (grandTotal) {
+      total_cents = Math.round(parseFloat(grandTotal[1].replace(/,/g, '')) * 100);
       break;
     }
+    const totalMatch = line.match(/^total[:\s]+(?:cdn\$?|ca\$?|cad\$?|\$)?\s*([\d,.]+)/i);
+    if (totalMatch) {
+      total_cents = Math.round(parseFloat(totalMatch[1].replace(/,/g, '')) * 100);
+      break;
+    }
+    // "CA$6.78" or "CDN$ 11.29"
+    const cadMatch = line.match(/(?:ca|cdn|cad)\$\s*([\d,.]+)/i);
+    if (cadMatch && !total_cents) {
+      const val = Math.round(parseFloat(cadMatch[1].replace(/,/g, '')) * 100);
+      if (val > 50) total_cents = val;
+    }
+  }
+
+  // Tax patterns
+  let tax_cents: number | null = null;
+  for (const line of lines) {
+    // "Tax Collected: CDN$ 1.30"
+    const taxCollected = line.match(/tax\s+collected[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
+    if (taxCollected) {
+      tax_cents = Math.round(parseFloat(taxCollected[1].replace(/,/g, '')) * 100);
+      break;
+    }
+    // "Tax (13%) CA$0.78"
+    const taxPercent = line.match(/tax\s+\(\d+%\)[:\s]+(?:ca\$?|cdn\$?|cad\$?)?\s*([\d,.]+)/i);
+    if (taxPercent) {
+      tax_cents = Math.round(parseFloat(taxPercent[1].replace(/,/g, '')) * 100);
+      break;
+    }
+    // Simple "Tax: $1.30"
+    const simpleTax = line.match(/^tax[:\s]+\$?\s*([\d,.]+)$/i);
+    if (simpleTax) {
+      tax_cents = Math.round(parseFloat(simpleTax[1].replace(/,/g, '')) * 100);
+      break;
+    }
+  }
+
+  // Payment info
+  let card_last_four: string | null = null;
+  let card_brand: string | null = null;
+  for (const line of lines) {
+    const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i) ||
+                      line.match(/card\s+number[:\s]+[*·\s]+(\d{4})/i);
+    if (cardMatch) card_last_four = cardMatch[1];
+    if (/mastercard/i.test(line) && !card_brand) card_brand = 'Mastercard';
+    if (/\bvisa\b/i.test(line) && !card_brand) card_brand = 'Visa';
+    if (/amex|american\s+express/i.test(line) && !card_brand) card_brand = 'Amex';
   }
 
   return {
     vendor,
     date,
-    total_cents: total,
-    raw_text: text.substring(0, 1000),
+    total_cents,
+    tax_cents,
+    card_last_four,
+    card_brand,
+    raw_text: text.substring(0, 2000),
   };
 }
