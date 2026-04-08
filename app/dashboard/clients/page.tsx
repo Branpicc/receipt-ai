@@ -65,8 +65,6 @@ export default function ClientsPage() {
   const [newTimezone, setNewTimezone] = useState("America/Toronto");
   const [newProvince, setNewProvince] = useState("ON");
   const [creating, setCreating] = useState(false);
-  const [newIncomeType, setNewIncomeType] = useState("self_employed");
-
   const sortedClients = useMemo(() => {
     return [...clients].sort((a, b) => a.name.localeCompare(b.name));
   }, [clients]);
@@ -242,7 +240,6 @@ const { error } = await supabase.from("clients").insert([
     client_code,
     province: newProvince,
     timezone: newTimezone,
-    income_type: newIncomeType,
     is_active: true,
   },
 ]);
@@ -254,7 +251,6 @@ const { error } = await supabase.from("clients").insert([
     }
 
     setNewName("");
-    setNewIncomeType("self_employed");
     await loadClients(firmId);
     setCreating(false);
   };
@@ -338,21 +334,7 @@ const { error } = await supabase.from("clients").insert([
               <option value="NU">NU</option>
               <option value="YT">YT</option>
             </select>
-<select
-  className="rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg text-gray-900 dark:text-white px-4 py-3"
-  value={newIncomeType}
-  onChange={(e) => setNewIncomeType(e.target.value)}
->
-  <option value="self_employed">Self-Employed (T2125)</option>
-  <option value="incorporated">Incorporated (T2125)</option>
-  <option value="partnership">Partnership (T2125)</option>
-  <option value="rental_property">Rental Property (T776)</option>
-  <option value="employed">Employed (T2200)</option>
-  <option value="retired">Retired (T1)</option>
-  <option value="investment">Investment (T1)</option>
-  <option value="student">Student (T1)</option>
-  <option value="other">Other (T2125)</option>
-</select>
+
 
             <button
               onClick={createClient}
