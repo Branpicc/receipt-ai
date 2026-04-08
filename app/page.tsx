@@ -220,11 +220,11 @@ export default function LandingPage() {
             </span>
           </div>
           <div className="hidden md:flex items-center gap-8">
-            {["Features", "How It Works", "Pricing", "Contact"].map(item => (
+{["Features", "How It Works", "Pricing", "Contact"].map(item => (
               <a
                 key={item}
-                href={`#${item.toLowerCase().replace(" ", "-")}`}
-                className={`text-sm font-medium transition-colors hover:text-blue-500 ${scrolled ? "text-gray-600" : "text-white/80"}`}
+                href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
+                                className={`text-sm font-medium transition-colors hover:text-blue-500 ${scrolled ? "text-gray-600" : "text-white/80"}`}
               >
                 {item}
               </a>
@@ -504,13 +504,23 @@ export default function LandingPage() {
                 <div className={`text-sm font-semibold uppercase tracking-widest mb-2 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>
                   {plan.name}
                 </div>
-                <div className="flex items-baseline gap-1 mb-1">
+<div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                  {billingInterval === "annual" && (
+                    <span className={`text-2xl font-medium line-through ${plan.highlighted ? "text-blue-300" : "text-gray-400"}`}>
+                      {plan.name === "Starter" ? "$49" : plan.name === "Professional" ? "$199" : "$349"}
+                    </span>
+                  )}
                   <span className={`text-5xl font-bold ${plan.highlighted ? "text-white" : "text-gray-900"}`} style={{ fontFamily: "'Playfair Display', serif" }}>
                     {plan.price}
                   </span>
                   <span className={`text-lg ${plan.highlighted ? "text-blue-200" : "text-gray-400"}`}>{plan.period}</span>
                 </div>
-                <p className={`text-sm mb-2 ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>{plan.description}</p>
+                {billingInterval === "annual" && (
+                  <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-green-300" : "text-green-600"}`}>
+                    Save ${plan.name === "Starter" ? "96" : plan.name === "Professional" ? "396" : "696"}/year
+                  </div>
+                )}
+                                <p className={`text-sm mb-2 ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>{plan.description}</p>
                 <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.clients}</div>
                 <div className={`text-xs font-medium mb-6 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.users}</div>
 
