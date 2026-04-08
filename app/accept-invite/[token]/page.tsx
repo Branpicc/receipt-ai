@@ -41,7 +41,7 @@ export default function AcceptInvitePage() {
 
 const { data: invite, error: inviteError } = await supabase
   .from("invitations")
-  .select(`
+.select(`
     id, 
     firm_id, 
     email, 
@@ -49,9 +49,10 @@ const { data: invite, error: inviteError } = await supabase
     status, 
     expires_at, 
     client_id, 
-    assigned_accountant_id
+    assigned_accountant_id,
+    firm_name
   `)
-  .eq("token", token)
+    .eq("token", token)
   .single();
 
   console.log('🔍 Invite data:', invite);
@@ -74,16 +75,9 @@ const { data: invite, error: inviteError } = await supabase
         return;
       }
 
-      // Separately fetch firm name
-      const { data: firm } = await supabase
-        .from("firms")
-        .select("name")
-        .eq("id", invite.firm_id)
-        .single();
-
 setInvitation({
   ...invite,
-  firm_name: firm?.name || "Your Accounting Firm",
+  firm_name: (invite as any).firm_name || "Your Accounting Firm",
 });
     } catch (err: any) {
       setError("Failed to load invitation");

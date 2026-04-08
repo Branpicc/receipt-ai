@@ -84,11 +84,7 @@ export async function POST(request: NextRequest) {
       .eq("firm_id", firmId);
 
     if (existingFirmUsers) {
-      // Get all auth users for this firm
       const authUserIds = existingFirmUsers.map(u => u.auth_user_id);
-      
-      // Check if any of these users have the invited email
-      // Note: This requires querying auth.users which needs service role
       const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
       
       const emailAlreadyExists = authUsers.users.some(
@@ -121,6 +117,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get firm name BEFORE creating invitation so we can store it
+    const { data: firm } = await supabaseAdmin
+      .from("firms")
+      .select("name")
+      .eq("id", firmId)
+      .single();
+
+    const firmName = firm?.name || "the firm";
+
     // Generate unique token
     const inviteToken = crypto.randomBytes(32).toString("hex");
 
@@ -128,7 +133,7 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Create invitation
+    // Create invitation — store firm_name so accept page can show it without RLS issues
     const { data: invitation, error: inviteError } = await supabaseAdmin
       .from("invitations")
       .insert([
@@ -142,6 +147,7 @@ export async function POST(request: NextRequest) {
           status: "pending",
           client_id: role === "client" ? clientId : null,
           assigned_accountant_id: role === "client" ? assignedAccountantId : null,
+          firm_name: firmName,
         },
       ])
       .select()
@@ -155,34 +161,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get firm name for email
-    const { data: firm } = await supabaseAdmin
-      .from("firms")
-      .select("name")
-      .eq("id", firmId)
-      .single();
-
-    const firmName = firm?.name || "the firm";
-
     // Build invitation URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const inviteUrl = `${baseUrl}/accept-invite/${inviteToken}`;
 
-// TODO: Re-enable email sending when SendGrid production account is ready
-// SendGrid free tier has strict rate limits causing failures
-console.log('📧 Email sending temporarily disabled');
-console.log('✅ Invitation created successfully');
-console.log('📎 Share this link with the user:', inviteUrl);
+    // TODO: Re-enable email sending when SendGrid production account is ready
+    console.log('📧 Email sending temporarily disabled');
+    console.log('✅ Invitation created successfully');
+    console.log('📎 Share this link with the user:', inviteUrl);
 
-return NextResponse.json({
-  success: true,
-  invitation: {
-    id: invitation.id,
-    email: invitation.email,
-    role: invitation.role,
-    inviteUrl: inviteUrl,
-  },
-});
+    return NextResponse.json({
+      success: true,
+      invitation: {
+        id: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
+        inviteUrl: inviteUrl,
+      },
+    });
   } catch (error: any) {
     console.error("Invite error:", error);
     return NextResponse.json(
