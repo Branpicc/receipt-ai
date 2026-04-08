@@ -1,76 +1,720 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 
-export default function Home() {
-  const router = useRouter();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<string>("");
+export default function LandingPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [demoName, setDemoName] = useState("");
+  const [demoEmail, setDemoEmail] = useState("");
+  const [demoFirm, setDemoFirm] = useState("");
+  const [demoSubmitted, setDemoSubmitted] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) router.push("/dashboard");
-    };
-    checkSession();
-  }, [router]);
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-  const signIn = async () => {
-    setStatus("Signing in...");
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+  async function handleDemoRequest(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await fetch("/api/demo-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: demoName, email: demoEmail, firm: demoFirm }),
+      });
+    } catch {}
+    setDemoSubmitted(true);
+  }
 
-    if (error) {
-      setStatus(error.message);
-      return;
-    }
+  async function handleContact(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: contactName, email: contactEmail, message: contactMessage }),
+      });
+    } catch {}
+    setContactSubmitted(true);
+  }
 
-    setStatus("Success ✅ Redirecting...");
-    router.push("/dashboard");
-  };
+  const plans = [
+    {
+      name: "Starter",
+      price: billingInterval === "annual" ? "$41" : "$49",
+      period: "/mo",
+      description: "Perfect for small firms getting started",
+      clients: "Up to 5 clients",
+      users: "1 accountant seat",
+      features: [
+        "Unlimited receipts",
+        "AI categorization & OCR",
+        "Tax code mapping (GST/HST/PST)",
+        "Project folders",
+        "Email receipt forwarding",
+        "SMS purpose collection",
+        "CSV export",
+        "In-app AI support chat",
+      ],
+      cta: "Get Started",
+      highlighted: false,
+    },
+    {
+      name: "Professional",
+      price: billingInterval === "annual" ? "$166" : "$199",
+      period: "/mo",
+      description: "For growing firms with more clients",
+      clients: "Up to 20 clients",
+      users: "3 accountant seats",
+      features: [
+        "Everything in Starter",
+        "Advanced reports & edit history",
+        "Budget tracking & alerts",
+        "Monthly client reports",
+        "Business card fraud detection",
+        "Client detail profiles",
+        "Multi-user collaboration",
+        "Receipt edit tracking",
+      ],
+      cta: "Get Started",
+      highlighted: true,
+      badge: "Most Popular",
+    },
+    {
+      name: "Enterprise",
+      price: billingInterval === "annual" ? "$291" : "$349",
+      period: "/mo",
+      description: "For large firms with complex needs",
+      clients: "Unlimited clients",
+      users: "Unlimited accountant seats",
+      features: [
+        "Everything in Professional",
+        "Unlimited clients & users",
+        "Training & onboarding modules",
+        "Priority onboarding call with founder",
+        "Custom feature requests",
+        "SLA guarantee",
+        "Dedicated support channel",
+      ],
+      cta: "Contact Us",
+      highlighted: false,
+    },
+  ];
+
+  const steps = [
+    {
+      number: "01",
+      role: "Client",
+      icon: "📸",
+      title: "Snap & Submit",
+      description: "Clients photograph receipts with their phone or forward email receipts. Takes seconds — no app download required.",
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      number: "02",
+      role: "AI",
+      icon: "🤖",
+      title: "AI Extracts Everything",
+      description: "Our AI reads vendor, amount, date, line items, and HST automatically. A text message asks the client for the expense purpose.",
+      color: "from-purple-500 to-purple-600",
+    },
+    {
+      number: "03",
+      role: "Accountant",
+      icon: "✅",
+      title: "Review & Categorize",
+      description: "Accountants see organized receipts with AI-suggested categories. Review flags, approve categories, and export for tax season.",
+      color: "from-green-500 to-green-600",
+    },
+  ];
+
+  const features = [
+    { icon: "📱", title: "SMS Purpose Collection", desc: "Clients get a text asking for the expense purpose. They reply in seconds. No app needed." },
+    { icon: "🤖", title: "AI-Powered OCR", desc: "Extracts vendor, amount, date, line items, and tax from any receipt photo or forwarded email." },
+    { icon: "🗂️", title: "Tax Code Mapping", desc: "Every receipt is automatically mapped to the correct CRA line — T2125, T776, or T2200." },
+    { icon: "🚩", title: "Smart Flagging", desc: "Automatically flags personal cards, duplicate receipts, and category mismatches for review." },
+    { icon: "📊", title: "Monthly Reports", desc: "Auto-generated monthly expense reports per client, ready for tax prep or review meetings." },
+    { icon: "📧", title: "Email Forwarding", desc: "Clients forward Amazon, Meta, or any digital receipt to their unique inbox address." },
+    { icon: "💬", title: "In-App Messaging", desc: "Direct messaging between clients and accountants — no more email chains for receipt questions." },
+    { icon: "📥", title: "QuickBooks Export", desc: "One-click CSV export in QuickBooks-compatible format for seamless accounting workflow." },
+  ];
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-2xl border p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">Receipt AI</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Sign in to your accounting firm dashboard
-        </p>
+    <div className="min-h-screen bg-white" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@700;800&display=swap');
 
-        <div className="mt-6 space-y-3">
-          <input
-            className="w-full rounded-xl border px-4 py-3"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        * { box-sizing: border-box; }
 
-          <input
-            className="w-full rounded-xl border px-4 py-3"
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+        .hero-gradient {
+          background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+        }
 
-          <button
-            onClick={signIn}
-            className="w-full rounded-xl bg-black text-white py-3 font-medium"
-          >
-            Sign In
+        .accent { color: #3b82f6; }
+        .accent-bg { background: #3b82f6; }
+
+        .glass {
+          background: rgba(255,255,255,0.05);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-hover {
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+        }
+
+        .step-line {
+          background: linear-gradient(90deg, #3b82f6, transparent);
+        }
+
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+        .float { animation: float 4s ease-in-out infinite; }
+        .float-delay { animation: float 4s ease-in-out 1.5s infinite; }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.6s ease forwards; }
+        .fade-up-delay { animation: fadeUp 0.6s ease 0.2s forwards; opacity: 0; }
+        .fade-up-delay-2 { animation: fadeUp 0.6s ease 0.4s forwards; opacity: 0; }
+
+        .nav-blur {
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+        }
+
+        .pricing-highlight {
+          background: linear-gradient(135deg, #1e3a5f, #2563eb);
+          transform: scale(1.05);
+        }
+
+        .dot-pattern {
+          background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+          background-size: 24px 24px;
+        }
+      `}</style>
+
+      {/* NAV */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 nav-blur transition-all duration-300 ${scrolled ? "bg-white/90 shadow-sm border-b border-gray-100" : "bg-transparent"}`}>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📄</span>
+            <span className={`text-xl font-bold ${scrolled ? "text-gray-900" : "text-white"}`} style={{ fontFamily: "'Playfair Display', serif" }}>
+              Receipture
+            </span>
+          </div>
+          <div className="hidden md:flex items-center gap-8">
+            {["Features", "How It Works", "Pricing", "Contact"].map(item => (
+              <a
+                key={item}
+                href={`#${item.toLowerCase().replace(" ", "-")}`}
+                className={`text-sm font-medium transition-colors hover:text-blue-500 ${scrolled ? "text-gray-600" : "text-white/80"}`}
+              >
+                {item}
+              </a>
+            ))}
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <Link
+              href="/login"
+              className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${scrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
+            >
+              Sign In
+            </Link>
+            <a
+              href="#demo"
+              className="text-sm font-semibold px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-lg shadow-blue-600/30"
+            >
+              Request Demo
+            </a>
+          </div>
+          <button className="md:hidden" onClick={() => setMenuOpen(!menuOpen)}>
+            <span className={scrolled ? "text-gray-900" : "text-white"}>☰</span>
           </button>
+        </div>
+        {menuOpen && (
+          <div className="md:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-3">
+            {["Features", "How It Works", "Pricing", "Contact"].map(item => (
+              <a key={item} href={`#${item.toLowerCase().replace(" ", "-")}`} className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>
+                {item}
+              </a>
+            ))}
+            <Link href="/login" className="block text-gray-700 font-medium">Sign In</Link>
+            <a href="#demo" className="block bg-blue-600 text-white text-center py-2 rounded-xl font-semibold" onClick={() => setMenuOpen(false)}>
+              Request Demo
+            </a>
+          </div>
+        )}
+      </nav>
 
-          {status && (
-            <p className="text-sm text-gray-600 mt-2 break-words">{status}</p>
+      {/* HERO */}
+      <section className="hero-gradient min-h-screen flex items-center relative overflow-hidden">
+        {/* Background dots */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="dot-pattern w-full h-full" />
+        </div>
+        {/* Glow */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-6 pt-32 pb-20 relative z-10">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-blue-300 text-sm font-medium mb-8 fade-up">
+              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              Now accepting accounting firms across Canada
+            </div>
+
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 fade-up-delay leading-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Your accountant called.
+              <br />
+              <span className="text-blue-400">They want your receipts.</span>
+            </h1>
+
+            <p className="text-xl md:text-2xl text-blue-100/70 mb-10 max-w-2xl mx-auto fade-up-delay-2 font-light">
+              Receipts in. Tax season out.
+            </p>
+
+            <p className="text-lg text-white/60 mb-10 max-w-xl mx-auto fade-up-delay-2">
+              AI-powered receipt management for Canadian accounting firms. Clients snap photos, 
+              our AI extracts everything, accountants review in minutes — not hours.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center fade-up-delay-2">
+              <a
+                href="#demo"
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-2xl transition-all shadow-2xl shadow-blue-600/40 text-lg"
+              >
+                Request a Demo →
+              </a>
+              <a
+                href="#how-it-works"
+                className="px-8 py-4 glass text-white font-semibold rounded-2xl transition-all hover:bg-white/10 text-lg"
+              >
+                See How It Works
+              </a>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-6 mt-20 max-w-2xl mx-auto">
+              {[
+                { value: "5 min", label: "Daily client check-in" },
+                { value: "100%", label: "Canadian tax compliant" },
+                { value: "3 roles", label: "Client, Accountant, Admin" },
+              ].map((stat) => (
+                <div key={stat.label} className="glass rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-bold text-white mb-1">{stat.value}</div>
+                  <div className="text-xs text-white/50">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/30 text-sm flex flex-col items-center gap-2">
+          <span>Scroll</span>
+          <div className="w-px h-8 bg-white/20" />
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section id="how-it-works" className="py-24 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <div className="text-blue-600 font-semibold text-sm uppercase tracking-widest mb-3">The Process</div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Three steps. That&apos;s it.
+            </h2>
+            <p className="text-lg text-gray-500 max-w-xl mx-auto">
+              From receipt photo to tax-ready record in under 5 minutes — without bothering your clients.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            {steps.map((step, i) => (
+              <div key={step.number} className="relative">
+                {i < steps.length - 1 && (
+                  <div className="hidden md:block absolute top-16 left-full w-full h-px step-line z-10" style={{ width: "calc(100% - 2rem)" }} />
+                )}
+                <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 card-hover">
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${step.color} flex items-center justify-center text-2xl mb-6 shadow-lg`}>
+                    {step.icon}
+                  </div>
+                  <div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2">{step.role}</div>
+                  <div className="text-4xl font-bold text-gray-100 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>{step.number}</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
+                  <p className="text-gray-500 leading-relaxed">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Time savings callout */}
+          <div className="mt-16 bg-gradient-to-r from-blue-600 to-blue-700 rounded-3xl p-8 md:p-12 text-white text-center">
+            <div className="text-5xl mb-4">⏱️</div>
+            <h3 className="text-3xl font-bold mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
+              5–10 minutes a day keeps tax season stress away.
+            </h3>
+            <p className="text-blue-100 text-lg max-w-2xl mx-auto">
+              Clients spend 30 seconds uploading receipts. Accountants spend 5 minutes reviewing. 
+              No more scrambling at year-end — everything is organized as it happens.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section id="features" className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <div className="text-blue-600 font-semibold text-sm uppercase tracking-widest mb-3">Features</div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Built for Canadian accounting firms.
+            </h2>
+            <p className="text-lg text-gray-500 max-w-xl mx-auto">
+              Every feature designed around how your firm actually works — not how software companies think you work.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((f) => (
+              <div key={f.title} className="p-6 rounded-2xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all card-hover">
+                <div className="text-3xl mb-4">{f.icon}</div>
+                <h3 className="font-bold text-gray-900 mb-2">{f.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Role breakdown */}
+          <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              {
+                role: "For Clients",
+                icon: "👤",
+                color: "bg-blue-50 border-blue-100",
+                headerColor: "text-blue-700",
+                points: [
+                  "Snap a photo — done in 30 seconds",
+                  "Reply to a text with the expense purpose",
+                  "Forward email receipts automatically",
+                  "See spending vs. budget in real time",
+                  "No app download required",
+                ],
+              },
+              {
+                role: "For Accountants",
+                icon: "💼",
+                color: "bg-green-50 border-green-100",
+                headerColor: "text-green-700",
+                points: [
+                  "AI pre-categorizes every receipt",
+                  "Review flags and approve categories",
+                  "Edit history tracks every change",
+                  "Export QuickBooks-ready CSV",
+                  "Message clients directly in-app",
+                ],
+              },
+              {
+                role: "For Firm Admins",
+                icon: "🏢",
+                color: "bg-purple-50 border-purple-100",
+                headerColor: "text-purple-700",
+                points: [
+                  "Manage multiple accountants and clients",
+                  "Assign clients to accountants",
+                  "Firm-wide analytics and reporting",
+                  "Training modules for new staff",
+                  "Subscription and billing management",
+                ],
+              },
+            ].map((role) => (
+              <div key={role.role} className={`rounded-3xl border p-8 ${role.color}`}>
+                <div className="text-4xl mb-4">{role.icon}</div>
+                <h3 className={`text-xl font-bold mb-4 ${role.headerColor}`} style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {role.role}
+                </h3>
+                <ul className="space-y-2">
+                  {role.points.map((p) => (
+                    <li key={p} className="flex items-start gap-2 text-sm text-gray-700">
+                      <span className="text-green-500 mt-0.5 flex-shrink-0">✓</span>
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section id="pricing" className="py-24 bg-gray-50 dot-pattern">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="text-blue-600 font-semibold text-sm uppercase tracking-widest mb-3">Pricing</div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Simple, transparent pricing.
+            </h2>
+            <p className="text-lg text-gray-500 mb-8">No per-user fees. No surprise charges. Cancel anytime.</p>
+
+            {/* Billing toggle */}
+            <div className="inline-flex items-center gap-1 bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
+              <button
+                onClick={() => setBillingInterval("monthly")}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${billingInterval === "monthly" ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:text-gray-900"}`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingInterval("annual")}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${billingInterval === "annual" ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:text-gray-900"}`}
+              >
+                Annual <span className="text-green-500 font-bold ml-1">−17%</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+            {plans.map((plan) => (
+              <div
+                key={plan.name}
+                className={`rounded-3xl p-8 relative ${plan.highlighted ? "pricing-highlight text-white shadow-2xl shadow-blue-600/30" : "bg-white border border-gray-100 shadow-sm"}`}
+              >
+                {plan.badge && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
+                    {plan.badge}
+                  </div>
+                )}
+                <div className={`text-sm font-semibold uppercase tracking-widest mb-2 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>
+                  {plan.name}
+                </div>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className={`text-5xl font-bold ${plan.highlighted ? "text-white" : "text-gray-900"}`} style={{ fontFamily: "'Playfair Display', serif" }}>
+                    {plan.price}
+                  </span>
+                  <span className={`text-lg ${plan.highlighted ? "text-blue-200" : "text-gray-400"}`}>{plan.period}</span>
+                </div>
+                <p className={`text-sm mb-2 ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>{plan.description}</p>
+                <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.clients}</div>
+                <div className={`text-xs font-medium mb-6 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.users}</div>
+
+                <ul className="space-y-3 mb-8">
+                  {plan.features.map((f) => (
+                    <li key={f} className={`flex items-start gap-2 text-sm ${plan.highlighted ? "text-blue-50" : "text-gray-600"}`}>
+                      <span className={`mt-0.5 flex-shrink-0 ${plan.highlighted ? "text-green-300" : "text-green-500"}`}>✓</span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                <a
+                  href={plan.cta === "Contact Us" ? "#contact" : "#demo"}
+                  className={`block text-center py-3 rounded-xl font-semibold transition-all ${
+                    plan.highlighted
+                      ? "bg-white text-blue-600 hover:bg-blue-50"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {plan.cta}
+                </a>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-sm text-gray-400 mt-8">
+            All plans include a 14-day free trial. No credit card required.
+          </p>
+        </div>
+      </section>
+
+      {/* DEMO REQUEST */}
+      <section id="demo" className="py-24 bg-white">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="text-blue-600 font-semibold text-sm uppercase tracking-widest mb-3">Request a Demo</div>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+              See Receipture in action.
+            </h2>
+            <p className="text-lg text-gray-500">
+              We&apos;ll walk you through the full workflow — from client photo to accountant review — in a live demo tailored to your firm.
+            </p>
+          </div>
+
+          {demoSubmitted ? (
+            <div className="bg-green-50 border border-green-200 rounded-3xl p-12 text-center">
+              <div className="text-5xl mb-4">🎉</div>
+              <h3 className="text-2xl font-bold text-green-800 mb-2">Request received!</h3>
+              <p className="text-green-600">We&apos;ll be in touch within 24 hours to schedule your demo.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleDemoRequest} className="bg-gray-50 rounded-3xl p-8 border border-gray-100 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={demoName}
+                    onChange={(e) => setDemoName(e.target.value)}
+                    placeholder="Jane Smith"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={demoEmail}
+                    onChange={(e) => setDemoEmail(e.target.value)}
+                    placeholder="jane@smithcpa.ca"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Firm Name</label>
+                <input
+                  type="text"
+                  required
+                  value={demoFirm}
+                  onChange={(e) => setDemoFirm(e.target.value)}
+                  placeholder="Smith & Associates CPA"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors text-lg shadow-lg shadow-blue-600/30"
+              >
+                Request My Demo →
+              </button>
+              <p className="text-xs text-gray-400 text-center">We typically respond within 24 hours. No spam, ever.</p>
+            </form>
           )}
         </div>
-      </div>
-    </main>
+      </section>
+
+      {/* CONTACT */}
+      <section id="contact" className="py-24 bg-gray-50">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="text-blue-600 font-semibold text-sm uppercase tracking-widest mb-3">Contact Us</div>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Have a question?
+            </h2>
+            <p className="text-lg text-gray-500">
+              We&apos;re a small Canadian team. Real humans respond to every message.
+            </p>
+          </div>
+
+          {contactSubmitted ? (
+            <div className="bg-green-50 border border-green-200 rounded-3xl p-12 text-center">
+              <div className="text-5xl mb-4">✅</div>
+              <h3 className="text-2xl font-bold text-green-800 mb-2">Message sent!</h3>
+              <p className="text-green-600">We&apos;ll get back to you within 24 hours.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleContact} className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={contactMessage}
+                  onChange={(e) => setContactMessage(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl transition-colors"
+              >
+                Send Message →
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-gray-900 text-white py-16">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            <div className="col-span-1 md:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-2xl">📄</span>
+                <span className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>Receipture</span>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed max-w-sm">
+                AI-powered receipt management for Canadian accounting firms. Built to save time for clients, accountants, and firm admins.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm uppercase tracking-widest text-gray-400 mb-4">Product</h4>
+              <ul className="space-y-2 text-sm text-gray-500">
+                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+                <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
+                <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
+                <li><Link href="/login" className="hover:text-white transition-colors">Sign In</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm uppercase tracking-widest text-gray-400 mb-4">Company</h4>
+              <ul className="space-y-2 text-sm text-gray-500">
+                <li><a href="#demo" className="hover:text-white transition-colors">Request Demo</a></li>
+                <li><a href="#contact" className="hover:text-white transition-colors">Contact Us</a></li>
+                <li><a href="mailto:branpicc2@gmail.com" className="hover:text-white transition-colors">branpicc2@gmail.com</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <p className="text-sm text-gray-500">© {new Date().getFullYear()} Receipture. All rights reserved. Made in Canada 🍁</p>
+            <div className="flex gap-6 text-sm text-gray-500">
+              <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
+              <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

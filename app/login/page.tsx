@@ -49,16 +49,16 @@ function LoginPageContent() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h1 className="text-center text-4xl font-bold text-gray-900 dark:text-white">
-            ReceiptAI
+<h1 className="text-center text-4xl font-bold text-gray-900 dark:text-white">
+            Receipture
           </h1>
-          <h2 className="mt-6 text-center text-3xl font-semibold text-gray-900 dark:text-white">
+                    <h2 className="mt-6 text-center text-3xl font-semibold text-gray-900 dark:text-white">
             Sign in to your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Accounting software for Canadian small businesses
+<p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+            Receipt management for Canadian accounting firms
           </p>
-        </div>
+                  </div>
 
         {magicLinkSent ? (
           <div className="rounded-2xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-6">
