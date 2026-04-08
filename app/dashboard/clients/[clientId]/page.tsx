@@ -209,6 +209,24 @@ setEdits(clientEdits);
     return true;
   });
 
+async function requestIncomeTypeUpdate() {
+    if (!confirm(`Send a task to ${client?.name} asking them to confirm or update their income type?`)) return;
+    try {
+      const firmId = await getMyFirmId();
+      await supabase.from("notifications").insert({
+        firm_id: firmId,
+        client_id: clientId,
+        type: "task",
+        title: "Please confirm your income type",
+        message: "Your accountant has requested that you review and confirm your income type in Settings. This ensures your receipts are assigned to the correct tax form (T2125, T776, or T2200).",
+        read: false,
+      });
+      alert(`✅ Task sent to ${client?.name} — they'll see it in their notifications.`);
+    } catch (err: any) {
+      alert("Failed to send task: " + err.message);
+    }
+  }
+
   if (loading) return <div className="p-8 text-gray-500 dark:text-gray-400">Loading client...</div>;
   if (!client) return <div className="p-8 text-red-600">Client not found.</div>;
 
@@ -310,11 +328,19 @@ setEdits(clientEdits);
                     <span className="text-gray-500 dark:text-gray-400">Phone</span>
                     <span className="text-gray-900 dark:text-white">{client.phone_number || "—"}</span>
                   </div>
-                  <div className="flex justify-between p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
+<div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
                     <span className="text-gray-500 dark:text-gray-400">Income Type</span>
-                    <span className="text-gray-900 dark:text-white capitalize">{client.income_type?.replace("_", " ") || "—"}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-900 dark:text-white capitalize">{client.income_type?.replace(/_/g, " ") || "Not set"}</span>
+                      <button
+                        onClick={requestIncomeTypeUpdate}
+                        className="text-xs px-2 py-1 bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-400 border border-accent-200 dark:border-accent-700 rounded-lg hover:bg-accent-100 dark:hover:bg-accent-900/30 transition-colors"
+                      >
+                        📋 Request Update
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex justify-between p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
+                                    <div className="flex justify-between p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
                     <span className="text-gray-500 dark:text-gray-400">SMS Notifications</span>
                     <span className={client.sms_enabled ? "text-green-600 dark:text-green-400" : "text-gray-400"}>{client.sms_enabled ? "Enabled" : "Disabled"}</span>
                   </div>

@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [replayingTour, setReplayingTour] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [editingName, setEditingName] = useState(false);
+  const [incomeType, setIncomeType] = useState("self_employed");
   
   // Email forwarding
   const [emailForwarding, setEmailForwarding] = useState("");
@@ -106,6 +107,16 @@ export default function SettingsPage() {
       });
       
       setDisplayName(firmUser.display_name || "");
+
+      // Load income type for clients
+      if (firmUser.role === "client" && firmUser.client_id) {
+        const { data: clientData } = await supabase
+          .from("clients")
+          .select("income_type")
+          .eq("id", firmUser.client_id)
+          .single();
+        setIncomeType(clientData?.income_type || "self_employed");
+      }
       
       // Load email forwarding for clients
       if (firmUser.role === "client" && firmUser.client_id) {
@@ -569,6 +580,47 @@ setBillingInfo({
                   </div>
                 </div>
               </div>
+
+{/* Income Type — clients only */}
+              {isClient && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Income Type
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    This determines which CRA tax form applies to your receipts (T2125, T776, or T2200).
+                  </p>
+                  <select
+                    value={incomeType}
+                    onChange={async (e) => {
+                      const newType = e.target.value;
+                      setIncomeType(newType);
+                      try {
+                        const { data: { user: authUser } } = await supabase.auth.getUser();
+                        if (!authUser) return;
+                        const { data: firmUser } = await supabase
+                          .from("firm_users")
+                          .select("client_id")
+                          .eq("auth_user_id", authUser.id)
+                          .single();
+                        if (!firmUser?.client_id) return;
+                        await supabase
+                          .from("clients")
+                          .update({ income_type: newType })
+                          .eq("id", firmUser.client_id);
+                        alert("✅ Income type updated");
+                      } catch (err: any) {
+                        alert("Failed to update income type: " + err.message);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                  >
+                    <option value="self_employed">Self-Employed / Incorporated (T2125)</option>
+                    <option value="rental_property">Rental Property (T776)</option>
+                    <option value="employed">Employed — Home Office/Vehicle (T2200)</option>
+                  </select>
+                </div>
+              )}
 
               {/* Business Card Manager — clients only */}
               {isClient && (
