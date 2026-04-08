@@ -15,6 +15,7 @@ export default function LandingPage() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
   const [scrolled, setScrolled] = useState(false);
+  const [showcaseTab, setShowcaseTab] = useState("Client View");
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -377,6 +378,329 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* PRODUCT SHOWCASE - Add this between How It Works and Features sections */}
+<section id="showcase" className="py-24 bg-white overflow-hidden">
+  <div className="max-w-7xl mx-auto px-6">
+    <div className="text-center mb-16">
+      <div className="text-blue-600 font-semibold text-sm uppercase tracking-widest mb-3">The Product</div>
+      <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+        Built for the real world.
+      </h2>
+      <p className="text-lg text-gray-500 max-w-xl mx-auto">
+        Three different views. One seamless workflow.
+      </p>
+    </div>
+
+    {/* Tab switcher */}
+    <div className="flex justify-center mb-10">
+      <div className="inline-flex bg-gray-100 rounded-2xl p-1.5 gap-1">
+        {["Client View", "Accountant View", "Firm Admin View"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setShowcaseTab(tab)}
+            className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              showcaseTab === tab
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* Client View */}
+    {showcaseTab === "Client View" && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold mb-6">
+            👤 Client Experience
+          </div>
+          <h3 className="text-3xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+            30 seconds to submit a receipt.
+          </h3>
+          <p className="text-gray-500 mb-6 leading-relaxed">
+            Clients open the app, tap upload, take a photo. Our AI does the rest — extracting vendor, amount, date, and tax automatically. A simple text message asks for the expense purpose.
+          </p>
+          <ul className="space-y-3">
+            {["No app download required — works in any browser", "Photo, PDF, or forwarded email receipts", "SMS follow-up for expense purpose", "Real-time budget tracking"].map(item => (
+              <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Phone mockup */}
+        <div className="flex justify-center">
+          <div className="relative">
+            {/* Phone frame */}
+            <div className="w-72 bg-gray-900 rounded-[3rem] p-3 shadow-2xl">
+              <div className="bg-white rounded-[2.5rem] overflow-hidden" style={{ height: "580px" }}>
+                {/* Status bar */}
+                <div className="bg-white px-6 pt-4 pb-2 flex justify-between items-center">
+                  <span className="text-xs font-semibold text-gray-900">9:41</span>
+                  <div className="w-24 h-5 bg-gray-900 rounded-full" />
+                  <div className="flex gap-1">
+                    <div className="w-4 h-3 bg-gray-900 rounded-sm opacity-80" />
+                  </div>
+                </div>
+
+                {/* App header */}
+                <div className="bg-blue-600 px-4 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-blue-200 text-xs">Good afternoon,</p>
+                      <p className="text-white font-bold text-lg">Piccinin 👋</p>
+                    </div>
+                    <div className="w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">BP</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upload button */}
+                <div className="px-4 pt-4">
+                  <div className="bg-blue-50 border-2 border-dashed border-blue-200 rounded-2xl p-5 text-center mb-4">
+                    <div className="text-2xl mb-1">📸</div>
+                    <p className="text-blue-700 font-semibold text-sm">Upload Receipt</p>
+                    <p className="text-blue-400 text-xs mt-1">Tap to take a photo</p>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {[["19", "Total"], ["7", "This Month"], ["84%", "Categorized"]].map(([val, label]) => (
+                      <div key={label} className="bg-gray-50 rounded-xl p-2 text-center">
+                        <p className="font-bold text-gray-900 text-sm">{val}</p>
+                        <p className="text-gray-400 text-xs">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Recent receipts */}
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent Receipts</p>
+                  {[
+                    { vendor: "Harvey's", amount: "$37.26", cat: "Meals", color: "bg-green-100 text-green-700" },
+                    { vendor: "Fortinos", amount: "$21.44", cat: "Groceries", color: "bg-blue-100 text-blue-700" },
+                    { vendor: "Shell", amount: "$89.50", cat: "Fuel", color: "bg-amber-100 text-amber-700" },
+                  ].map((r) => (
+                    <div key={r.vendor} className="flex items-center justify-between py-2 border-b border-gray-100">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{r.vendor}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${r.color}`}>{r.cat}</span>
+                      </div>
+                      <p className="text-sm font-bold text-gray-900">{r.amount}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* SMS bubble floating */}
+            <div className="absolute -right-8 top-20 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 w-52">
+              <p className="text-xs text-gray-500 mb-1">📱 Text message</p>
+              <p className="text-xs text-gray-800 leading-relaxed">
+                "Hi Piccinin! We received your Harvey's receipt for $37.26. What was the purpose?
+                <br/><br/>1. Business meal<br/>2. Team lunch<br/>3. Client entertainment"
+              </p>
+              <div className="mt-2 bg-blue-600 rounded-xl px-3 py-1.5 text-center">
+                <p className="text-white text-xs font-medium">Reply: "1"</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Accountant View */}
+    {showcaseTab === "Accountant View" && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-semibold mb-6">
+            💼 Accountant Experience
+          </div>
+          <h3 className="text-3xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+            Review. Categorize. Export.
+          </h3>
+          <p className="text-gray-500 mb-6 leading-relaxed">
+            Accountants see every receipt organized by client, with AI-suggested categories and flags for anything that needs attention. What used to take hours now takes minutes.
+          </p>
+          <ul className="space-y-3">
+            {["AI pre-categorizes every receipt automatically", "Flags personal cards, duplicates, mismatches", "Edit history tracks every change made", "One-click QuickBooks CSV export", "Direct messaging with clients in-app"].map(item => (
+              <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Desktop mockup */}
+        <div className="bg-gray-100 rounded-2xl p-4 shadow-xl">
+          {/* Browser bar */}
+          <div className="bg-white rounded-xl mb-3 px-4 py-2 flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-400" />
+              <div className="w-3 h-3 rounded-full bg-yellow-400" />
+              <div className="w-3 h-3 rounded-full bg-green-400" />
+            </div>
+            <div className="flex-1 bg-gray-100 rounded-lg px-3 py-1 text-xs text-gray-400">
+              receipture.ca/dashboard/receipts
+            </div>
+          </div>
+
+          {/* Dashboard */}
+          <div className="bg-white rounded-xl overflow-hidden">
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Receipts</p>
+                <p className="text-xs text-gray-400">19 total receipts</p>
+              </div>
+              <div className="flex gap-2">
+                <div className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium">📥 Export CSV</div>
+              </div>
+            </div>
+
+            {/* Client cards */}
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Client View</p>
+              <div className="flex gap-2">
+                {[
+                  { name: "J. Test", flags: 4, color: "border-orange-300 bg-orange-50" },
+                  { name: "Malina P.", flags: 2, color: "border-blue-200 bg-blue-50" },
+                  { name: "Bran T.", flags: 0, color: "border-gray-200 bg-white" },
+                ].map(c => (
+                  <div key={c.name} className={`border rounded-xl px-3 py-2 text-xs ${c.color}`}>
+                    <p className="font-semibold text-gray-900">{c.name}</p>
+                    {c.flags > 0 && <p className="text-orange-600">{c.flags} flags</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Receipt rows */}
+            <div className="divide-y divide-gray-50">
+              {[
+                { vendor: "Harvey's", date: "Apr 4", amount: "$37.26", cat: "Meals & Ent.", status: "approved", flag: false },
+                { vendor: "Fortinos", date: "Apr 3", amount: "$21.44", cat: "Groceries", status: "pending", flag: false },
+                { vendor: "Shoppers", date: "Apr 3", amount: "$30.83", cat: "Uncategorized", status: "review", flag: true },
+              ].map(r => (
+                <div key={r.vendor} className="px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">🧾</div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{r.vendor}</p>
+                      <p className="text-xs text-gray-400">{r.date}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {r.flag && <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full">🚩 Flag</span>}
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      r.status === "approved" ? "bg-green-50 text-green-600" :
+                      r.status === "review" ? "bg-yellow-50 text-yellow-600" :
+                      "bg-blue-50 text-blue-600"
+                    }`}>{r.cat}</span>
+                    <span className="text-sm font-bold text-gray-900">{r.amount}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Firm Admin View */}
+    {showcaseTab === "Firm Admin View" && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-full text-xs font-semibold mb-6">
+            🏢 Firm Admin Experience
+          </div>
+          <h3 className="text-3xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+            Your whole firm. One dashboard.
+          </h3>
+          <p className="text-gray-500 mb-6 leading-relaxed">
+            Firm admins see everything — all clients, all accountants, firm-wide analytics, and billing. Assign clients to accountants, monitor activity, and manage your subscription.
+          </p>
+          <ul className="space-y-3">
+            {["Manage multiple accountants and their clients", "Firm-wide receipt and flag analytics", "Assign clients to accountants easily", "Training modules for new staff onboarding", "Subscription and billing management"].map(item => (
+              <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
+                <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Admin dashboard mockup */}
+        <div className="bg-gray-100 rounded-2xl p-4 shadow-xl">
+          <div className="bg-white rounded-xl mb-3 px-4 py-2 flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-400" />
+              <div className="w-3 h-3 rounded-full bg-yellow-400" />
+              <div className="w-3 h-3 rounded-full bg-green-400" />
+            </div>
+            <div className="flex-1 bg-gray-100 rounded-lg px-3 py-1 text-xs text-gray-400">
+              receipture.ca/dashboard
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="font-semibold text-gray-900 text-sm">Firm Overview</p>
+              <p className="text-xs text-gray-400">Piccinin Accounting</p>
+            </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-4 gap-0 divide-x divide-gray-100 border-b border-gray-100">
+              {[["47", "Receipts"], ["3", "Flags"], ["89%", "Categorized"], ["7", "Clients"]].map(([val, label]) => (
+                <div key={label} className="px-3 py-3 text-center">
+                  <p className="font-bold text-gray-900 text-lg">{val}</p>
+                  <p className="text-gray-400 text-xs">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Accountant filter */}
+            <div className="px-4 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-500">👤 Accountant:</p>
+                <div className="bg-gray-100 rounded-lg px-3 py-1 text-xs text-gray-700 font-medium">Accountant 1 ▾</div>
+              </div>
+            </div>
+
+            {/* Team table */}
+            <div className="px-4 py-3">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Team</p>
+              {[
+                { name: "Accountant 1", clients: 4, receipts: 31, status: "Active" },
+                { name: "Accountant 2", clients: 3, receipts: 16, status: "Active" },
+              ].map(a => (
+                <div key={a.name} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-purple-100 rounded-full flex items-center justify-center">
+                      <span className="text-purple-600 text-xs font-bold">{a.name[0]}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{a.name}</p>
+                      <p className="text-xs text-gray-400">{a.clients} clients · {a.receipts} receipts</p>
+                    </div>
+                  </div>
+                  <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">{a.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</section>
 
       {/* FEATURES */}
       <section id="features" className="py-24 bg-white">
