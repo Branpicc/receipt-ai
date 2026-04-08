@@ -56,31 +56,31 @@ export async function triggerSms(
       client.timezone || 'America/Toronto'
     );
 
+    const nameParts = client.name.trim().split(' ');
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : client.name;
+    const amount = receipt.total_cents ? `$${(receipt.total_cents / 100).toFixed(2)}` : 'unknown amount';
+    const vendor = receipt.vendor || 'unknown vendor';
+
+    // For single receipts — keep original format
     const now = new Date();
     const greeting = getGreeting(now.getHours());
-    const amount = receipt.total_cents ? `$${(receipt.total_cents / 100).toFixed(2)}` : 'an unknown amount';
-    const vendor = receipt.vendor || 'an unknown vendor';
     const timeStr = new Date(receipt.created_at).toLocaleTimeString('en-CA', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: client.timezone || 'America/Toronto',
     });
-
-    const nameParts = client.name.trim().split(' ');
-    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : client.name;
     const suggestionText = suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n');
-
-    // Add batch prefix if multiple receipts
-    const batchPrefix = batchTotal > 1 ? `Receipt ${batchIndex} of ${batchTotal}: ` : '';
     const sourceText = source === 'email' ? 'via email' : source === 'camera' ? 'via camera' : 'uploaded';
 
-    const message = client.sms_timing === 'end_of_day'
-      ? `${greeting}, ${lastName}. ${batchPrefix}You submitted a receipt ${sourceText} from ${vendor} for ${amount}. What was the purpose? Reply with the number or type your own:\n${suggestionText}`
-      : `${greeting}, ${lastName}. ${batchPrefix}We received your receipt ${sourceText} from ${vendor} at ${timeStr} for ${amount}. What was the purpose of this expense?\n\n${suggestionText}\n\nReply with a number or describe in your own words.`;
+    const message = batchTotal === 1
+      ? (client.sms_timing === 'end_of_day'
+          ? `${greeting}, ${lastName}. You submitted a receipt ${sourceText} from ${vendor} for ${amount}. What was the purpose? Reply with a number or type your own:\n${suggestionText}`
+          : `${greeting}, ${lastName}. We received your receipt ${sourceText} from ${vendor} at ${timeStr} for ${amount}. What was the purpose?\n\n${suggestionText}\n\nReply with a number or describe in your own words.`)
+      : `queued`; // batch receipts — message will be sent as one combined SMS by sendBatchSms()
 
-    // First in batch sends immediately, rest wait as pending_batch
+    // Queue the SMS
     const isFirstInBatch = batchIndex === 1;
-    const status = isFirstInBatch ? 'pending' : 'pending_batch';
+    const status = batchTotal > 1 ? 'pending_batch' : 'pending';
 
     const { data: queueEntry, error: queueError } = await supabase
       .from('sms_queue')
@@ -103,8 +103,8 @@ export async function triggerSms(
 
     console.log(`📱 SMS queued (${batchIndex}/${batchTotal}):`, queueEntry.id);
 
-    // Only send immediately if instant AND first in batch
-    if (client.sms_timing === 'instant' && isFirstInBatch) {
+    // For single receipts — send immediately if instant
+    if (batchTotal === 1 && client.sms_timing === 'instant') {
       const twilio = await import('twilio');
       const client_twilio = twilio.default(
         process.env.TWILIO_ACCOUNT_SID!,
@@ -112,8 +112,6 @@ export async function triggerSms(
       );
 
       const formattedPhone = formatPhone(client.phone_number);
-      console.log('📱 Sending SMS to:', formattedPhone);
-
       await client_twilio.messages.create({
         body: message,
         from: process.env.TWILIO_PHONE_NUMBER!,
@@ -125,8 +123,13 @@ export async function triggerSms(
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', queueEntry.id);
 
-      console.log('📱 SMS sent successfully');
+      console.log('📱 Single SMS sent successfully');
       return { success: true, sent: true, queueId: queueEntry.id };
+    }
+
+    // For batches — if this is the last receipt in the batch, send combined SMS
+    if (batchTotal > 1 && batchIndex === batchTotal && client.sms_timing === 'instant') {
+      await sendBatchSms(clientId, batchId!, firmId);
     }
 
     return { success: true, sent: false, scheduledFor, queueId: queueEntry.id };
@@ -136,7 +139,75 @@ export async function triggerSms(
   }
 }
 
-// Called after a client replies — sends the next receipt in the batch
+// Send one combined SMS listing all receipts in the batch
+export async function sendBatchSms(clientId: string, batchId: string, firmId: string) {
+  try {
+    // Get all queued receipts for this batch
+    const { data: batchEntries } = await supabase
+      .from('sms_queue')
+      .select('*, receipts:receipt_id(vendor, total_cents)')
+      .eq('client_id', clientId)
+      .eq('batch_id', batchId)
+      .eq('status', 'pending_batch')
+      .order('batch_index', { ascending: true });
+
+    if (!batchEntries || batchEntries.length === 0) return null;
+
+    const { data: client } = await supabase
+      .from('clients')
+      .select('name, phone_number, timezone')
+      .eq('id', clientId)
+      .single();
+
+    if (!client?.phone_number) return null;
+
+    const nameParts = client.name.trim().split(' ');
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : client.name;
+    const now = new Date();
+    const greeting = getGreeting(now.getHours());
+    const total = batchEntries.length;
+
+    // Build receipt list
+    const receiptLines = batchEntries.map((entry: any) => {
+      const vendor = entry.receipts?.vendor || 'Unknown vendor';
+      const amount = entry.receipts?.total_cents
+        ? `$${(entry.receipts.total_cents / 100).toFixed(2)}`
+        : 'unknown amount';
+      return `${entry.batch_index}. ${vendor} — ${amount}`;
+    }).join('\n');
+
+    const message = `${greeting}, ${lastName}. We received ${total} receipts:\n\n${receiptLines}\n\nReply with the number and purpose for each:\n"1: purpose" or all at once:\n"1: purpose 2: purpose 3: purpose"`;
+
+    // Send the combined SMS
+    const twilio = await import('twilio');
+    const client_twilio = twilio.default(
+      process.env.TWILIO_ACCOUNT_SID!,
+      process.env.TWILIO_AUTH_TOKEN!
+    );
+
+    const formattedPhone = formatPhone(client.phone_number);
+    await client_twilio.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER!,
+      to: formattedPhone,
+    });
+
+    // Mark all batch entries as sent with the combined message
+    const ids = batchEntries.map((e: any) => e.id);
+    await supabase
+      .from('sms_queue')
+      .update({ status: 'sent', sent_at: new Date().toISOString(), message })
+      .in('id', ids);
+
+    console.log(`📱 Batch SMS sent for ${total} receipts`);
+    return { success: true, count: total };
+  } catch (error: any) {
+    console.error('📱 sendBatchSms error:', error.message);
+    return null;
+  }
+}
+
+// Called after a client replies to a single receipt — sends next if sequential mode
 export async function sendNextBatchSms(clientId: string, batchId: string) {
   try {
     const { data: nextEntry } = await supabase
@@ -168,12 +239,10 @@ export async function sendNextBatchSms(clientId: string, batchId: string) {
       process.env.TWILIO_AUTH_TOKEN!
     );
 
-    const formattedPhone = formatPhone(client.phone_number);
-
     await client_twilio.messages.create({
       body: nextEntry.message,
       from: process.env.TWILIO_PHONE_NUMBER!,
-      to: formattedPhone,
+      to: formatPhone(client.phone_number),
     });
 
     await supabase
