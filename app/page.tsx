@@ -23,6 +23,12 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  }, []);
+
   async function handleDemoRequest(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -231,10 +237,19 @@ export default function LandingPage() {
               </a>
             ))}
           </div>
-          <div className="hidden md:flex items-center gap-3">
+<div className="hidden md:flex items-center gap-3">
+            <button
+              onClick={() => {
+                const isDark = document.documentElement.classList.toggle("dark");
+                localStorage.setItem("theme", isDark ? "dark" : "light");
+              }}
+              className={`p-2 rounded-lg transition-colors ${scrolled ? "hover:bg-gray-100 text-gray-600" : "hover:bg-white/10 text-white/80"}`}
+            >
+              🌙
+            </button>
             <Link
               href="/login"
-              className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${scrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
+                            className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${scrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
             >
               Sign In
             </Link>
@@ -372,7 +387,7 @@ export default function LandingPage() {
               5–10 minutes a day keeps tax season stress away.
             </h3>
             <p className="text-blue-100 text-lg max-w-2xl mx-auto">
-              Clients spend 30 seconds uploading receipts. Accountants spend 5 minutes reviewing. 
+              Clients spend seconds uploading receipts. Accountants spend 5 minutes reviewing. 
               No more scrambling at year-end — everything is organized as it happens.
             </p>
           </div>
@@ -419,7 +434,7 @@ export default function LandingPage() {
             👤 Client Experience
           </div>
           <h3 className="text-3xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
-            30 seconds to submit a receipt.
+            Seconds to submit a receipt.
           </h3>
           <p className="text-gray-500 mb-6 leading-relaxed">
             Clients open the app, tap upload, take a photo. Our AI does the rest — extracting vendor, amount, date, and tax automatically. A simple text message asks for the expense purpose.
@@ -734,7 +749,7 @@ export default function LandingPage() {
                 color: "bg-blue-50 border-blue-100",
                 headerColor: "text-blue-700",
                 points: [
-                  "Snap a photo — done in 30 seconds",
+                  "Snap a photo — done in seconds",
                   "Reply to a text with the expense purpose",
                   "Forward email receipts automatically",
                   "See spending vs. budget in real time",
