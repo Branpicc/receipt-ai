@@ -72,8 +72,10 @@ const publicRoutes = [
     '/magic-link',
   ]
   
-  const isPublicRoute = publicRoutes.some((route) => path.startsWith(route))
-
+const isPublicRoute = publicRoutes.some((route) => 
+    route === '/' ? path === '/' : path.startsWith(route)
+  )
+  
   // If not authenticated and trying to access protected route
   if (!session && !isPublicRoute) {
     const redirectUrl = new URL('/login', request.url)
