@@ -165,13 +165,40 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const inviteUrl = `${baseUrl}/accept-invite/${inviteToken}`;
 
-    // TODO: Re-enable email sending when SendGrid production account is ready
-    console.log('📧 Email sending temporarily disabled');
-    console.log('✅ Invitation created successfully');
-    console.log('📎 Share this link with the user:', inviteUrl);
+// Send invite email via SendGrid
+    try {
+      const sgMail = await import('@sendgrid/mail');
+      sgMail.default.setApiKey(process.env.SENDGRID_API_KEY!);
+      await sgMail.default.send({
+        to: email,
+        from: 'noreply@receipture.ca',
+        subject: `You've been invited to join ${firmName} on Receipture`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <h1 style="font-size: 28px; color: #0f172a; margin-bottom: 8px;">You're invited!</h1>
+            <p style="color: #64748b; font-size: 16px; margin-bottom: 24px;">
+              <strong>${firmName}</strong> has invited you to join their team on Receipture as a <strong>${role}</strong>.
+            </p>
+            <a href="${inviteUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 16px; margin-bottom: 24px;">
+              Accept Invitation →
+            </a>
+            <p style="color: #94a3b8; font-size: 13px;">
+              This invitation expires in 7 days. If you didn't expect this email, you can safely ignore it.
+            </p>
+            <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+              Receipture · Receipt management for Canadian accounting firms · receipture.ca
+            </p>
+          </div>
+        `,
+      });
+      console.log('📧 Invite email sent to:', email);
+    } catch (emailError: any) {
+      console.error('📧 Failed to send invite email:', emailError.message);
+      // Non-blocking — still return success with the URL
+    }
 
     return NextResponse.json({
-      success: true,
+            success: true,
       invitation: {
         id: invitation.id,
         email: invitation.email,
