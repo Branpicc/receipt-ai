@@ -46,6 +46,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+// Check if email already exists
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const emailExists = existingUsers?.users.some(
+      u => u.email?.toLowerCase() === email.toLowerCase()
+    );
+    if (emailExists) {
+      return NextResponse.json(
+        { error: "An account with this email already exists. Please sign in instead." },
+        { status: 400 }
+      );
+    }
+
     // Create auth user
     const { data: authData, error: signupError } = await supabaseAdmin.auth.admin.createUser({
       email: email,

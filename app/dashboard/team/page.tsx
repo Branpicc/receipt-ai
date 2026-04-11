@@ -354,54 +354,101 @@ body: JSON.stringify({
 
         {/* Pending Invitations */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm mb-6 border border-transparent dark:border-dark-border overflow-hidden">
-          <div className="p-6 border-b border-gray-200 dark:border-dark-border">
+<div className="p-6 border-b border-gray-200 dark:border-dark-border">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Pending Invitations ({filteredInvitations.length})
+                Invitations
               </h2>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setInviteFilter("all")}
-                  className={`px-3 py-1 text-sm rounded-lg ${
-                    inviteFilter === "all"
-                      ? "bg-accent-500 text-white"
-                      : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setInviteFilter("accountant")}
-                  className={`px-3 py-1 text-sm rounded-lg ${
-                    inviteFilter === "accountant"
-                      ? "bg-accent-500 text-white"
-                      : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  Accountants
-                </button>
-                <button
-                  onClick={() => setInviteFilter("client")}
-                  className={`px-3 py-1 text-sm rounded-lg ${
-                    inviteFilter === "client"
-                      ? "bg-accent-500 text-white"
-                      : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  Clients
-                </button>
+                {(["all", "accountant", "client"] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setInviteFilter(f)}
+                    className={`px-3 py-1 text-sm rounded-lg capitalize ${
+                      inviteFilter === f
+                        ? "bg-accent-500 text-white"
+                        : "bg-gray-100 dark:bg-dark-bg text-gray-700 dark:text-gray-300"
+                    }`}
+                  >
+                    {f === "all" ? "All Roles" : f + "s"}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {filteredInvitations.length === 0 ? (
+{filteredInvitations.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
               No invitations found
             </div>
           ) : (
-            <div className="divide-y divide-gray-200 dark:divide-dark-border">
-              {filteredInvitations.map((invitation) => {
-                const isExpired = new Date(invitation.expires_at) < new Date();
+            <div>
+              {/* Group by status */}
+              {[
+                { label: "⏳ Pending", filter: (inv: Invitation) => inv.status === "pending" && new Date(inv.expires_at) > new Date() },
+                { label: "✅ Accepted", filter: (inv: Invitation) => inv.status === "accepted" },
+                { label: "⌛ Expired", filter: (inv: Invitation) => inv.status === "pending" && new Date(inv.expires_at) <= new Date() },
+                { label: "❌ Cancelled", filter: (inv: Invitation) => inv.status === "cancelled" },
+              ].map(({ label, filter }) => {
+                const group = filteredInvitations.filter(filter);
+                if (group.length === 0) return null;
+                return (
+                  <div key={label}>
+                    <div className="px-4 py-2 bg-gray-50 dark:bg-dark-hover border-y border-gray-100 dark:border-dark-border">
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        {label} ({group.length})
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-dark-border">
+                      {group.map((invitation) => {
+                        const isExpired = new Date(invitation.expires_at) < new Date();
+                        const isPending = invitation.status === "pending" && !isExpired;
+                        return (
+                          <div key={invitation.id} className="p-4 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-1">
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {invitation.email}
+                                  </div>
+                                  <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 capitalize">
+                                    {invitation.role}
+                                  </span>
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  Sent {new Date(invitation.created_at).toLocaleDateString()} •{" "}
+                                  {isExpired ? "Expired" : "Expires"} {new Date(invitation.expires_at).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {isPending && (
+                                  <button
+                                    onClick={() => cancelInvitation(invitation.id)}
+                                    className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                )}
+                                {isExpired && invitation.status !== "cancelled" && (
+                                  <button
+                                    onClick={() => resendInvitation(invitation.email, invitation.role)}
+                                    className="px-3 py-1.5 text-sm text-accent-600 dark:text-accent-400 hover:bg-accent-50 dark:hover:bg-accent-900/20 rounded-lg transition-colors"
+                                  >
+                                    Resend
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+                          const isExpired = new Date(invitation.expires_at) < new Date();
                 const isPending = invitation.status === "pending" && !isExpired;
                 
                 return (
