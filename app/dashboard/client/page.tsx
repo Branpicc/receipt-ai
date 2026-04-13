@@ -99,7 +99,7 @@ export default function ClientDashboardPage() {
         if (client) {
           setClientName(client.name);
           const emailAlias = client.email_alias || client.client_code;
-          setClientEmail(`${emailAlias}@receipts.example.com`);
+setClientEmail(`${emailAlias}@receipts.receipture.ca`);
         }
 
         await loadStats(firmUser.client_id, firmId);

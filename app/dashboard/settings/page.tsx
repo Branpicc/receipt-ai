@@ -12,6 +12,7 @@ type UserInfo = {
   role: string;
   firmId: string;
   displayName?: string;
+  phoneNumber?: string;
 };
 
 type UserPreferences = {
@@ -127,11 +128,12 @@ useEffect(() => {
         setIncomeType(clientData?.income_type || "self_employed");
       }
       
-      // Load email forwarding for clients
+// Load email forwarding and phone for clients
       if (firmUser.role === "client" && firmUser.client_id) {
         loadEmailForwarding(firmUser.client_id);
+        loadClientPhone(firmUser.client_id);
       }
-    } catch (error) {
+        } catch (error) {
       console.error("Failed to load user:", error);
     } finally {
       setLoading(false);
@@ -151,6 +153,21 @@ useEffect(() => {
       }
     } catch (error) {
       console.error("Failed to load email forwarding:", error);
+    }
+  };
+
+const loadClientPhone = async (clientId: string) => {
+    try {
+      const { data } = await supabase
+        .from("clients")
+        .select("phone_number")
+        .eq("id", clientId)
+        .single();
+      if (data) {
+        setUser(prev => prev ? { ...prev, phoneNumber: data.phone_number || "" } : null);
+      }
+    } catch (error) {
+      console.error("Failed to load phone:", error);
     }
   };
 
@@ -295,9 +312,8 @@ setBillingInfo({
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailForwarding)) {
-      alert("Please enter a valid email address");
+if (!/^[a-zA-Z0-9._-]+$/.test(emailForwarding.trim())) {
+      alert("Please enter only the part before the @ symbol");
       return;
     }
 
@@ -317,11 +333,11 @@ setBillingInfo({
         return;
       }
 
-      const { error } = await supabase
+const { error } = await supabase
         .from("clients")
-        .update({ email_forwarding_address: emailForwarding.trim() })
+        .update({ email_forwarding_address: `${emailForwarding.trim()}@receipts.receipture.ca` })
         .eq("id", firmUser.client_id);
-
+        
       if (error) throw error;
 
       setEditingEmail(false);
@@ -574,6 +590,35 @@ onClick={() => {
                 </h2>
 
                 <div className="space-y-4">
+
+                  {isClient && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Phone Number on File
+                      </label>
+                      <input
+                        type="text"
+                        value={user.phoneNumber || "Not set"}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-gray-100 dark:bg-dark-bg text-gray-900 dark:text-white"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Contact your accountant to update your phone number
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Role
+                    </label>
+                    <input
+                      type="text"
+                      value={user.role.replace("_", " ")}
+                      disabled
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-gray-100 dark:bg-dark-bg text-gray-900 dark:text-white capitalize"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Email
@@ -1046,16 +1091,21 @@ if (eligibility.eligible) {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Forwarding Email Address
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={emailForwarding}
-                    onChange={(e) => setEmailForwarding(e.target.value)}
-                    disabled={!editingEmail}
-                    placeholder="receipts@yourcompany.com"
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white disabled:bg-gray-100 disabled:dark:bg-dark-bg"
-                  />
-                  {editingEmail ? (
+<div className="flex gap-2 items-center">
+                  <div className="flex flex-1 border border-gray-300 dark:border-dark-border rounded-lg overflow-hidden">
+                    <input
+                      type="text"
+                      value={emailForwarding}
+                      onChange={(e) => setEmailForwarding(e.target.value.replace(/@.*/, ""))}
+                      disabled={!editingEmail}
+                      placeholder="yourname"
+                      className="flex-1 px-4 py-2 bg-white dark:bg-dark-bg text-gray-900 dark:text-white disabled:bg-gray-100 disabled:dark:bg-dark-bg outline-none"
+                    />
+                    <span className="px-3 py-2 bg-gray-50 dark:bg-dark-hover text-gray-500 dark:text-gray-400 text-sm border-l border-gray-300 dark:border-dark-border whitespace-nowrap">
+                      @receipts.receipture.ca
+                    </span>
+                  </div>
+                                    {editingEmail ? (
                     <>
                       <button
                         onClick={saveEmailForwarding}

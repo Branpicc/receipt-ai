@@ -48,7 +48,7 @@ const PROVINCE_DEFAULT_TZ: Record<string, string> = {
 
 export default function ClientsPage() {
   console.log("🔍 Clients page component mounted");
-  const inboxDomain = "receipts.example.com"; // change later
+const inboxDomain = "receipts.receipture.ca";
 
   const [firmId, setFirmId] = useState<string>("");
   const [userRole, setUserRole] = useState<string | null>(null);

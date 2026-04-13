@@ -322,7 +322,7 @@ async function requestIncomeTypeUpdate() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex justify-between p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
                     <span className="text-gray-500 dark:text-gray-400">Email Alias</span>
-                    <span className="font-mono text-gray-900 dark:text-white">{client.email_alias || client.client_code}@receipts.example.com</span>
+<span className="font-mono text-gray-900 dark:text-white">{client.email_alias || client.client_code}@receipts.receipture.ca</span>
                   </div>
                   <div className="flex justify-between p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
                     <span className="text-gray-500 dark:text-gray-400">Phone</span>

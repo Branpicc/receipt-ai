@@ -29,7 +29,7 @@ body {
   color: #0f172a;
 }
 
-.dark body {
+html.dark body {
   background-color: var(--color-dark-bg);
   color: white;
 }

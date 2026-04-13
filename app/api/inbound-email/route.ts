@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
     let firmId: string | null = null;
     let clientId: string | null = null;
 
-    // Try to match client-specific alias first (e.g., branpicc2@receipts.example.com)
-    const clientAliasMatch = to?.match(/([a-zA-Z0-9]+)@receipts\.example\.com/);
-    if (clientAliasMatch) {
+// Try to match client-specific alias first (e.g., branpicc2@receipts.receipture.ca)
+    const clientAliasMatch = to?.match(/([a-zA-Z0-9]+)@receipts\.receipture\.ca/);
+        if (clientAliasMatch) {
       const emailAlias = clientAliasMatch[1];
       console.log('🔍 Checking for client alias:', emailAlias);
 
