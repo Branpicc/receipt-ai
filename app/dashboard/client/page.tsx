@@ -157,17 +157,26 @@ setClientEmail(`${emailAlias}@receipts.receipture.ca`);
     setRecentReceipts((data as RecentReceipt[]) || []);
   }
 
-  async function loadRecentEdits(clientId: string, firmId: string) {
+async function loadRecentEdits(clientId: string, firmId: string) {
+    // Get this client's receipt IDs first
+    const { data: clientReceipts } = await supabase
+      .from("receipts")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("firm_id", firmId);
+
+    const receiptIds = clientReceipts?.map(r => r.id) || [];
+    if (receiptIds.length === 0) { setRecentEdits([]); return; }
+
     const { data } = await supabase
       .from("receipt_edits")
       .select("id, edit_reason, changes, created_at, receipt_id, receipts(vendor)")
-      .eq("firm_id", firmId)
+      .in("receipt_id", receiptIds)
       .order("created_at", { ascending: false })
       .limit(3);
-    const filtered = ((data || []) as unknown as RecentEdit[]).filter(e => e.receipts !== null);
-    setRecentEdits(filtered);
+    setRecentEdits(((data || []) as unknown as RecentEdit[]).filter(e => e.receipts !== null));
   }
-
+  
   async function loadBudgetStatus(clientId: string, firmId: string) {
     const { data: budgets } = await supabase
       .from("category_budgets")

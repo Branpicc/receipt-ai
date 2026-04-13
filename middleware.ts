@@ -120,6 +120,7 @@ const clientAllowedPaths = [
   '/dashboard/settings',
   '/dashboard/reports/clients',
   '/dashboard/reports/edits',
+  '/dashboard/email-inbox',
 ];
 
 // Redirect clients from /dashboard root to /dashboard/client

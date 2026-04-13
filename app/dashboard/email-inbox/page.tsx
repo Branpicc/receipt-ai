@@ -35,23 +35,45 @@ useEffect(() => {
     loadEmailAddress();
   }, [activeTab, selectedClient]);
 
-  async function loadEmailAddress() {
+async function loadEmailAddress() {
     try {
       const firmId = await getMyFirmId();
-      const { data: firm } = await supabase
-        .from("firms")
-        .select("email_ingestion_address")
-        .eq("id", firmId)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("role, client_id")
+        .eq("auth_user_id", authUser.id)
         .single();
 
-      if (firm?.email_ingestion_address) {
-        setEmailAddress(firm.email_ingestion_address);
+      if (firmUser?.role === "client" && firmUser?.client_id) {
+        const { data: client } = await supabase
+          .from("clients")
+          .select("email_alias, client_code")
+          .eq("id", firmUser.client_id)
+          .single();
+        if (client) {
+          const alias = client.email_alias || client.client_code;
+          setEmailAddress(`${alias}@receipts.receipture.ca`);
+        }
+      } else {
+        const { data: firm } = await supabase
+          .from("firms")
+          .select("email_ingestion_address")
+          .eq("id", firmId)
+          .single();
+        if (firm?.email_ingestion_address) {
+          setEmailAddress(firm.email_ingestion_address);
+        } else {
+          setEmailAddress(`receipts@receipts.receipture.ca`);
+        }
       }
     } catch (error) {
       console.error("Failed to load email address:", error);
     }
   }
-
+  
   async function loadEmailReceipts() {
     try {
       setLoading(true);
