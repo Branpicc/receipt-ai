@@ -25,6 +25,11 @@
 
 body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.dark body {
   background-color: var(--color-dark-bg);
   color: white;
 }

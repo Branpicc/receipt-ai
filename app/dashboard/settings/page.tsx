@@ -38,6 +38,9 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+const [hardDeleteUsers, setHardDeleteUsers] = useState<{id: string; auth_user_id: string; display_name: string | null; role: string; client_id: string | null}[]>([]);
+  const [hardDeleteSearch, setHardDeleteSearch] = useState("");
+  const [hardDeleteRoleFilter, setHardDeleteRoleFilter] = useState("all");
   const [replayingTour, setReplayingTour] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [editingName, setEditingName] = useState(false);
@@ -60,6 +63,12 @@ export default function SettingsPage() {
     receiptsUsed: number;
     receiptsLimit: number;
   } | null>(null);
+
+useEffect(() => {
+    if (user && activeTab === "advanced") {
+      loadHardDeleteUsers();
+    }
+  }, [user, activeTab]);
 
   useEffect(() => {
     loadUser();
@@ -379,6 +388,59 @@ setBillingInfo({
     }
   };
 
+const loadHardDeleteUsers = async () => {
+    if (!user || (user.role !== "firm_admin" && user.role !== "owner")) return;
+    try {
+      // Get users with accounts
+      const { data: firmUsers } = await supabase
+        .from("firm_users")
+        .select("id, auth_user_id, display_name, role, client_id")
+        .eq("firm_id", user.firmId)
+        .neq("role", "firm_admin")
+        .neq("role", "owner")
+        .order("created_at", { ascending: false });
+
+      // Get clients without accounts
+      const { data: allClients } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("firm_id", user.firmId)
+        .eq("is_active", true);
+
+      const accountClientIds = new Set((firmUsers || []).map(u => u.client_id).filter(Boolean));
+      const clientsWithoutAccounts = (allClients || [])
+        .filter(c => !accountClientIds.has(c.id))
+        .map(c => ({
+          id: `client-only-${c.id}`,
+          auth_user_id: "",
+          display_name: c.name,
+          role: "client (no account)",
+          client_id: c.id,
+        }));
+
+      setHardDeleteUsers([...(firmUsers || []), ...clientsWithoutAccounts]);
+    } catch (err) {
+      console.error("Failed to load users for delete:", err);
+    }
+  };
+
+const hardDeleteUser = async (firmUserId: string, authUserId: string, displayName: string | null, clientId: string | null) => {
+    if (!confirm(`⚠️ Permanently delete ${displayName || "this user"}?\n\nThis will remove:\n• Their account access\n• Their firm_users record\n• Their client record (if applicable)\n\nReceipts and data they submitted will remain. This cannot be undone.`)) return;
+try {
+      if (clientId) {
+        await supabase.from("clients").delete().eq("id", clientId);
+      }
+      // Only delete firm_users if it's a real account (not client-only)
+      if (!firmUserId.startsWith("client-only-")) {
+        await supabase.from("firm_users").delete().eq("id", firmUserId);
+      }
+            alert("✅ User removed successfully.");
+      loadHardDeleteUsers();
+    } catch (err: any) {
+      alert("Failed to delete user: " + err.message);
+    }
+  };
+
   const exportData = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -484,8 +546,11 @@ setBillingInfo({
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors whitespace-nowrap border-b-2 ${
+onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === "advanced") loadHardDeleteUsers();
+                }}
+                                className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors whitespace-nowrap border-b-2 ${
                   activeTab === tab.id
                     ? "border-accent-500 text-accent-600 dark:text-accent-400"
                     : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
@@ -569,16 +634,28 @@ setBillingInfo({
 
 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Role
+                      Theme
                     </label>
-                    <input
-                      type="text"
-                      value={user.role.replace("_", " ")}
-                      disabled
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-gray-100 dark:bg-dark-bg text-gray-900 dark:text-white capitalize"
-                    />
+                    <div className="flex gap-2">
+                      {(["light", "dark", "system"] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => savePreferences({ theme: t })}
+                          className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors capitalize ${
+                            preferences.theme === t
+                              ? "bg-accent-500 text-white border-accent-500"
+                              : "bg-white dark:bg-dark-bg text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover"
+                          }`}
+                        >
+                          {t === "light" ? "☀️ Light" : t === "dark" ? "🌙 Dark" : "💻 System"}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      System follows your device setting
+                    </p>
                   </div>
-                </div>
+                                  </div>
               </div>
 
 {/* Income Type — clients only */}
@@ -746,8 +823,10 @@ setBillingInfo({
                       </div>
 
                       {/* Usage Progress Bar */}
-                      {billingInfo.receiptsLimit < 999999 && (
-                        <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2 mb-4">
+<div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2 mb-4">
+                        {billingInfo.receiptsLimit >= 999999 || billingInfo.receiptsLimit === -1 ? (
+                          <div className="h-2 rounded-full bg-green-500 w-full" />
+                        ) : (
                           <div
                             className={`h-2 rounded-full transition-all ${
                               billingInfo.receiptsUsed >= billingInfo.receiptsLimit
@@ -758,8 +837,8 @@ setBillingInfo({
                             }`}
                             style={{ width: `${Math.min((billingInfo.receiptsUsed / billingInfo.receiptsLimit) * 100, 100)}%` }}
                           />
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       <div className="flex gap-3">
                         <button
@@ -1078,10 +1157,10 @@ if (eligibility.eligible) {
       )}
 
       {/* Advanced Tab */}
-      {activeTab === "advanced" && (
+{activeTab === "advanced" && (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    <div>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Onboarding Tour
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -1137,6 +1216,67 @@ if (eligibility.eligible) {
               </ol>
             </div>
           </div>
+
+{/* Hard Delete — firm admins only */}
+          {(user.role === "firm_admin" || user.role === "owner") && (
+            <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                🗑️ Remove Users
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Permanently remove a user and all their associated data from the firm. This cannot be undone.
+              </p>
+{/* Search and filter */}
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  placeholder="Search by name..."
+                  value={hardDeleteSearch}
+                  onChange={(e) => setHardDeleteSearch(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
+                <select
+                  value={hardDeleteRoleFilter}
+                  onChange={(e) => setHardDeleteRoleFilter(e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="accountant">Accountants</option>
+                  <option value="client">Clients</option>
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                {hardDeleteUsers.length === 0 ? (
+                  <p className="text-sm text-gray-400 dark:text-gray-500">Loading team members...</p>
+                ) : (
+                  hardDeleteUsers
+                    .filter(u => {
+                      const matchesSearch = !hardDeleteSearch || 
+                        (u.display_name || "").toLowerCase().includes(hardDeleteSearch.toLowerCase()) ||
+                        u.auth_user_id.toLowerCase().includes(hardDeleteSearch.toLowerCase());
+                      const matchesRole = hardDeleteRoleFilter === "all" || u.role === hardDeleteRoleFilter;
+                      return matchesSearch && matchesRole;
+                    })
+                    .map(u => (
+                                          <div key={u.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-dark-hover rounded-lg border border-gray-200 dark:border-dark-border">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{u.display_name || "No name"}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-mono">{u.auth_user_id}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{u.role}</p>
+                      </div>
+                      <button
+onClick={() => hardDeleteUser(u.id, u.auth_user_id, u.display_name, u.client_id)}
+                        className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="border-t border-gray-200 dark:border-dark-border pt-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">

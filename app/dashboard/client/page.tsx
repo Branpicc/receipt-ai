@@ -280,6 +280,26 @@ export default function ClientDashboardPage() {
     }
   }
 
+function getCategoryColor(category: string) {
+    const map: Record<string, string> = {
+      "Meals & Entertainment": "bg-green-100 text-green-700",
+      "Meals": "bg-green-100 text-green-700",
+      "Groceries": "bg-blue-100 text-blue-700",
+      "Vehicle Expenses & Fuel": "bg-amber-100 text-amber-700",
+      "Fuel": "bg-amber-100 text-amber-700",
+      "Office Supplies & Expenses": "bg-purple-100 text-purple-700",
+      "Software & Subscriptions": "bg-indigo-100 text-indigo-700",
+      "Travel Expenses": "bg-cyan-100 text-cyan-700",
+      "Professional Fees": "bg-pink-100 text-pink-700",
+      "Advertising & Promotion": "bg-orange-100 text-orange-700",
+      "Utilities": "bg-yellow-100 text-yellow-700",
+      "Insurance": "bg-teal-100 text-teal-700",
+      "Rent & Lease": "bg-red-100 text-red-700",
+      "Equipment & Tools": "bg-gray-100 text-gray-700",
+    };
+    return map[category] || "bg-gray-100 text-gray-700";
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -440,8 +460,12 @@ export default function ClientDashboardPage() {
                   <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.vendor || "Unknown vendor"}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     {receipt.receipt_date ? new Date(receipt.receipt_date).toLocaleDateString() : new Date(receipt.created_at).toLocaleDateString()}
-                    {receipt.approved_category && <span className="ml-1 text-green-600 dark:text-green-400">• {receipt.approved_category}</span>}
-                  </div>
+{receipt.approved_category && (
+                      <span className={`ml-1 text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryColor(receipt.approved_category)}`}>
+                        {receipt.approved_category}
+                      </span>
+                    )}
+                                      </div>
                 </div>
                 <div className="text-sm font-bold text-gray-900 dark:text-white ml-3 whitespace-nowrap">${(receipt.total_cents / 100).toFixed(2)}</div>
               </Link>
