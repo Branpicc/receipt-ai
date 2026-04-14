@@ -190,6 +190,7 @@ const isMultiReply = parsedKeys.length > 1;
       // Single reply — apply to most recent sent receipt
 // Find most recent entry with a valid receipt_id
       const queueEntry = sentEntries.find(e => e.receipt_id !== null) || sentEntries[0];
+console.log('📱 Queue entry found:', queueEntry?.id, 'receipt_id:', queueEntry?.receipt_id);
 
       if (!queueEntry.receipt_id) {
         return new NextResponse(
@@ -212,6 +213,7 @@ const isMultiReply = parsedKeys.length > 1;
         purpose_source: 'client',
         purpose_updated_at: new Date().toISOString(),
       }).eq('id', queueEntry.receipt_id);
+      console.log('📱 Purpose saved:', purposeSummary, 'for receipt:', queueEntry.receipt_id);
 
       await supabase.from('sms_queue').update({
         status: 'replied',
