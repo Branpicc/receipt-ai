@@ -208,12 +208,18 @@ console.log('📱 Queue entry found:', queueEntry?.id, 'receipt_id:', queueEntry
       const purposeText = parsed[0] || body.trim();
       const purposeSummary = await summarizePurpose(purposeText, receipt?.vendor || '', suggestions);
 
-      await supabase.from('receipts').update({
+const { error: updateError } = await supabase.from('receipts').update({
         purpose_text: purposeSummary,
         purpose_source: 'client',
         purpose_updated_at: new Date().toISOString(),
       }).eq('id', queueEntry.receipt_id);
-      console.log('📱 Purpose saved:', purposeSummary, 'for receipt:', queueEntry.receipt_id);
+      
+      if (updateError) {
+        console.error('❌ Failed to save purpose:', updateError);
+      } else {
+        console.log('✅ Purpose saved to receipt:', queueEntry.receipt_id);
+      }
+            console.log('📱 Purpose saved:', purposeSummary, 'for receipt:', queueEntry.receipt_id);
 
       await supabase.from('sms_queue').update({
         status: 'replied',
