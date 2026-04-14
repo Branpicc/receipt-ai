@@ -8,6 +8,8 @@ import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
 import RequestChangesModal from "@/components/RequestChangesModal";
 import ReceiptEditSection from "@/components/ReceiptEditSection";
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Receipt = {
   id: string;
