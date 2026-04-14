@@ -71,7 +71,6 @@ type ReceiptFlag = {
 export default function ReceiptDetailPage(): JSX.Element {
   const params = useParams();
   const receiptId = (params?.id as string) || "";
-  const hasLoadedRef = useRef(false);
 
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [files, setFiles] = useState<ReceiptFile[]>([]);
@@ -343,9 +342,9 @@ async function resolveFlag(flagId: string, note: string) {
     return files.find((f) => f.id === activeFileId) ?? files[0];
   }, [files, activeFileId]);
 
-  useEffect(() => {
-    if (!receiptId || hasLoadedRef.current) return;
-    const load = async () => {
+useEffect(() => {
+    if (!receiptId) return;
+        const load = async () => {
       setLoading(true);
       setErr("");
       try {
@@ -389,7 +388,6 @@ async function resolveFlag(flagId: string, note: string) {
           }
         }
 
-        hasLoadedRef.current = true;
         await checkRole();
 
         // Load folders after we have firm_id and client_id
