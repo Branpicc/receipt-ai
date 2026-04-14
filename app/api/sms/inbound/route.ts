@@ -43,12 +43,8 @@ async function summarizePurpose(
   }
 }
 
-// Parse multi-receipt replies like "1: lunch 2: office supplies 3: fuel"
-// or single "1: lunch with client"
 function parseMultiReply(body: string): Record<number, string> {
   const results: Record<number, string> = {};
-
-  // Match patterns like "1: text" or "1. text" with optional following numbers
   const pattern = /(\d+)\s*[:.\s]\s*([^0-9]+?)(?=\s*\d+\s*[:.\s]|$)/g;
   let match;
   while ((match = pattern.exec(body)) !== null) {
@@ -58,12 +54,9 @@ function parseMultiReply(body: string): Record<number, string> {
       results[num] = text;
     }
   }
-
-  // If no numbered pattern found, treat whole message as single reply
   if (Object.keys(results).length === 0 && body.trim().length > 0) {
-    results[0] = body.trim(); // 0 = apply to current pending receipt
+    results[0] = body.trim();
   }
-
   return results;
 }
 
@@ -97,14 +90,18 @@ export async function POST(request: NextRequest) {
 
     const client = clients[0];
 
-    // Get all sent SMS entries for this client to handle batch replies
-const { data: sentEntries } = await supabase
+    // Only look at entries sent in the last 24 hours to avoid stale matches
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: sentEntries } = await supabase
       .from('sms_queue')
       .select('id, receipt_id, suggested_purposes, firm_id, batch_id, batch_index, batch_total, status')
-            .eq('client_id', client.id)
+      .eq('client_id', client.id)
       .eq('status', 'sent')
+      .gte('sent_at', oneDayAgo)
       .order('sent_at', { ascending: false })
       .limit(10);
+
+    console.log('📱 Sent entries found:', sentEntries?.length, 'in last 24h');
 
     if (!sentEntries || sentEntries.length === 0) {
       return new NextResponse(
@@ -113,20 +110,16 @@ const { data: sentEntries } = await supabase
       );
     }
 
-    // Parse the reply — may contain multiple numbered purposes
     const parsed = parseMultiReply(body.trim());
     const parsedKeys = Object.keys(parsed).map(Number);
-const isMultiReply = parsedKeys.length > 1;
+    const isMultiReply = parsedKeys.length > 1;
 
     let savedCount = 0;
     let confirmParts: string[] = [];
 
     if (isMultiReply) {
-      // Multi-reply: match numbers to batch entries
       const mostRecentEntry = sentEntries[0];
       const batchId = mostRecentEntry.batch_id;
-
-      // Get all sent entries for this batch
       const batchEntries = batchId
         ? sentEntries.filter(e => e.batch_id === batchId)
         : [mostRecentEntry];
@@ -145,11 +138,14 @@ const isMultiReply = parsedKeys.length > 1;
         const suggestions = (entry.suggested_purposes as string[]) || [];
         const purposeSummary = await summarizePurpose(purposeText, receipt?.vendor || '', suggestions);
 
-        await supabase.from('receipts').update({
+        const { error: updateError } = await supabase.from('receipts').update({
           purpose_text: purposeSummary,
           purpose_source: 'client',
           purpose_updated_at: new Date().toISOString(),
         }).eq('id', entry.receipt_id);
+
+        if (updateError) console.error('❌ Failed to save purpose:', updateError);
+        else console.log('✅ Purpose saved:', purposeSummary, 'for receipt:', entry.receipt_id);
 
         await supabase.from('sms_queue').update({
           status: 'replied',
@@ -171,7 +167,6 @@ const isMultiReply = parsedKeys.length > 1;
         savedCount++;
       }
 
-      // Check if all batch receipts are now replied
       const allReplied = batchEntries.every(e =>
         confirmParts.some((_, i) => parsedKeys[i] === e.batch_index) ||
         e.status === 'replied'
@@ -187,10 +182,9 @@ const isMultiReply = parsedKeys.length > 1;
       );
 
     } else {
-      // Single reply — apply to most recent sent receipt
-// Find most recent entry with a valid receipt_id
+      // Single reply — find most recent entry with a valid receipt_id
       const queueEntry = sentEntries.find(e => e.receipt_id !== null) || sentEntries[0];
-console.log('📱 Queue entry found:', queueEntry?.id, 'receipt_id:', queueEntry?.receipt_id);
+      console.log('📱 Queue entry found:', queueEntry?.id, 'receipt_id:', queueEntry?.receipt_id);
 
       if (!queueEntry.receipt_id) {
         return new NextResponse(
@@ -204,22 +198,22 @@ console.log('📱 Queue entry found:', queueEntry?.id, 'receipt_id:', queueEntry
         .select('vendor')
         .eq('id', queueEntry.receipt_id)
         .single();
-              const suggestions = (queueEntry.suggested_purposes as string[]) || [];
+
+      const suggestions = (queueEntry.suggested_purposes as string[]) || [];
       const purposeText = parsed[0] || body.trim();
       const purposeSummary = await summarizePurpose(purposeText, receipt?.vendor || '', suggestions);
 
-const { error: updateError } = await supabase.from('receipts').update({
+      const { error: updateError } = await supabase.from('receipts').update({
         purpose_text: purposeSummary,
         purpose_source: 'client',
         purpose_updated_at: new Date().toISOString(),
       }).eq('id', queueEntry.receipt_id);
-      
+
       if (updateError) {
         console.error('❌ Failed to save purpose:', updateError);
       } else {
-        console.log('✅ Purpose saved to receipt:', queueEntry.receipt_id);
+        console.log('✅ Purpose saved:', purposeSummary, 'for receipt:', queueEntry.receipt_id);
       }
-            console.log('📱 Purpose saved:', purposeSummary, 'for receipt:', queueEntry.receipt_id);
 
       await supabase.from('sms_queue').update({
         status: 'replied',
@@ -243,7 +237,6 @@ const { error: updateError } = await supabase.from('receipts').update({
       const remaining = batchTotal - batchIndex;
 
       let confirmMessage = `Got it! Saved: "${purposeSummary}"`;
-
       if (remaining > 0 && batchId) {
         confirmMessage += `\n\n${remaining} receipt${remaining > 1 ? 's' : ''} still need a purpose. Reply with their numbers, e.g. "${batchIndex + 1}: purpose"`;
       } else {
