@@ -116,7 +116,7 @@ const { data: sentEntries } = await supabase
     // Parse the reply — may contain multiple numbered purposes
     const parsed = parseMultiReply(body.trim());
     const parsedKeys = Object.keys(parsed).map(Number);
-    const isMultiReply = parsedKeys.length > 1 || (parsedKeys.length === 1 && parsedKeys[0] > 0);
+const isMultiReply = parsedKeys.length > 1;
 
     let savedCount = 0;
     let confirmParts: string[] = [];
@@ -188,15 +188,22 @@ const { data: sentEntries } = await supabase
 
     } else {
       // Single reply — apply to most recent sent receipt
-      const queueEntry = sentEntries[0];
+// Find most recent entry with a valid receipt_id
+      const queueEntry = sentEntries.find(e => e.receipt_id !== null) || sentEntries[0];
+
+      if (!queueEntry.receipt_id) {
+        return new NextResponse(
+          '<?xml version="1.0"?><Response><Message>Thanks for your reply! We could not find a matching receipt. Please contact your accountant.</Message></Response>',
+          { headers: { 'Content-Type': 'text/xml' } }
+        );
+      }
 
       const { data: receipt } = await supabase
         .from('receipts')
         .select('vendor')
         .eq('id', queueEntry.receipt_id)
         .single();
-
-      const suggestions = (queueEntry.suggested_purposes as string[]) || [];
+              const suggestions = (queueEntry.suggested_purposes as string[]) || [];
       const purposeText = parsed[0] || body.trim();
       const purposeSummary = await summarizePurpose(purposeText, receipt?.vendor || '', suggestions);
 

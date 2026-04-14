@@ -192,9 +192,27 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
       try {
         // Strip HTML tags for text parsing
         const emailContent = text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-        extractedData = parseEmailText(emailContent);
-                vendorName = extractedData.vendor || vendorName;
-        console.log('✅ Parsed from text:', extractedData);
+extractedData = parseEmailText(emailContent);
+        // Use from_email as vendor hint if no vendor detected
+        if (!extractedData.vendor && from) {
+          const fromDomain = from.match(/@([^.]+)\./)?.[1];
+          if (fromDomain) {
+            const domainVendorMap: Record<string, string> = {
+              amazon: 'Amazon',
+              meta: 'Meta',
+              facebook: 'Meta',
+              nintendo: 'Nintendo',
+              google: 'Google',
+              microsoft: 'Microsoft',
+              apple: 'Apple',
+              netflix: 'Netflix',
+              spotify: 'Spotify',
+            };
+            extractedData.vendor = domainVendorMap[fromDomain.toLowerCase()] || fromDomain;
+          }
+        }
+        vendorName = extractedData.vendor || vendorName;
+                console.log('✅ Parsed from text:', extractedData);
       } catch (parseError) {
         console.error('❌ Parsing failed:', parseError);
       }
@@ -379,7 +397,12 @@ function parseEmailText(text: string): any {
   // Total patterns
   let total_cents: number | null = null;
   for (const line of lines) {
-    // "Grand Total: CDN$ 11.29" or "Total: $28.24" or "CA$6.78"
+// "Order Total: CDN$ 59.72" or "Grand Total: CDN$ 11.29" or "Total: $28.24"
+    const orderTotal = line.match(/order\s+total[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
+    if (orderTotal) {
+      total_cents = Math.round(parseFloat(orderTotal[1].replace(/,/g, '')) * 100);
+      break;
+    }
     const grandTotal = line.match(/grand\s+total[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
     if (grandTotal) {
       total_cents = Math.round(parseFloat(grandTotal[1].replace(/,/g, '')) * 100);
@@ -390,8 +413,8 @@ function parseEmailText(text: string): any {
       total_cents = Math.round(parseFloat(totalMatch[1].replace(/,/g, '')) * 100);
       break;
     }
-    // "CA$6.78" or "CDN$ 11.29"
-    const cadMatch = line.match(/(?:ca|cdn|cad)\$\s*([\d,.]+)/i);
+    // "CDN$ 59.72" or "CA$6.78"
+    const cadMatch = line.match(/(?:cdn|ca|cad)\$\s*([\d,.]+)/i);
     if (cadMatch && !total_cents) {
       const val = Math.round(parseFloat(cadMatch[1].replace(/,/g, '')) * 100);
       if (val > 50) total_cents = val;
