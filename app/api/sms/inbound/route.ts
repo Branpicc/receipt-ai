@@ -91,16 +91,16 @@ export async function POST(request: NextRequest) {
     const client = clients[0];
 
     // Only look at entries sent in the last 24 hours to avoid stale matches
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: sentEntries } = await supabase
       .from('sms_queue')
       .select('id, receipt_id, suggested_purposes, firm_id, batch_id, batch_index, batch_total, status')
       .eq('client_id', client.id)
       .eq('status', 'sent')
-      .gte('sent_at', oneDayAgo)
-      .order('sent_at', { ascending: false })
+      .gte('created_at', oneDayAgo)
+      .order('created_at', { ascending: false })
       .limit(10);
-
+      
     console.log('📱 Sent entries found:', sentEntries?.length, 'in last 24h');
 
     if (!sentEntries || sentEntries.length === 0) {
