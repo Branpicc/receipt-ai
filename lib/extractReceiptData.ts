@@ -258,19 +258,19 @@ function extractTotal(lines: string[]): number | null {
     }
 
     // "TOTAL   CAD $   59.43" or "TOTAL: $21.44" or "Total: $28.24"
-    if (/^total[:\s]/i.test(line) && !/subtotal/i.test(line)) {
+if (/^total[:\s]/i.test(line) && !/subtotal/i.test(line)) {
       const nums = line.match(/[\d]+\s*\.?\s*[\d]*/g);
       if (nums) {
         for (const n of nums) {
           const cents = parseCents(n);
-          if (cents && cents > 50 && (!bestTotal || cents > bestTotal)) bestTotal = cents;
+          if (cents && cents > 50) { bestTotal = cents; break; }
         }
       }
       if (!bestTotal && i + 1 < lines.length) {
         const cents = parseCents(lines[i + 1]);
         if (cents && cents > 50) bestTotal = cents;
       }
-      if (bestTotal) break;
+      break; // Always stop after finding TOTAL line
     }
 
     // "CA$6.78" or "CDN$ 11.29" or "CAD$ 59.43"
@@ -287,11 +287,23 @@ function extractTotal(lines: string[]): number | null {
     }
   }
 
+// Card payment fallback — amount on line after card brand (Mastercard/Visa/etc)
+  if (!bestTotal) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i].trim();
+      if (/mastercard|visa|amex|debit|interac/i.test(line)) {
+        const next = lines[i + 1]?.trim();
+        const cents = parseCents(next);
+        if (cents && cents > 200) { bestTotal = cents; break; }
+      }
+    }
+  }
+
   // Harvey's/restaurant fallback: standalone amount in bottom half
   if (!bestTotal) {
     for (let i = Math.floor(lines.length * 0.5); i < lines.length; i++) {
       const line = lines[i].trim();
-      if (/subtotal|tax|hst|gst|rounded|survey|feedback|cash|change|optimum|points|tip|balance/i.test(line)) continue;
+      if (/subtotal|tax|hst|gst|rounded|survey|feedback|cash|change|optimum|points|tip|balance|savings|loyalty|level|reward|member|credit|discount/i.test(line)) continue;
       const standalone = line.match(/^([\d]+\.\d{2})$/);
       if (standalone) {
         const cents = parseCents(standalone[1]);
@@ -299,7 +311,7 @@ function extractTotal(lines: string[]): number | null {
       }
     }
   }
-
+  
   return bestTotal;
 }
 
