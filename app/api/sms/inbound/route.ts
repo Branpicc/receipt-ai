@@ -90,19 +90,23 @@ const { data: clients } = await supabase
       );
     }
 
-    const client = clients[0];
-
-    // Only look at entries sent in the last 24 hours to avoid stale matches
-const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+// Search across ALL clients with this phone number
+    const clientIds = clients.map(c => c.id);
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: sentEntries } = await supabase
       .from('sms_queue')
-      .select('id, receipt_id, suggested_purposes, firm_id, batch_id, batch_index, batch_total, status')
-      .eq('client_id', client.id)
+      .select('id, receipt_id, suggested_purposes, firm_id, batch_id, batch_index, batch_total, status, client_id')
+      .in('client_id', clientIds)
       .eq('status', 'sent')
       .gte('created_at', oneDayAgo)
       .order('created_at', { ascending: false })
       .limit(10);
 
+    // Use the client from the most recent queue entry
+    const client = sentEntries && sentEntries.length > 0
+      ? clients.find(c => c.id === sentEntries[0].client_id) || clients[0]
+      : clients[0];
+      
     console.log('📱 Sent entries found:', sentEntries?.length, 'in last 24h');
 
     if (!sentEntries || sentEntries.length === 0) {
