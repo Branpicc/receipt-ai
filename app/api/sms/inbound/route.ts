@@ -76,15 +76,17 @@ export async function POST(request: NextRequest) {
 
     const normalizedPhone = from.replace(/\D/g, '');
 
-    const { data: clients } = await supabase
+const { data: clients } = await supabase
       .from('clients')
       .select('id, name, firm_id, timezone')
       .or(`phone_number.eq.${from},phone_number.eq.+${normalizedPhone},phone_number.eq.${normalizedPhone}`);
 
+    console.log('📱 Phone lookup:', from, 'normalized:', normalizedPhone, 'clients found:', clients?.length);
+
     if (!clients || clients.length === 0) {
       return new NextResponse(
         '<?xml version="1.0"?><Response><Message>Sorry, we could not find your account. Please contact your accountant.</Message></Response>',
-        { headers: { 'Content-Type': 'text/xml' } }
+                { headers: { 'Content-Type': 'text/xml' } }
       );
     }
 
@@ -100,7 +102,7 @@ const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       .gte('created_at', oneDayAgo)
       .order('created_at', { ascending: false })
       .limit(10);
-            
+
     console.log('📱 Sent entries found:', sentEntries?.length, 'in last 24h');
 
     if (!sentEntries || sentEntries.length === 0) {
