@@ -258,19 +258,26 @@ function extractTotal(lines: string[]): number | null {
     }
 
     // "TOTAL   CAD $   59.43" or "TOTAL: $21.44" or "Total: $28.24"
-if (/^total[:\s]/i.test(line) && !/subtotal/i.test(line)) {
-      const nums = line.match(/[\d]+\s*\.?\s*[\d]*/g);
+if (/^total[:\s$]/i.test(line) && !/subtotal/i.test(line)) {
+      // Check same line first
+      const nums = line.match(/\d+\.\d{2}/g);
       if (nums) {
         for (const n of nums) {
           const cents = parseCents(n);
           if (cents && cents > 50) { bestTotal = cents; break; }
         }
       }
-      if (!bestTotal && i + 1 < lines.length) {
-        const cents = parseCents(lines[i + 1]);
-        if (cents && cents > 50) bestTotal = cents;
+      // Check next 1-2 lines if not found on same line
+      if (!bestTotal) {
+        for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+          const nextLine = lines[j].trim();
+          // Skip if next line is subtotal/tax/etc
+          if (/subtotal|tax|hst|gst|payment|cash|savings|loyalty/i.test(nextLine)) break;
+          const cents = parseCents(nextLine);
+          if (cents && cents > 50) { bestTotal = cents; break; }
+        }
       }
-      break; // Always stop after finding TOTAL line
+      break; // Always stop after TOTAL line
     }
 
     // "CA$6.78" or "CDN$ 11.29" or "CAD$ 59.43"
@@ -311,7 +318,7 @@ if (/^total[:\s]/i.test(line) && !/subtotal/i.test(line)) {
       }
     }
   }
-  
+
   return bestTotal;
 }
 
