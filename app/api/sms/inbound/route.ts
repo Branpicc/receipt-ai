@@ -100,7 +100,7 @@ const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       .gte('created_at', oneDayAgo)
       .order('created_at', { ascending: false })
       .limit(10);
-      
+            
     console.log('📱 Sent entries found:', sentEntries?.length, 'in last 24h');
 
     if (!sentEntries || sentEntries.length === 0) {
