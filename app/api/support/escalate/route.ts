@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'support@receiptai.com',
+          from: 'support@Receipture.com',
           to: supportEmail,
-          subject: `[ReceiptAI Support] ${subject || 'New escalation'} — ${userName}`,
+          subject: `[Receipture Support] ${subject || 'New escalation'} — ${userName}`,
           text: `
 Support Escalation Request
 ==========================
@@ -47,7 +47,7 @@ Conversation Transcript:
 ------------------------
 ${transcript}
 
-Please respond to the user through the ReceiptAI dashboard.
+Please respond to the user through the Receipture dashboard.
           `.trim(),
         }),
       });

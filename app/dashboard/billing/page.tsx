@@ -142,7 +142,7 @@ export default function BillingPage() {
 
   async function handleSubscribe(tier: string) {
     if (tier === "enterprise") {
-      window.location.href = "mailto:sales@receiptai.com?subject=Enterprise Plan Inquiry";
+      window.location.href = "mailto:sales@receipture.ca?subject=Enterprise Plan Inquiry";
       return;
     }
 

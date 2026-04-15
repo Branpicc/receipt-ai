@@ -1214,7 +1214,7 @@ if (eligibility.eligible) {
               Onboarding Tour
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Replay the onboarding tour to learn about ReceiptAI features again
+              Replay the onboarding tour to learn about Receipture features again
             </p>
             <button
               onClick={handleReplayTour}

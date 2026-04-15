@@ -81,7 +81,7 @@ return (
             <div className="p-6 border-b border-gray-200 dark:border-dark-border">
               <div className="flex items-center justify-between">
                 {sidebarOpen ? (
-                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">ReceiptAI</h1>
+                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">Receipture</h1>
                 ) : (
                   <span className="text-2xl">📱</span>
                 )}

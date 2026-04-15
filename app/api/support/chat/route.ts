@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
-        system: `You are a helpful support assistant for ReceiptAI, a receipt management platform for Canadian accounting firms.
+        system: `You are a helpful support assistant for Receipture, a receipt management platform for Canadian accounting firms.
 
 You help users with questions about:
 - Uploading and managing receipts
@@ -32,7 +32,7 @@ You help users with questions about:
 
 Be concise, friendly, and helpful. If after genuinely trying you truly cannot solve their problem, say exactly: "I'm unable to resolve this issue and will escalate it to our support team."
 
-Do not make up features. Stick to what ReceiptAI actually does.`,
+Do not make up features. Stick to what Receipture actually does.`,
         messages: messages.slice(-10),
       }),
     });

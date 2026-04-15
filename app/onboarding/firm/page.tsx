@@ -71,7 +71,7 @@ export default function FirmSetupPage() {
         {/* Content */}
         <div className="bg-white rounded-2xl shadow-sm p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome to ReceiptAI! 👋
+            Welcome to Receipture! 👋
           </h1>
           <p className="text-gray-600 mb-8">
             Let's get your accounting firm set up. First, what's your firm name?

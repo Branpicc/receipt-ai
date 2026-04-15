@@ -255,7 +255,7 @@ const aiMessage = data.message || "I'm sorry, I couldn't process that. Please tr
       await supabase.from("conversation_messages").insert({
         conversation_id: conversationId,
         sender_role: "ai",
-        sender_name: "ReceiptAI Support",
+        sender_name: "Receipture Support",
         message: aiMessage,
         read: false,
       });
@@ -301,7 +301,7 @@ const aiMessage = data.message || "I'm sorry, I couldn't process that. Please tr
       await supabase.from("conversation_messages").insert({
         conversation_id: selectedConversation.id,
         sender_role: "ai",
-        sender_name: "ReceiptAI Support",
+        sender_name: "Receipture Support",
         message: "✅ Your issue has been escalated to our support team. You'll hear back within 24 hours. We've sent a summary of this conversation to our team.",
         read: false,
       });
@@ -521,7 +521,7 @@ if (activeTab === "support") {
                 {aiThinking && (
                   <div className="flex justify-start">
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3">
-                      <div className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">🤖 ReceiptAI Support</div>
+                      <div className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">🤖 Receipture Support</div>
                       <div className="flex gap-1">
                         <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                         <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
