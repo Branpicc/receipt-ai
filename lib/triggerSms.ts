@@ -127,9 +127,23 @@ export async function triggerSms(
       return { success: true, sent: true, queueId: queueEntry.id };
     }
 
-    // For batches — if this is the last receipt in the batch, send combined SMS
-    if (batchTotal > 1 && batchIndex === batchTotal && client.sms_timing === 'instant') {
-      await sendBatchSms(clientId, batchId!, firmId);
+// For batches — wait for all receipts to be queued then send combined SMS
+    if (batchTotal > 1 && client.sms_timing === 'instant') {
+      // Wait a moment for other uploads to finish
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Check how many batch entries are now queued
+      const { data: batchEntries } = await supabase
+        .from('sms_queue')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('batch_id', batchId!)
+        .eq('status', 'pending_batch');
+
+      // Only send if we have all entries OR this is the last expected one
+      if (batchEntries && (batchEntries.length >= batchTotal || batchIndex === batchTotal)) {
+        await sendBatchSms(clientId, batchId!, firmId);
+      }
     }
 
     return { success: true, sent: false, scheduledFor, queueId: queueEntry.id };
@@ -142,6 +156,20 @@ export async function triggerSms(
 // Send one combined SMS listing all receipts in the batch
 export async function sendBatchSms(clientId: string, batchId: string, firmId: string) {
   try {
+    // Check if batch SMS already sent (prevent duplicate sends)
+    const { data: alreadySent } = await supabase
+      .from('sms_queue')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('batch_id', batchId)
+      .eq('status', 'sent')
+      .limit(1);
+
+    if (alreadySent && alreadySent.length > 0) {
+      console.log('📱 Batch SMS already sent, skipping');
+      return null;
+    }
+
     // Get all queued receipts for this batch
     const { data: batchEntries } = await supabase
       .from('sms_queue')
@@ -152,8 +180,7 @@ export async function sendBatchSms(clientId: string, batchId: string, firmId: st
       .order('batch_index', { ascending: true });
 
     if (!batchEntries || batchEntries.length === 0) return null;
-
-    const { data: client } = await supabase
+        const { data: client } = await supabase
       .from('clients')
       .select('name, phone_number, timezone')
       .eq('id', clientId)
