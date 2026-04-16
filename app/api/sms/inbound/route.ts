@@ -60,6 +60,55 @@ function parseMultiReply(body: string): Record<number, string> {
   return results;
 }
 
+async function recategorizeAfterPurpose(receiptId: string, vendor: string, purposeSummary: string, firmId: string) {
+  try {
+    const { categorizeReceipt } = await import('@/lib/categorizeReceipt');
+    
+    // Check vendor history for pattern learning
+    const { data: pastReceipts } = await supabase
+      .from('receipts')
+      .select('approved_category, suggested_category')
+      .eq('firm_id', firmId)
+      .eq('vendor', vendor)
+      .not('approved_category', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // If 2+ past receipts from same vendor have same approved category, use it
+    if (pastReceipts && pastReceipts.length >= 2) {
+      const categoryCounts: Record<string, number> = {};
+      pastReceipts.forEach(r => {
+        if (r.approved_category) {
+          categoryCounts[r.approved_category] = (categoryCounts[r.approved_category] || 0) + 1;
+        }
+      });
+      const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
+      if (topCategory && topCategory[1] >= 2) {
+        await supabase.from('receipts').update({
+          suggested_category: topCategory[0],
+          category_confidence: 90,
+          category_reasoning: `Pattern: ${topCategory[1]} previous ${vendor} receipts categorized as ${topCategory[0]}`,
+        }).eq('id', receiptId);
+        console.log('🧠 Pattern-based category applied:', topCategory[0]);
+        return;
+      }
+    }
+
+    // Otherwise re-run categorization with vendor + purpose
+    const result = categorizeReceipt(vendor, purposeSummary);
+    if (result.suggested_category) {
+      await supabase.from('receipts').update({
+        suggested_category: result.suggested_category,
+        category_confidence: result.category_confidence,
+        category_reasoning: result.category_reasoning,
+      }).eq('id', receiptId);
+      console.log('🏷️ Re-categorized after purpose:', result.suggested_category);
+    }
+  } catch (err: any) {
+    console.error('❌ Re-categorization failed:', err.message);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -106,7 +155,7 @@ const { data: clients } = await supabase
     const client = sentEntries && sentEntries.length > 0
       ? clients.find(c => c.id === sentEntries[0].client_id) || clients[0]
       : clients[0];
-      
+
     console.log('📱 Sent entries found:', sentEntries?.length, 'in last 24h');
 
     if (!sentEntries || sentEntries.length === 0) {
@@ -152,6 +201,10 @@ const { data: clients } = await supabase
 
         if (updateError) console.error('❌ Failed to save purpose:', updateError);
         else console.log('✅ Purpose saved:', purposeSummary, 'for receipt:', entry.receipt_id);
+
+        if (!updateError && receipt?.vendor) {
+          await recategorizeAfterPurpose(entry.receipt_id, receipt.vendor, purposeSummary, client.firm_id);
+        }
 
         await supabase.from('sms_queue').update({
           status: 'replied',
@@ -219,6 +272,11 @@ const { data: clients } = await supabase
         console.error('❌ Failed to save purpose:', updateError);
       } else {
         console.log('✅ Purpose saved:', purposeSummary, 'for receipt:', queueEntry.receipt_id);
+      }
+
+      // Re-categorize with vendor + purpose
+      if (!updateError && receipt?.vendor) {
+        await recategorizeAfterPurpose(queueEntry.receipt_id, receipt.vendor, purposeSummary, client.firm_id);
       }
 
       await supabase.from('sms_queue').update({

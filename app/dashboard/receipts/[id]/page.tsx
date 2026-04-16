@@ -745,20 +745,24 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                         Change category
                       </button>
                     </div>
-                  ) : receipt.suggested_category && receipt.category_confidence ? (
+) : receipt.suggested_category && receipt.category_confidence ? (
                     <div className="space-y-3">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">
+                          🏷️ Is this the right category?
+                        </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium text-gray-900 dark:text-white ${receipt.category_confidence >= 80 ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                          {receipt.category_confidence >= 80 ? '→' : '⚠'} Suggested: {receipt.suggested_category}
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${receipt.category_confidence >= 80 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>
+                          {receipt.category_confidence >= 80 ? '✓' : '⚠'} {receipt.suggested_category}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{receipt.category_confidence}% confidence</span>
                       </div>
-                      {receipt.category_reasoning && (
+                                            {receipt.category_reasoning && (
                         <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-dark-hover rounded-lg p-3">
                           <span className="font-medium text-gray-900 dark:text-white">Reasoning:</span> {receipt.category_reasoning}
                         </div>
                       )}
-                      <div className="flex gap-2">
+<div className="flex gap-2 mt-3">
                         <button
                           onClick={async () => {
                             if (isFirmAdmin) { alert("🔒 Firm admins cannot approve categories."); return; }
@@ -785,12 +789,13 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                           disabled={isFirmAdmin}
                           className={`rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          Change Category
+                          ✏️ Change
                         </button>
+                      </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                                        <div className="space-y-3">
                       <div className="text-sm text-gray-500 dark:text-gray-400 bg-yellow-50 rounded-lg p-3 border border-yellow-200">
                         ⚠ Unable to auto-categorize. Please add vendor and purpose information.
                       </div>
