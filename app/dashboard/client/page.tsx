@@ -244,7 +244,7 @@ async function loadRecentEdits(clientId: string, firmId: string) {
 
       let succeeded = 0;
       let failed = 0;
-      const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
+const batchId = fileArray.length > 1 ? crypto.randomUUID() : undefined;
 
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
