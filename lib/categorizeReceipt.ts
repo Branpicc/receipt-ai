@@ -72,6 +72,11 @@ export const TAX_CATEGORIES = {
     gst_hst_eligible: true,
     note: "May be capital asset - verify with accountant",
   },
+  GIFTS: {
+    name: "Advertising & Promotion",
+    deductible: 100,
+    gst_hst_eligible: true,
+  },
   OTHER: {
     name: "Other Expenses",
     deductible: 100,
@@ -88,30 +93,25 @@ const VENDOR_PATTERNS = {
     "bureau en gros",
     "amazon", // Often office supplies
   ],
-  MEALS: [
-    "tim hortons",
-    "starbucks",
-    "mcdonalds",
-    "subway",
-    "restaurant",
-    "cafe",
-    "coffee",
-    "pizz",
-    "burger",
-    "food",
-    "keg", // The Keg Steakhouse
-    "canoe", // Canoe Restaurant
-    "grill",
-    "bistro",
-    "bar",
-    "pub",
-    "diner",
-    "steakhouse",
-    "tavern",
-    "eatery",
-    "kitchen",
+MEALS: [
+    "tim hortons", "starbucks", "mcdonalds", "mcdonald",
+    "subway", "restaurant", "cafe", "coffee", "pizz",
+    "burger", "food", "keg", "canoe", "grill", "bistro",
+    "bar", "pub", "diner", "steakhouse", "tavern", "eatery",
+    "kitchen", "harvey", "wendy", "dairy queen", "dq",
+    "a&w", "popeyes", "kfc", "taco bell", "chipotle",
+    "five guys", "swiss chalet", "montana", "east side",
+    "boston pizza", "pizza pizza", "domino", "papa john",
+    "sushi", "pho", "ramen", "thai", "indian", "chinese",
+    "greek", "italian", "french", "mexican", "bbq",
   ],
-  VEHICLE: [
+  EQUIPMENT: [
+    "ebgames", "eb games", "best buy", "bestbuy",
+    "staples", "canada computers", "memory express",
+    "apple store", "microsoft store", "dell",
+    "nintendo", "playstation", "xbox", "gaming",
+  ],
+    VEHICLE: [
     "shell",
     "esso",
     "petro-canada",
@@ -120,7 +120,10 @@ const VENDOR_PATTERNS = {
     "husky",
     "canadian tire gas",
     "costco gas",
+    "petro", "shell", "esso", "husky", "ultramar",
+    "pioneer", "canadian tire", "circle k",
   ],
+
   TELECOM: [
     "rogers",
     "bell",
@@ -152,6 +155,10 @@ const VENDOR_PATTERNS = {
     "mccarthy",
     "legal",
     "law",
+  ],
+  GIFTS: [
+    "flowers", "florist", "1-800-flowers", "ftd",
+    "hallmark", "gift", "basket",
   ],
   RENT: [
     "cadillac fairview",
