@@ -83,13 +83,14 @@ async function recategorizeAfterPurpose(receiptId: string, vendor: string, purpo
         }
       });
       const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0];
-      if (topCategory && topCategory[1] >= 2) {
+if (topCategory && topCategory[1] >= 2) {
         await supabase.from('receipts').update({
           suggested_category: topCategory[0],
+          approved_category: topCategory[0],
           category_confidence: 90,
-          category_reasoning: `Pattern: ${topCategory[1]} previous ${vendor} receipts categorized as ${topCategory[0]}`,
+          category_reasoning: `Auto-approved: ${topCategory[1]} previous ${vendor} receipts categorized as ${topCategory[0]}`,
         }).eq('id', receiptId);
-        console.log('🧠 Pattern-based category applied:', topCategory[0]);
+                console.log('🧠 Pattern-based category applied:', topCategory[0]);
         return;
       }
     }
