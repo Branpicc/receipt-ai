@@ -18,7 +18,9 @@ type EmailReceipt = {
   status: string;
   has_attachment: boolean;
   email_text: string;
+  email_html: string | null;
   converted_receipt_id: string | null;
+  purpose_text?: string | null;
 };
 
 type TabType = "pending" | "approved" | "rejected";
@@ -29,6 +31,7 @@ export default function EmailInboxPage() {
   const [loading, setLoading] = useState(true);
   const [emailAddress, setEmailAddress] = useState("");
   const { selectedClient, isFiltered } = useClientContext();
+  const [selectedEmail, setSelectedEmail] = useState<EmailReceipt | null>(null);
 
 useEffect(() => {
     loadEmailReceipts();
@@ -382,10 +385,11 @@ let emailQuery = supabase
       ) : (
         <div className="space-y-4">
           {emailReceipts.map((email) => (
-            <div
+<div
               key={email.id}
-              className={`rounded-lg border p-6 ${
-                activeTab === "approved" 
+              onClick={() => setSelectedEmail(email)}
+              className={`rounded-lg border p-6 cursor-pointer ${
+                                activeTab === "approved" 
                   ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20" :
                 activeTab === "rejected" 
                   ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20" :
@@ -442,17 +446,17 @@ let emailQuery = supabase
               </div>
 
               {/* Actions */}
-              {activeTab === "pending" && (
+{activeTab === "pending" && (
                 <div className="flex gap-3">
                   <button
-                    onClick={() => approveReceipt(email.id)}
-                    className="flex-1 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded font-medium hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); approveReceipt(email.id); }}
+                                        className="flex-1 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded font-medium hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
                   >
                     ✓ Approve & Categorize
                   </button>
-                  <button
-                    onClick={() => rejectReceipt(email.id)}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+<button
+                    onClick={(e) => { e.stopPropagation(); rejectReceipt(email.id); }}
+                                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   >
                     ✗ Reject
                   </button>
@@ -475,9 +479,9 @@ let emailQuery = supabase
 
               {activeTab === "rejected" && (
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => restoreReceipt(email.id)}
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+<button
+                    onClick={(e) => { e.stopPropagation(); restoreReceipt(email.id); }}
+                                        className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
                   >
                     ↺ Restore to Pending
                   </button>
@@ -488,6 +492,98 @@ let emailQuery = supabase
               )}
             </div>
           ))}
+        </div>
+      )}
+      {/* Email Detail Modal */}
+      {selectedEmail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 dark:border-dark-border flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                  {selectedEmail.vendor || "Unknown Vendor"}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{selectedEmail.from_email}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{selectedEmail.subject}</p>
+                <div className="flex gap-4 mt-2">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    ${((selectedEmail.total_cents || 0) / 100).toFixed(2)}
+                  </span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {selectedEmail.receipt_date || new Date(selectedEmail.received_at).toLocaleDateString()}
+                  </span>
+                </div>
+                {selectedEmail.purpose_text && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                    Purpose: {selectedEmail.purpose_text}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedEmail(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl ml-4"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Email Preview */}
+            <div className="flex-1 overflow-hidden p-4">
+              {selectedEmail.email_html ? (
+                <iframe
+                  srcDoc={selectedEmail.email_html}
+                  className="w-full h-full rounded-lg border border-gray-200 dark:border-dark-border"
+                  style={{ minHeight: '500px' }}
+                  title="Email Receipt"
+                  sandbox="allow-same-origin"
+                />
+              ) : selectedEmail.email_text ? (
+                <pre className="w-full h-full overflow-auto text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-dark-hover rounded-lg p-4 whitespace-pre-wrap">
+                  {selectedEmail.email_text}
+                </pre>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+                  No email content available
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 border-t border-gray-200 dark:border-dark-border flex gap-3">
+              {selectedEmail.status === 'pending' && (
+                <>
+                  <button
+                    onClick={() => { approveReceipt(selectedEmail.id); setSelectedEmail(null); }}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                  >
+                    ✓ Approve & Categorize
+                  </button>
+                  <button
+                    onClick={() => { rejectReceipt(selectedEmail.id); setSelectedEmail(null); }}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-300"
+                  >
+                    ✗ Reject
+                  </button>
+                </>
+              )}
+              {selectedEmail.converted_receipt_id && (
+                <Link
+                  href={`/dashboard/receipts/${selectedEmail.converted_receipt_id}`}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 text-center"
+                  onClick={() => setSelectedEmail(null)}
+                >
+                  View Receipt →
+                </Link>
+              )}
+              <button
+                onClick={() => setSelectedEmail(null)}
+                className="px-4 py-2 border border-gray-300 dark:border-dark-border text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
