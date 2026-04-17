@@ -12,13 +12,16 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     
-    const to = formData.get('to') as string;
+const to = formData.get('to') as string;
     const from = formData.get('from') as string;
     const subject = formData.get('subject') as string;
     const text = formData.get('text') as string;
     const html = formData.get('html') as string;
+    const rawEmail = formData.get('email') as string; // Raw MIME when Send Raw is enabled
     
     console.log('📧 Inbound email received:', { to, from, subject });
+    console.log('📧 Has text:', !!text, 'Has html:', !!html, 'Has raw:', !!rawEmail);
+    console.log('📧 Raw email preview:', rawEmail?.substring(0, 500));
 
     let firmId: string | null = null;
     let clientId: string | null = null;
@@ -151,9 +154,9 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
         client_id: clientId,
         from_email: from,
         subject: subject,
-        email_text: text,
-        email_html: html,
-        has_attachment: attachmentCount > 0,
+email_text: text || rawEmail?.substring(0, 10000),
+        email_html: html || rawEmail?.substring(0, 50000),
+                has_attachment: attachmentCount > 0,
         attachment_count: attachmentCount,
         attachment_url: attachments[0]?.url || null,
         attachment_filename: attachments[0]?.name || null,
@@ -188,12 +191,12 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
       } catch (ocrError) {
         console.error('❌ OCR failed:', ocrError);
       }
-} else if (text || html) {
+} else if (text || html || rawEmail) {
       try {
         // Strip HTML tags for text parsing - handle forwarded emails
         let emailContent = text || '';
         if (!emailContent && html) {
-          emailContent = html
+                    emailContent = html
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
             .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
             .replace(/<br\s*\/?>/gi, '\n')
@@ -210,11 +213,25 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
             .replace(/\s{3,}/g, '\n')
             .trim();
         }
+        // Fallback to raw MIME email if no text/html
+        if (!emailContent && rawEmail) {
+          emailContent = rawEmail
+            .replace(/Content-Type:[^\n]+\n/gi, '')
+            .replace(/Content-Transfer-Encoding:[^\n]+\n/gi, '')
+            .replace(/MIME-Version:[^\n]+\n/gi, '')
+            .replace(/--[a-zA-Z0-9_-]+/g, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/=\r?\n/g, '')
+            .replace(/=[0-9A-F]{2}/gi, ' ')
+            .replace(/\s{3,}/g, '\n')
+            .trim();
+        }
         // Also use subject as vendor hint
         if (subject) {
           emailContent = `Subject: ${subject}\n` + emailContent;
         }
         extractedData = parseEmailText(emailContent);
+
                 // Use from_email as vendor hint if no vendor detected
         if (!extractedData.vendor && from) {
           const fromDomain = from.match(/@([^.]+)\./)?.[1];
@@ -317,7 +334,7 @@ const { data: queueEntry } = await supabase.from('sms_queue').insert({
         status: 'pending',
         scheduled_for: scheduledFor.toISOString(),
       }).select().single();
-      
+
       if (clientSms.sms_timing === 'instant' && queueEntry) {
         const twilio = await import('twilio');
         const twilioClient = twilio.default(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
