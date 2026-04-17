@@ -353,11 +353,27 @@ function parseEmailText(text: string): any {
     'paypal': 'PayPal',
   };
 
-  let vendor: string | null = null;
-  for (const [key, name] of Object.entries(KNOWN_EMAIL_VENDORS)) {
-    if (text.toLowerCase().includes(key)) {
-      vendor = name;
-      break;
+let vendor: string | null = null;
+  
+  // Try to extract vendor from Toast/restaurant email subject pattern
+  // "Receipt for Order #85 at HEAL Wellness"
+  const atVendorMatch = text.match(/(?:order|receipt)\s+(?:#\d+\s+)?at\s+([^\n<]+)/i);
+  if (atVendorMatch) {
+    vendor = atVendorMatch[1].trim().replace(/\s*-\s*.*$/, '').trim(); // Remove location suffix
+  }
+
+  // Try "Thank you for your order" followed by business name
+  if (!vendor) {
+    const thankYouMatch = text.match(/(?:thank you for your order|visit to)\s+([A-Z][^\n<.]+)/i);
+    if (thankYouMatch) vendor = thankYouMatch[1].trim();
+  }
+
+  if (!vendor) {
+    for (const [key, name] of Object.entries(KNOWN_EMAIL_VENDORS)) {
+      if (text.toLowerCase().includes(key)) {
+        vendor = name;
+        break;
+      }
     }
   }
 
@@ -397,6 +413,14 @@ function parseEmailText(text: string): any {
   // Total patterns
   let total_cents: number | null = null;
   for (const line of lines) {
+
+// Toast POS format: "Total$31.64" or "Total $31.64"
+    const toastTotal = line.match(/^total\$?([\d,.]+)$/i);
+    if (toastTotal && !total_cents) {
+      const val = Math.round(parseFloat(toastTotal[1].replace(/,/g, '')) * 100);
+      if (val > 50) { total_cents = val; break; }
+    }
+
 // "Order Total: CDN$ 59.72" or "Grand Total: CDN$ 11.29" or "Total: $28.24"
     const orderTotal = line.match(/order\s+total[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
     if (orderTotal) {
@@ -436,6 +460,14 @@ function parseEmailText(text: string): any {
       tax_cents = Math.round(parseFloat(taxPercent[1].replace(/,/g, '')) * 100);
       break;
     }
+
+    // Toast format: "Tax$3.64"
+    const toastTax = line.match(/^tax\$?([\d,.]+)$/i);
+    if (toastTax) {
+      tax_cents = Math.round(parseFloat(toastTax[1].replace(/,/g, '')) * 100);
+      break;
+    }
+
     // Simple "Tax: $1.30"
     const simpleTax = line.match(/^tax[:\s]+\$?\s*([\d,.]+)$/i);
     if (simpleTax) {
@@ -448,13 +480,19 @@ function parseEmailText(text: string): any {
   let card_last_four: string | null = null;
   let card_brand: string | null = null;
   for (const line of lines) {
-    const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i) ||
+const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i) ||
                       line.match(/card\s+number[:\s]+[*·\s]+(\d{4})/i);
     if (cardMatch) card_last_four = cardMatch[1];
+    // Toast format: "Mastercardxxxxxxxx2054"
+    const toastCard = line.match(/(mastercard|visa|amex)x+(\d{4})/i);
+    if (toastCard) {
+      card_brand = toastCard[1].charAt(0).toUpperCase() + toastCard[1].slice(1).toLowerCase();
+      card_last_four = toastCard[2];
+    }
     if (/mastercard/i.test(line) && !card_brand) card_brand = 'Mastercard';
     if (/\bvisa\b/i.test(line) && !card_brand) card_brand = 'Visa';
     if (/amex|american\s+express/i.test(line) && !card_brand) card_brand = 'Amex';
-  }
+    }
 
   return {
     vendor,
