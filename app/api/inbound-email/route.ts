@@ -8,6 +8,28 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function extractTextFromMime(raw: string): string {
+  const textMatch = raw.match(/Content-Type: text\/plain[^\n]*\n(?:Content-Transfer-Encoding:[^\n]*\n)?\n([\s\S]*?)(?=\n--|\z)/i);
+  if (textMatch) {
+    return textMatch[1]
+      .replace(/=\r?\n/g, '')
+      .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+      .trim();
+  }
+  return raw.substring(0, 5000);
+}
+
+function extractHtmlFromMime(raw: string): string {
+  const htmlMatch = raw.match(/Content-Type: text\/html[^\n]*\n(?:Content-Transfer-Encoding:[^\n]*\n)?\n([\s\S]*?)(?=\n--[a-zA-Z0-9]|\z)/i);
+  if (htmlMatch) {
+    return htmlMatch[1]
+      .replace(/=\r?\n/g, '')
+      .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+      .trim();
+  }
+  return '';
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -154,9 +176,9 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
         client_id: clientId,
         from_email: from,
         subject: subject,
-email_text: text || rawEmail?.substring(0, 10000),
-        email_html: html || rawEmail?.substring(0, 50000),
-                has_attachment: attachmentCount > 0,
+email_text: text || extractTextFromMime(rawEmail || ''),
+        email_html: html || extractHtmlFromMime(rawEmail || ''),
+                        has_attachment: attachmentCount > 0,
         attachment_count: attachmentCount,
         attachment_url: attachments[0]?.url || null,
         attachment_filename: attachments[0]?.name || null,
@@ -226,6 +248,8 @@ email_text: text || rawEmail?.substring(0, 10000),
             .replace(/\s{3,}/g, '\n')
             .trim();
         }
+
+        
         // Also use subject as vendor hint
         if (subject) {
           emailContent = `Subject: ${subject}\n` + emailContent;
