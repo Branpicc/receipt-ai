@@ -145,7 +145,7 @@ const { data: clients } = await supabase
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: sentEntries } = await supabase
       .from('sms_queue')
-      .select('id, receipt_id, suggested_purposes, firm_id, batch_id, batch_index, batch_total, status, client_id')
+.select('id, receipt_id, email_receipt_id, suggested_purposes, firm_id, batch_id, batch_index, batch_total, status, client_id')
       .in('client_id', clientIds)
       .eq('status', 'sent')
       .gte('created_at', oneDayAgo)
@@ -246,7 +246,7 @@ const { data: clients } = await supabase
       const queueEntry = sentEntries.find(e => e.receipt_id !== null) || sentEntries[0];
       console.log('📱 Queue entry found:', queueEntry?.id, 'receipt_id:', queueEntry?.receipt_id);
 
-      if (!queueEntry.receipt_id) {
+if (!queueEntry.receipt_id && !(queueEntry as any).email_receipt_id) {
         return new NextResponse(
           '<?xml version="1.0"?><Response><Message>Thanks for your reply! We could not find a matching receipt. Please contact your accountant.</Message></Response>',
           { headers: { 'Content-Type': 'text/xml' } }
@@ -263,11 +263,20 @@ const { data: clients } = await supabase
       const purposeText = parsed[0] || body.trim();
       const purposeSummary = await summarizePurpose(purposeText, receipt?.vendor || '', suggestions);
 
-      const { error: updateError } = await supabase.from('receipts').update({
-        purpose_text: purposeSummary,
-        purpose_source: 'client',
-        purpose_updated_at: new Date().toISOString(),
-      }).eq('id', queueEntry.receipt_id);
+let updateError = null;
+      if (queueEntry.receipt_id) {
+        const { error } = await supabase.from('receipts').update({
+          purpose_text: purposeSummary,
+          purpose_source: 'client',
+          purpose_updated_at: new Date().toISOString(),
+        }).eq('id', queueEntry.receipt_id);
+        updateError = error;
+      } else if ((queueEntry as any).email_receipt_id) {
+        const { error } = await supabase.from('email_receipts').update({
+          purpose_text: purposeSummary,
+        }).eq('id', (queueEntry as any).email_receipt_id);
+        updateError = error;
+      }
 
       if (updateError) {
         console.error('❌ Failed to save purpose:', updateError);

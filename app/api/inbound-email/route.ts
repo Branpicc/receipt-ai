@@ -190,10 +190,32 @@ const monthlyLimit = 999999; // Unlimited for all paid plans
       }
 } else if (text || html) {
       try {
-        // Strip HTML tags for text parsing
-        const emailContent = text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-extractedData = parseEmailText(emailContent);
-        // Use from_email as vendor hint if no vendor detected
+        // Strip HTML tags for text parsing - handle forwarded emails
+        let emailContent = text || '';
+        if (!emailContent && html) {
+          emailContent = html
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<\/div>/gi, '\n')
+            .replace(/<\/tr>/gi, '\n')
+            .replace(/<\/td>/gi, ' ')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#\d+;/g, ' ')
+            .replace(/\s{3,}/g, '\n')
+            .trim();
+        }
+        // Also use subject as vendor hint
+        if (subject) {
+          emailContent = `Subject: ${subject}\n` + emailContent;
+        }
+        extractedData = parseEmailText(emailContent);
+                // Use from_email as vendor hint if no vendor detected
         if (!extractedData.vendor && from) {
           const fromDomain = from.match(/@([^.]+)\./)?.[1];
           if (fromDomain) {
@@ -285,16 +307,17 @@ if (clientId) {
         clientSms.timezone || 'America/Toronto'
       );
 
-      const { data: queueEntry } = await supabase.from('sms_queue').insert({
+const { data: queueEntry } = await supabase.from('sms_queue').insert({
         client_id: clientId,
         firm_id: firmId,
         receipt_id: null,
+        email_receipt_id: emailReceipt.id,
         message,
         suggested_purposes: suggestions,
         status: 'pending',
         scheduled_for: scheduledFor.toISOString(),
       }).select().single();
-
+      
       if (clientSms.sms_timing === 'instant' && queueEntry) {
         const twilio = await import('twilio');
         const twilioClient = twilio.default(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
