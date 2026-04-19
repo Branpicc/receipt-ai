@@ -322,13 +322,14 @@ if (extractedData) {
       const { categorizeReceipt } = await import('@/lib/categorizeReceipt');
       const categorization = categorizeReceipt(extractedData.vendor || '', '');
       // Clean the raw text - strip MIME headers
-      const cleanRawText = (extractedData.raw_text || '')
-        .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:|Check #|HEAL|Subtotal|Total)/m, '')
+const cleanRawText = (extractedData.raw_text || '')
+        .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:\s|Check #\d|Subtotal\s+\$|1 Mango|1 Nutella)/m, '')
+        .replace(/Received: from[\s\S]*?(?=---------- Forwarded message|Thank you for your order)/m, '')
         .replace(/=\r?\n/g, '')
         .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
         .replace(/\[image:[^\]]+\]/g, '')
         .trim();
-      await supabase
+              await supabase
         .from('email_receipts')
         .update({
           vendor: extractedData.vendor,
@@ -343,7 +344,7 @@ if (extractedData) {
         })
         .eq('id', emailReceipt.id);
     }
-    
+
 // Save tax if extracted
     if (extractedData?.tax_cents && extractedData.tax_cents > 0 && emailReceipt.id) {
       try {
@@ -608,6 +609,13 @@ const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i
     if (/amex|american\s+express/i.test(line) && !card_brand) card_brand = 'Amex';
     }
 
+// Strip MIME headers from raw_text before saving
+  const cleanText = text
+    .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:|Check #)/m, '')
+    .replace(/=\r?\n/g, '')
+    .replace(/\[image:[^\]]+\]/g, '')
+    .trim();
+
   return {
     vendor,
     date,
@@ -615,6 +623,6 @@ const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i
     tax_cents,
     card_last_four,
     card_brand,
-    raw_text: text.substring(0, 2000),
+    raw_text: (cleanText || text).substring(0, 3000),
   };
 }
