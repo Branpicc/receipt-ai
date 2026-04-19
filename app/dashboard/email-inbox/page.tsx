@@ -185,7 +185,7 @@ purpose_text: emailReceipt.purpose_text,
           payment_method: emailReceipt.payment_method || null,
           card_brand: emailReceipt.card_brand || null,
           card_last_four: emailReceipt.card_last_four || null,
-                }])
+                        }])
                 .select("id")
         .single();
 
@@ -203,6 +203,17 @@ await supabase
         })
         .eq("id", emailReceiptId);
 
+// Save tax from email receipt
+      if (emailReceipt.tax_cents && emailReceipt.tax_cents > 0) {
+        await supabase.from('receipt_taxes').insert([{
+          receipt_id: receipt.id,
+          firm_id: firmId,
+          tax_type: 'HST',
+          rate: 0.13,
+          amount_cents: emailReceipt.tax_cents,
+        }]);
+      }
+
       // Parse and save line items from email text
       if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
 // Use clean text only — skip if it looks like raw MIME
@@ -212,25 +223,45 @@ const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || ''
           .replace(/=\r?\n/g, '')
           .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
           .replace(/\[image:[^\]]+\]/g, '');
-                            const lineItemRegex = /(\d+)\s+([A-Za-z][^\$\n]+?)\s+\$?([\d.]+)/g;
-        const lineItems: any[] = [];
-        let match;
-        while ((match = lineItemRegex.exec(rawText)) !== null) {
-          const qty = parseInt(match[1]);
-          const desc = match[2].trim();
-          const price = Math.round(parseFloat(match[3]) * 100);
-          if (price > 0 && price < 100000 && desc.length > 2) {
-            lineItems.push({
-              receipt_id: receipt.id,
-              description: desc,
-              quantity: qty,
-              unit_price_cents: price,
-              total_cents: qty * price,
-              line_index: lineItems.length + 1,
-            });
+const lineItems: any[] = [];
+        const textLines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+        
+        for (let i = 0; i < textLines.length; i++) {
+          const line = textLines[i];
+          
+          // Skip non-item lines
+          if (/^(subtotal|tax|total|credit|mastercard|visa|transaction|authorization|approval|payment|card|powered|toast|privacy|terms|server|check|guest|ordered|bolton|ontario|on$)/i.test(line)) continue;
+          if (/^(no |add |light )/i.test(line)) continue; // Skip modifiers
+          
+          // Pattern 1: "1 Mango Bowl $14.00" on same line
+          const sameLine = line.match(/^(\d+)\s+([A-Za-z][^$\n]{2,40}?)\s+\$?([\d.]+)$/);
+          if (sameLine) {
+            const qty = parseInt(sameLine[1]);
+            const desc = sameLine[2].trim();
+            const price = Math.round(parseFloat(sameLine[3]) * 100);
+            if (price > 0 && price < 100000 && desc.length > 2 && qty < 20) {
+              lineItems.push({ receipt_id: receipt.id, description: desc, quantity: qty, unit_price_cents: price, total_cents: qty * price, line_index: lineItems.length + 1 });
+            }
+            continue;
+          }
+          
+          // Pattern 2: "1 Mango Bowl" on one line, "$14.00" on next line
+          const itemStart = line.match(/^(\d+)\s+([A-Za-z][^$\n]{2,40})$/);
+          if (itemStart && i + 1 < textLines.length) {
+            const nextLine = textLines[i + 1];
+            const priceMatch = nextLine.match(/^\$?([\d.]+)$/);
+            if (priceMatch) {
+              const qty = parseInt(itemStart[1]);
+              const desc = itemStart[2].trim();
+              const price = Math.round(parseFloat(priceMatch[1]) * 100);
+              if (price > 0 && price < 100000 && desc.length > 2 && qty < 20) {
+                lineItems.push({ receipt_id: receipt.id, description: desc, quantity: qty, unit_price_cents: price, total_cents: qty * price, line_index: lineItems.length + 1 });
+                i++; // Skip price line
+              }
+            }
           }
         }
-        if (lineItems.length > 0) {
+                if (lineItems.length > 0) {
           await supabase.from('receipt_items').insert(lineItems);
         }
       }
