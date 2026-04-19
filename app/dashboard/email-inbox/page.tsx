@@ -202,8 +202,12 @@ await supabase
 
       // Parse and save line items from email text
       if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
-        const rawText = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
-        const lineItemRegex = /(\d+)\s+([A-Za-z][^\$\n]+?)\s+\$?([\d.]+)/g;
+// Use clean text only — skip if it looks like raw MIME
+        const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
+        const rawText = rawTextSource.startsWith('Received:') 
+          ? rawTextSource.replace(/^[\s\S]*?(?=---------- Forwarded|Thank you for your order|Server:|Check #)/m, '')
+          : rawTextSource;
+                  const lineItemRegex = /(\d+)\s+([A-Za-z][^\$\n]+?)\s+\$?([\d.]+)/g;
         const lineItems: any[] = [];
         let match;
         while ((match = lineItemRegex.exec(rawText)) !== null) {

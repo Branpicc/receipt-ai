@@ -291,12 +291,12 @@ if (extractedData) {
           receipt_date: extractedData.date,
           total_cents: extractedData.total_cents,
           extraction_status: 'completed',
-          ocr_raw_text: extractedData.raw_text,
+ocr_raw_text: extractTextFromMime(rawEmail || '') || extractedData.raw_text,
           suggested_category: categorization.suggested_category,
         })
         .eq('id', emailReceipt.id);
     }
-    
+
 // Save tax if extracted
     if (extractedData?.tax_cents && extractedData.tax_cents > 0 && emailReceipt.id) {
       try {

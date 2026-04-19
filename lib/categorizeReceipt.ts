@@ -95,7 +95,7 @@ const VENDOR_PATTERNS = {
   ],
 MEALS: [
     "tim hortons", "starbucks", "mcdonalds", "mcdonald",
-    "subway", "restaurant", "cafe", "coffee", "pizz",
+    "subway", "heal wellness", "heal", "restaurant", "cafe", "coffee", "pizz",
     "burger", "food", "keg", "canoe", "grill", "bistro",
     "bar", "pub", "diner", "steakhouse", "tavern", "eatery",
     "kitchen", "harvey", "wendy", "dairy queen", "dq",
