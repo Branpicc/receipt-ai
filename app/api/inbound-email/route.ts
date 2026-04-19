@@ -9,14 +9,22 @@ const supabase = createClient(
 );
 
 function extractTextFromMime(raw: string): string {
-  const textMatch = raw.match(/Content-Type: text\/plain[^\n]*\n(?:Content-Transfer-Encoding:[^\n]*\n)?\n([\s\S]*?)(?=\n--|\z)/i);
+  // Try to extract text/plain section
+  const textMatch = raw.match(/Content-Type: text\/plain[^\n]*\n(?:[^\n]+\n)*\n([\s\S]*?)(?=\n--[a-zA-Z0-9])/i);
   if (textMatch) {
     return textMatch[1]
       .replace(/=\r?\n/g, '')
       .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+      .replace(/\[image:[^\]]+\]/g, '') // Remove [image: ...] placeholders
       .trim();
   }
-  return raw.substring(0, 5000);
+  // Fallback: strip all headers and boundaries
+  return raw
+    .replace(/^[\s\S]*?(?=---------- Forwarded message)/m, '')
+    .replace(/=\r?\n/g, '')
+    .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+    .replace(/\[image:[^\]]+\]/g, '')
+    .substring(0, 5000);
 }
 
 function extractHtmlFromMime(raw: string): string {
@@ -320,7 +328,7 @@ if (extractedData) {
           receipt_date: extractedData.date,
           total_cents: extractedData.total_cents,
           extraction_status: 'completed',
-ocr_raw_text: extractTextFromMime(rawEmail || '') || extractedData.raw_text,
+ocr_raw_text: extractedData.raw_text || extractTextFromMime(rawEmail || ''),
           suggested_category: categorization.suggested_category,
         })
         .eq('id', emailReceipt.id);
