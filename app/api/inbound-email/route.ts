@@ -14,7 +14,7 @@ function extractTextFromMime(raw: string): string {
   if (textMatch) {
     return textMatch[1]
       .replace(/=\r?\n/g, '')
-      .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+      .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
       .replace(/\[image:[^\]]+\]/g, '') // Remove [image: ...] placeholders
       .trim();
   }
@@ -22,7 +22,7 @@ function extractTextFromMime(raw: string): string {
   return raw
     .replace(/^[\s\S]*?(?=---------- Forwarded message)/m, '')
     .replace(/=\r?\n/g, '')
-    .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+    .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
     .replace(/\[image:[^\]]+\]/g, '')
     .substring(0, 5000);
 }
@@ -32,7 +32,7 @@ function extractHtmlFromMime(raw: string): string {
   if (htmlMatch) {
     return htmlMatch[1]
       .replace(/=\r?\n/g, '')
-      .replace(/=[0-9A-F]{2}/gi, (m) => String.fromCharCode(parseInt(m.slice(1), 16)))
+      .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
       .trim();
   }
   return '';
@@ -321,6 +321,13 @@ email_text: text || extractTextFromMime(rawEmail || ''),
 if (extractedData) {
       const { categorizeReceipt } = await import('@/lib/categorizeReceipt');
       const categorization = categorizeReceipt(extractedData.vendor || '', '');
+      // Clean the raw text - strip MIME headers
+      const cleanRawText = (extractedData.raw_text || '')
+        .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:|Check #|HEAL|Subtotal|Total)/m, '')
+        .replace(/=\r?\n/g, '')
+        .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
+        .replace(/\[image:[^\]]+\]/g, '')
+        .trim();
       await supabase
         .from('email_receipts')
         .update({
@@ -328,12 +335,15 @@ if (extractedData) {
           receipt_date: extractedData.date,
           total_cents: extractedData.total_cents,
           extraction_status: 'completed',
-ocr_raw_text: extractedData.raw_text || extractTextFromMime(rawEmail || ''),
+          ocr_raw_text: cleanRawText || extractedData.raw_text,
           suggested_category: categorization.suggested_category,
+          payment_method: extractedData.payment_method || null,
+          card_brand: extractedData.card_brand || null,
+          card_last_four: extractedData.card_last_four || null,
         })
         .eq('id', emailReceipt.id);
     }
-
+    
 // Save tax if extracted
     if (extractedData?.tax_cents && extractedData.tax_cents > 0 && emailReceipt.id) {
       try {

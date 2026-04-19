@@ -177,12 +177,15 @@ const { data: receipt, error: receiptError } = await supabase
           extraction_status: emailReceipt.extraction_status,
           ocr_raw_text: emailReceipt.ocr_raw_text,
           file_path: emailReceipt.attachment_url,
-          purpose_text: emailReceipt.purpose_text,
+purpose_text: emailReceipt.purpose_text,
           purpose_source: emailReceipt.purpose_text ? 'client' : null,
           suggested_category: categorization.suggested_category,
           category_confidence: categorization.category_confidence,
           category_reasoning: categorization.category_reasoning,
-        }])
+          payment_method: emailReceipt.payment_method || null,
+          card_brand: emailReceipt.card_brand || null,
+          card_last_four: emailReceipt.card_last_four || null,
+                }])
                 .select("id")
         .single();
 
@@ -203,11 +206,13 @@ await supabase
       // Parse and save line items from email text
       if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
 // Use clean text only — skip if it looks like raw MIME
-        const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
-        const rawText = rawTextSource.startsWith('Received:') 
-          ? rawTextSource.replace(/^[\s\S]*?(?=---------- Forwarded|Thank you for your order|Server:|Check #)/m, '')
-          : rawTextSource;
-                  const lineItemRegex = /(\d+)\s+([A-Za-z][^\$\n]+?)\s+\$?([\d.]+)/g;
+const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
+        const rawText = rawTextSource
+          .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:|Check #|Subtotal|Total\$)/m, '')
+          .replace(/=\r?\n/g, '')
+          .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
+          .replace(/\[image:[^\]]+\]/g, '');
+                            const lineItemRegex = /(\d+)\s+([A-Za-z][^\$\n]+?)\s+\$?([\d.]+)/g;
         const lineItems: any[] = [];
         let match;
         while ((match = lineItemRegex.exec(rawText)) !== null) {
