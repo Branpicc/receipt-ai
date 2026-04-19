@@ -560,10 +560,11 @@ let vendor: string | null = null;
     }
   }
 
-  // Tax patterns
+// Tax patterns
   let tax_cents: number | null = null;
-  for (const line of lines) {
-    // "Tax Collected: CDN$ 1.30"
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+        // "Tax Collected: CDN$ 1.30"
     const taxCollected = line.match(/tax\s+collected[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
     if (taxCollected) {
       tax_cents = Math.round(parseFloat(taxCollected[1].replace(/,/g, '')) * 100);
@@ -583,6 +584,16 @@ let vendor: string | null = null;
       break;
     }
 
+// Toast format: "Tax" on one line, "$3.64" on next line
+    if (/^tax$/i.test(line) && i + 1 < lines.length) {
+      const nextLine = lines[i + 1].trim();
+      const nextAmount = nextLine.match(/^\$?([\d,.]+)$/);
+      if (nextAmount) {
+        tax_cents = Math.round(parseFloat(nextAmount[1].replace(/,/g, '')) * 100);
+        break;
+      }
+    }
+
     // Simple "Tax: $1.30"
     const simpleTax = line.match(/^tax[:\s]+\$?\s*([\d,.]+)$/i);
     if (simpleTax) {
@@ -598,13 +609,13 @@ let vendor: string | null = null;
 const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i) ||
                       line.match(/card\s+number[:\s]+[*·\s]+(\d{4})/i);
     if (cardMatch) card_last_four = cardMatch[1];
-    // Toast format: "Mastercardxxxxxxxx2054"
-    const toastCard = line.match(/(mastercard|visa|amex)x+(\d{4})/i);
+// Toast format: "Mastercardxxxxxxxx2054" or "Mastercard xxxxxxxx2054"
+    const toastCard = line.match(/(mastercard|visa|amex)\s*x+(\d{4})/i);
     if (toastCard) {
       card_brand = toastCard[1].charAt(0).toUpperCase() + toastCard[1].slice(1).toLowerCase();
       card_last_four = toastCard[2];
     }
-    if (/mastercard/i.test(line) && !card_brand) card_brand = 'Mastercard';
+        if (/mastercard/i.test(line) && !card_brand) card_brand = 'Mastercard';
     if (/\bvisa\b/i.test(line) && !card_brand) card_brand = 'Visa';
     if (/amex|american\s+express/i.test(line) && !card_brand) card_brand = 'Amex';
     }

@@ -218,12 +218,16 @@ await supabase
       if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
 // Use clean text only — skip if it looks like raw MIME
 const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
-        const rawText = rawTextSource
-          .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:|Check #|Subtotal|Total\$)/m, '')
+        // Strip MIME and take only first occurrence of receipt content
+        const strippedText = rawTextSource
+          .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order|Server:|Check #)/m, '')
           .replace(/=\r?\n/g, '')
           .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
           .replace(/\[image:[^\]]+\]/g, '');
-const lineItems: any[] = [];
+        // Only use text up to the second occurrence of the forwarded message
+        const secondForward = strippedText.indexOf('---------- Forwarded', 10);
+        const rawText = secondForward > 0 ? strippedText.substring(0, secondForward) : strippedText;
+        const lineItems: any[] = [];
         const textLines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
         
         for (let i = 0; i < textLines.length; i++) {
