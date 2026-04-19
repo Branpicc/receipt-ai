@@ -530,7 +530,7 @@ let emailQuery = supabase
 
             {/* Email Preview */}
             <div className="flex-1 overflow-hidden p-4">
-              {selectedEmail.email_html ? (
+{selectedEmail.email_html && !selectedEmail.email_html.startsWith('Received:') ? (
                 <iframe
                   srcDoc={selectedEmail.email_html}
                   className="w-full h-full rounded-lg border border-gray-200 dark:border-dark-border"
@@ -538,13 +538,38 @@ let emailQuery = supabase
                   title="Email Receipt"
                   sandbox="allow-same-origin"
                 />
-              ) : selectedEmail.email_text ? (
-                <pre className="w-full h-full overflow-auto text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-dark-hover rounded-lg p-4 whitespace-pre-wrap">
-                  {selectedEmail.email_text}
-                </pre>
               ) : (
-                <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
-                  No email content available
+                <div className="w-full overflow-auto bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border p-6" style={{ minHeight: '400px' }}>
+                  <div className="max-w-md mx-auto space-y-4">
+                    <div className="text-center border-b pb-4">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">{selectedEmail.vendor || 'Unknown Vendor'}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{selectedEmail.from_email}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="text-gray-500 dark:text-gray-400">Date</div>
+                      <div className="text-right font-medium text-gray-900 dark:text-white">{selectedEmail.receipt_date || '—'}</div>
+                      <div className="text-gray-500 dark:text-gray-400">Total</div>
+                      <div className="text-right font-bold text-gray-900 dark:text-white">${((selectedEmail.total_cents || 0) / 100).toFixed(2)}</div>
+                    </div>
+                    {selectedEmail.purpose_text && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Purpose</p>
+                        <p className="text-sm text-gray-900 dark:text-white mt-1">{selectedEmail.purpose_text}</p>
+                      </div>
+                    )}
+                    {(selectedEmail.email_text || selectedEmail.email_html) && (
+                      <div className="border-t pt-4">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2">Email Content</p>
+                        <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-auto max-h-64">
+                          {(selectedEmail.email_text || selectedEmail.email_html || '')
+                            .replace(/^[\s\S]*?(?=---------- Forwarded message|Thank you for your order)/m, '')
+                            .replace(/<[^>]+>/g, ' ')
+                            .replace(/\s{3,}/g, '\n')
+                            .substring(0, 2000)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
