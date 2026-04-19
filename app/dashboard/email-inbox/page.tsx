@@ -261,10 +261,19 @@ const lineItems: any[] = [];
             }
           }
         }
-                if (lineItems.length > 0) {
-          await supabase.from('receipt_items').insert(lineItems);
+// Deduplicate line items by description
+        const seen = new Set<string>();
+        const uniqueLineItems = lineItems.filter((item: any) => {
+          const key = `${item.description}-${item.unit_price_cents}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).map((item: any, index: number) => ({ ...item, line_index: index + 1 }));
+
+        if (uniqueLineItems.length > 0) {
+          await supabase.from('receipt_items').insert(uniqueLineItems);
         }
-      }
+            }
 
       try {
         await supabase.from("notifications").insert([
