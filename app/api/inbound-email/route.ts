@@ -213,8 +213,37 @@ email_text: text || extractTextFromMime(rawEmail || ''),
       } catch (ocrError) {
         console.error('❌ OCR failed:', ocrError);
       }
-} else if (text || html || rawEmail) {
+// Try to extract inline images from HTML email body
+    if (!extractedData && (html || rawEmail)) {
       try {
+        const htmlContent = html || extractHtmlFromMime(rawEmail || '');
+        const base64Images = htmlContent?.match(/data:image\/[^;]+;base64,([^"']+)/g) || [];
+        const imgSrcMatches = htmlContent?.match(/src=["']https?:\/\/[^"']+\.(jpg|jpeg|png|gif|webp)[^"']*/gi) || [];
+        
+        console.log(`📧 Found ${base64Images.length} inline images, ${imgSrcMatches.length} external images`);
+        
+        // Try extracting from external image URLs (like Toast receipt images)
+        for (const imgTag of imgSrcMatches.slice(0, 3)) {
+          const urlMatch = imgTag.match(/src=["'](https?:\/\/[^"']+\.(jpg|jpeg|png|gif|webp)[^"']*)/i);
+          if (urlMatch) {
+            try {
+              const imgResult = await extractReceiptData(urlMatch[1]);
+              if (imgResult.total_cents || imgResult.vendor) {
+                extractedData = imgResult;
+                vendorName = extractedData.vendor || vendorName;
+                console.log('✅ OCR from inline image:', extractedData);
+                break;
+              }
+            } catch { /* skip failed images */ }
+          }
+        }
+      } catch (imgError) {
+        console.error('❌ Inline image extraction failed:', imgError);
+      }
+    }
+
+} else if (text || html || rawEmail) {
+        try {
         // Strip HTML tags for text parsing - handle forwarded emails
         let emailContent = text || '';
         if (!emailContent && html) {
