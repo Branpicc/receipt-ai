@@ -31,6 +31,8 @@ type Receipt = {
   card_brand?: string | null;
   card_last_four?: string | null;
   card_entry_method?: string | null;
+  source?: string | null;
+  ocr_raw_text?: string | null;
 };
 
 type Folder = {
@@ -350,7 +352,7 @@ useEffect(() => {
       try {
         const { data: r, error: rErr } = await supabase
           .from("receipts")
-          .select(`id, firm_id, client_id, vendor, receipt_date, total_cents, status, created_at, purpose_text, purpose_source, purpose_updated_at, suggested_category, category_confidence, approved_category, category_reasoning, file_path, folder_id, payment_method, card_brand, card_last_four, card_entry_method`)
+.select(`id, firm_id, client_id, vendor, receipt_date, total_cents, status, created_at, purpose_text, purpose_source, purpose_updated_at, suggested_category, category_confidence, approved_category, category_reasoning, file_path, folder_id, payment_method, card_brand, card_last_four, card_entry_method, source, ocr_raw_text`)
           .eq("id", receiptId)
           .single();
         if (rErr) throw rErr;
@@ -629,9 +631,26 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                     <a className="text-sm underline text-blue-600 hover:text-blue-800" href={fileUrl} target="_blank" rel="noreferrer">Open image in new tab</a>
                   </div>
                 </div>
-              ) : !receipt.file_path && !files.length && !splitPdfUrl ? (
-                <div className="text-sm text-gray-600 dark:text-gray-400">No file attached yet (this can happen with sample rows).</div>
-              ) : (
+) : !receipt.file_path && !files.length && !splitPdfUrl ? (
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {receipt.source === 'email' ? (
+                    <div className="space-y-3">
+                      <p className="font-medium text-gray-700 dark:text-gray-300">📧 Email Receipt</p>
+                      {receipt.ocr_raw_text ? (
+                        <pre className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap bg-gray-50 dark:bg-dark-hover rounded-lg p-4 max-h-96 overflow-auto">
+                          {receipt.ocr_raw_text
+                            .replace(/^[\s\S]*?(?=---------- Forwarded|Thank you for your order|HEAL|Server:)/m, '')
+                            .substring(0, 2000)}
+                        </pre>
+                      ) : (
+                        <p>No email content available</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p>No file attached yet (this can happen with sample rows).</p>
+                  )}
+                </div>
+                              ) : (
                 <div className="text-sm text-gray-600 dark:text-gray-400">No preview available.</div>
               )}
             </div>

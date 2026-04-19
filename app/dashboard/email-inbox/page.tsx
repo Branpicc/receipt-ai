@@ -156,18 +156,18 @@ let emailQuery = supabase
         return;
       }
 
-      const categorization = categorizeReceipt(
+const categorization = categorizeReceipt(
         emailReceipt.vendor || "",
-        emailReceipt.email_text || ""
+        emailReceipt.purpose_text || ""
       );
 
       console.log("📊 Categorization result:", categorization);
 
-      const { data: receipt, error: receiptError } = await supabase
+const { data: receipt, error: receiptError } = await supabase
         .from("receipts")
         .insert([{
           firm_id: firmId,
-          client_id: clients[0].id,
+          client_id: emailReceipt.client_id || clients[0].id,
           source: "email",
           vendor: emailReceipt.vendor,
           receipt_date: emailReceipt.receipt_date,
@@ -177,11 +177,13 @@ let emailQuery = supabase
           extraction_status: emailReceipt.extraction_status,
           ocr_raw_text: emailReceipt.ocr_raw_text,
           file_path: emailReceipt.attachment_url,
+          purpose_text: emailReceipt.purpose_text,
+          purpose_source: emailReceipt.purpose_text ? 'client' : null,
           suggested_category: categorization.suggested_category,
           category_confidence: categorization.category_confidence,
           category_reasoning: categorization.category_reasoning,
         }])
-        .select("id")
+                .select("id")
         .single();
 
       if (receiptError) {
@@ -190,7 +192,7 @@ let emailQuery = supabase
         return;
       }
 
-      await supabase
+await supabase
         .from("email_receipts")
         .update({
           status: "approved",
@@ -198,9 +200,35 @@ let emailQuery = supabase
         })
         .eq("id", emailReceiptId);
 
+      // Parse and save line items from email text
+      if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
+        const rawText = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
+        const lineItemRegex = /(\d+)\s+([A-Za-z][^\$\n]+?)\s+\$?([\d.]+)/g;
+        const lineItems: any[] = [];
+        let match;
+        while ((match = lineItemRegex.exec(rawText)) !== null) {
+          const qty = parseInt(match[1]);
+          const desc = match[2].trim();
+          const price = Math.round(parseFloat(match[3]) * 100);
+          if (price > 0 && price < 100000 && desc.length > 2) {
+            lineItems.push({
+              receipt_id: receipt.id,
+              description: desc,
+              quantity: qty,
+              unit_price_cents: price,
+              total_cents: qty * price,
+              line_index: lineItems.length + 1,
+            });
+          }
+        }
+        if (lineItems.length > 0) {
+          await supabase.from('receipt_items').insert(lineItems);
+        }
+      }
+
       try {
         await supabase.from("notifications").insert([
-          {
+                    {
             firm_id: firmId,
             type: "receipt_needs_review",
             title: "Email receipt approved",
@@ -214,7 +242,7 @@ let emailQuery = supabase
         console.error("Failed to create notification:", notifError);
       }
 
-      alert(`✅ Receipt approved and categorized as "${categorization.suggested_category}"!`);
+alert(`✅ Receipt approved${categorization.suggested_category ? ` and categorized as "${categorization.suggested_category}"` : ' — please set category manually'}!`);
       loadEmailReceipts();
     } catch (error: any) {
       console.error("Approve error:", error);
