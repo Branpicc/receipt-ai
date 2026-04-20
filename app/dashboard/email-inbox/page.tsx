@@ -248,23 +248,28 @@ const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || ''
           if (/\s+[HN]\s+\$/.test(tl)) console.log('🎯 BB match candidate:', JSON.stringify(tl.trim()));
         });
         const lineItems: any[] = [];
-        const textLines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
-        
+const textLines = rawText.split(/\r?\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+
 for (let i = 0; i < textLines.length; i++) {
           const line = textLines[i];
 
 // Best Buy format: price at end of line "...H $1,889.99" or "...N $69.99"
-          const bbInline = line.match(/^(.+?)\s+[HN]\s+\$?([\d,]+\.?\d*)$/);
+const bbInline = line.match(/^(.+?)\s+[HN]\s+\$?([\d,]+\.?\d*)$/);
           if (bbInline) {
-            const desc = bbInline[1].trim();
+            let desc = bbInline[1].trim();
             const price = Math.round(parseFloat(bbInline[2].replace(/,/g, '')) * 100);
-            if (price > 0 && price < 500000 && desc.length > 3 &&
-                !/^(subtotal|tax|total|payment|approved|finance|transaction|date|auth|val|store|gst|hst|item #|covered|contract|start|expiry)/i.test(desc)) {
+            // Clean up description - remove price overrides and item numbers
+            desc = desc
+              .replace(/Approved Price Override[^)]+\)\s*/i, '')
+              .replace(/Item #:\s*\d+\s*/i, '')
+              .replace(/Expiry Date:[^\s]+\s*/i, '')
+              .trim();
+            if (price > 0 && price < 500000 && desc.length > 3) {
               lineItems.push({ receipt_id: receipt.id, description: desc.substring(0, 100), quantity: 1, unit_price_cents: price, total_cents: price, line_index: lineItems.length + 1 });
               continue;
             }
           }
-
+          
           // Best Buy format: "H $1,889.99" or "N $69.99" on line after description
           const bbPrice = line.match(/^[HN]\s+\$?([\d,]+\.?\d*)$/);
           if (bbPrice && i > 0) {
