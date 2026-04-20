@@ -260,18 +260,33 @@ const bbInline = line.match(/^(.+?)\s+[HN]\s+\$?([\d,]+\.?\d*)$/);
             const price = Math.round(parseFloat(bbInline[2].replace(/,/g, '')) * 100);
             // Clean up description - remove price overrides and item numbers
 // For lines like "Expiry Date: 2029-01-27 H $649.99" use previous line as description
+// For lines with metadata prefixes, find the actual product name by looking back
             if (/^(expiry date|item #|approved price override|covered item|contract id|start date)/i.test(desc)) {
-              // Use the line before this as the description
-              if (i > 0) {
-                const prevLine = textLines[i - 1].trim();
-                if (prevLine.length > 3 && !/^(item #|covered|contract|start date|expiry|approved price)/i.test(prevLine)) {
+              // Look back up to 5 lines for a meaningful description
+              for (let back = 1; back <= 5; back++) {
+                if (i - back < 0) break;
+                const prevLine = textLines[i - back].trim();
+                if (prevLine.length > 5 && 
+                    !/^(item #|covered|contract|start date|expiry|approved price|h \$|n \$|\d{4}-\d{2}-\d{2})/i.test(prevLine) &&
+                    !/^\d+$/.test(prevLine)) {
                   desc = prevLine;
-                } else if (i > 1) {
-                  desc = textLines[i - 2].trim();
+                  break;
                 }
               }
             }
-            // Clean up remaining prefixes
+            // For descriptions that are just the end of a multi-line product name
+            // e.g. "512GB SSD) - English" - look back for the start
+            if (/^\d+GB|^SSD\)|^- English|^- French/i.test(desc)) {
+              for (let back = 1; back <= 3; back++) {
+                if (i - back < 0) break;
+                const prevLine = textLines[i - back].trim();
+                if (/^Apple|^Samsung|^Sony|^LG|^Dell|^HP|^Lenovo|^Microsoft/i.test(prevLine)) {
+                  desc = prevLine;
+                  break;
+                }
+              }
+            }
+                        // Clean up remaining prefixes
             desc = desc
               .replace(/^Approved Price Override[^)]+\)\s*/i, '')
               .replace(/^Item #:\s*\d+\s*/i, '')
