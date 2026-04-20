@@ -594,6 +594,13 @@ let vendor: string | null = null;
       }
     }
 
+// "Tax $3.64" with space
+    const taxSpace = line.match(/^tax\s+\$?([\d,.]+)$/i);
+    if (taxSpace) {
+      tax_cents = Math.round(parseFloat(taxSpace[1].replace(/,/g, '')) * 100);
+      break;
+    }
+
     // Simple "Tax: $1.30"
     const simpleTax = line.match(/^tax[:\s]+\$?\s*([\d,.]+)$/i);
     if (simpleTax) {
@@ -603,9 +610,10 @@ let vendor: string | null = null;
   }
 
   // Payment info
-  let card_last_four: string | null = null;
+let card_last_four: string | null = null;
   let card_brand: string | null = null;
-  for (const line of lines) {
+  let payment_method: string | null = null;
+    for (const line of lines) {
 const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i) ||
                       line.match(/card\s+number[:\s]+[*·\s]+(\d{4})/i);
     if (cardMatch) card_last_four = cardMatch[1];
@@ -618,6 +626,7 @@ const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i
         if (/mastercard/i.test(line) && !card_brand) card_brand = 'Mastercard';
     if (/\bvisa\b/i.test(line) && !card_brand) card_brand = 'Visa';
     if (/amex|american\s+express/i.test(line) && !card_brand) card_brand = 'Amex';
+    if (/contactless|tap|chip|swipe/i.test(line) && card_brand) payment_method = 'card';
     }
 
 // Strip MIME headers from raw_text before saving
@@ -627,6 +636,9 @@ const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i
     .replace(/\[image:[^\]]+\]/g, '')
     .trim();
 
+// Set payment_method if card was detected
+  if (card_brand && !payment_method) payment_method = 'card';
+
   return {
     vendor,
     date,
@@ -634,6 +646,7 @@ const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i
     tax_cents,
     card_last_four,
     card_brand,
+    payment_method,
     raw_text: (cleanText || text).substring(0, 3000),
   };
 }

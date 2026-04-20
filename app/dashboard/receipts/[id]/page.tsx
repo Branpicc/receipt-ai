@@ -843,7 +843,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                         }}
                         className="mt-3 text-xs text-gray-500 dark:text-gray-400 underline"
                       >
-                        🔄 Re-run categorization (test)
+                        🔄 Re-run categorization
                       </button>
                     </div>
                   )}
