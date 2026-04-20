@@ -300,7 +300,6 @@ email_text: text || extractTextFromMime(rawEmail || ''),
           .trim();
         console.log('📧 Cleaned email content preview:', emailContent.substring(0, 200));
         extractedData = parseEmailText(emailContent);
-        extractedData = parseEmailText(emailContent);
 
                 // Use from_email as vendor hint if no vendor detected
         if (!extractedData.vendor && from) {
@@ -338,12 +337,13 @@ const cleanRawText = (extractedData.raw_text || '')
         .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
         .replace(/\[image:[^\]]+\]/g, '')
         .trim();
-              await supabase
+await supabase
         .from('email_receipts')
         .update({
           vendor: extractedData.vendor,
           receipt_date: extractedData.date,
           total_cents: extractedData.total_cents,
+          tax_cents: extractedData.tax_cents || null,
           extraction_status: 'completed',
           ocr_raw_text: cleanRawText || extractedData.raw_text,
           suggested_category: categorization.suggested_category,
@@ -352,7 +352,7 @@ const cleanRawText = (extractedData.raw_text || '')
           card_last_four: extractedData.card_last_four || null,
         })
         .eq('id', emailReceipt.id);
-    }
+          }
 
 // Save tax if extracted
     if (extractedData?.tax_cents && extractedData.tax_cents > 0 && emailReceipt.id) {
