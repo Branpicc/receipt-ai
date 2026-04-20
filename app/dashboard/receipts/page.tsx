@@ -500,10 +500,10 @@ function exportQuickBooksCSV() {
       </div>
     </div>
   );
-  // Shared receipt grid
-  //   const ReceiptGrid = () => (
+// Shared receipt grid
+  const ReceiptGrid = () => (
     <>
-      {loading ? (
+          {loading ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading receipts...</div>
       ) : receipts.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
@@ -601,11 +601,11 @@ function exportQuickBooksCSV() {
               );
             });
           })()}
-        </div>
-            )}
+       </div>
+      )}
     </>
   );
-
+     
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">
