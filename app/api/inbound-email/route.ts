@@ -336,6 +336,16 @@ email_text: text || extractTextFromMime(rawEmail || ''),
       }
     }
 
+// Extract line items from HTML for retailers like Best Buy
+    let htmlLineItems: Array<{description: string, price_cents: number}> = [];
+    if (html || rawEmail) {
+      const htmlContent = html || extractHtmlFromMime(rawEmail || '');
+      if (htmlContent) {
+        htmlLineItems = extractBestBuyItems(htmlContent);
+        console.log('🛒 HTML line items found:', htmlLineItems.length);
+      }
+    }
+
 if (extractedData) {
       const { categorizeReceipt } = await import('@/lib/categorizeReceipt');
       const categorization = categorizeReceipt(extractedData.vendor || '', '');
@@ -354,6 +364,7 @@ await supabase
           receipt_date: extractedData.date,
           total_cents: extractedData.total_cents,
           tax_cents: extractedData.tax_cents || null,
+          line_items_json: htmlLineItems.length > 0 ? htmlLineItems : null,
           extraction_status: 'completed',
           ocr_raw_text: cleanRawText || extractedData.raw_text,
           suggested_category: categorization.suggested_category,
@@ -461,6 +472,43 @@ const { data: queueEntry } = await supabase.from('sms_queue').insert({
       { status: 500 }
     );
   }
+}
+
+function extractBestBuyItems(html: string): Array<{description: string, price_cents: number}> {
+  const items: Array<{description: string, price_cents: number}> = [];
+  // Match Best Buy HTML table rows with item info
+  // Pattern: item name followed by price with H/N indicator
+  const cleanHtml = html
+    .replace(/=\r?\n/g, '')
+    .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)));
+  
+  // Extract text content from HTML
+  const text = cleanHtml
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, '\n')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s{3,}/g, '\n')
+    .trim();
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Best Buy H/N price format
+    const bbPrice = line.match(/^[HN]\s+\$?([\d,]+\.?\d*)$/);
+    if (bbPrice && i > 0) {
+      const desc = lines[i - 1].trim();
+      const price = Math.round(parseFloat(bbPrice[1].replace(/,/g, '')) * 100);
+      if (price > 0 && price < 500000 && desc.length > 3 &&
+          !/^(subtotal|tax|total|payment|approved|finance|transaction|date|auth|val|store|gst|hst|province|summary)/i.test(desc)) {
+        items.push({ description: desc.substring(0, 100), price_cents: price });
+      }
+    }
+  }
+  return items;
 }
 
 function parseEmailText(text: string): any {

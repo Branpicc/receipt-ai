@@ -20,7 +20,8 @@ type EmailReceipt = {
   email_text: string;
   email_html: string | null;
   converted_receipt_id: string | null;
-  purpose_text?: string | null;
+purpose_text?: string | null;
+  line_items_json?: any[] | null;
 };
 
 type TabType = "pending" | "approved" | "rejected";
@@ -214,9 +215,20 @@ await supabase
         }]);
       }
 
-      // Parse and save line items from email text
-      if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
-// Use clean text only — skip if it looks like raw MIME
+// Parse and save line items from email text
+      // Use pre-extracted HTML line items if available (e.g. Best Buy)
+      if (emailReceipt.line_items_json && (emailReceipt.line_items_json as any[]).length > 0) {
+        const htmlItems = (emailReceipt.line_items_json as any[]).map((item: any, index: number) => ({
+          receipt_id: receipt.id,
+          description: item.description,
+          quantity: 1,
+          unit_price_cents: item.price_cents,
+          total_cents: item.price_cents,
+          line_index: index + 1,
+        }));
+        await supabase.from('receipt_items').insert(htmlItems);
+      } else if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
+        // Use clean text only — skip if it looks like raw MIME
 const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
         // Strip MIME and take only first occurrence of receipt content
         const strippedText = rawTextSource
@@ -248,7 +260,7 @@ for (let i = 0; i < textLines.length; i++) {
           // Skip non-item lines
           if (/^(subtotal|tax|total|credit|mastercard|visa|transaction|authorization|approval|payment|card|powered|toast|privacy|terms|server|check|guest|ordered|bolton|ontario|on$)/i.test(line)) continue;
           if (/^(no |add |light )/i.test(line)) continue; // Skip modifiers
-                    
+
           // Pattern 1: "1 Mango Bowl $14.00" on same line
           const sameLine = line.match(/^(\d+)\s+([A-Za-z][^$\n]{2,40}?)\s+\$?([\d.]+)$/);
           if (sameLine) {
@@ -286,10 +298,10 @@ for (let i = 0; i < textLines.length; i++) {
           return true;
         }).map((item: any, index: number) => ({ ...item, line_index: index + 1 }));
 
-        if (uniqueLineItems.length > 0) {
+if (uniqueLineItems.length > 0) {
           await supabase.from('receipt_items').insert(uniqueLineItems);
         }
-            }
+      }
 
       try {
         await supabase.from("notifications").insert([
