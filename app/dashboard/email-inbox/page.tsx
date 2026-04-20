@@ -230,13 +230,25 @@ const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || ''
         const lineItems: any[] = [];
         const textLines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
         
-        for (let i = 0; i < textLines.length; i++) {
+for (let i = 0; i < textLines.length; i++) {
           const line = textLines[i];
-          
+
+          // Best Buy format: "H $1,889.99" or "N $69.99" on line after description
+          const bbPrice = line.match(/^[HN]\s+\$?([\d,]+\.?\d*)$/);
+          if (bbPrice && i > 0) {
+            const desc = textLines[i - 1].trim();
+            const price = Math.round(parseFloat(bbPrice[1].replace(/,/g, '')) * 100);
+            if (price > 0 && price < 500000 && desc.length > 3 &&
+                !/^(subtotal|tax|total|payment|approved|finance|transaction|date|auth|val|store|gst|hst|h |n )/i.test(desc)) {
+              lineItems.push({ receipt_id: receipt.id, description: desc.substring(0, 100), quantity: 1, unit_price_cents: price, total_cents: price, line_index: lineItems.length + 1 });
+              continue;
+            }
+          }
+
           // Skip non-item lines
           if (/^(subtotal|tax|total|credit|mastercard|visa|transaction|authorization|approval|payment|card|powered|toast|privacy|terms|server|check|guest|ordered|bolton|ontario|on$)/i.test(line)) continue;
           if (/^(no |add |light )/i.test(line)) continue; // Skip modifiers
-          
+                    
           // Pattern 1: "1 Mango Bowl $14.00" on same line
           const sameLine = line.match(/^(\d+)\s+([A-Za-z][^$\n]{2,40}?)\s+\$?([\d.]+)$/);
           if (sameLine) {
