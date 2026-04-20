@@ -127,7 +127,7 @@ function ReceiptsPageContent() {
   // Reload receipts when filters or selected client change
   useEffect(() => {
     if (firmId) loadReceipts();
-}, [firmId, statusFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId, selectedClient, vendorSearch, categoryFilter]);
+}, [firmId, statusFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId, selectedClient]);
 
   // Load folders on initial load and when switching to folder view or client changes
   useEffect(() => {
