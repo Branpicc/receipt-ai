@@ -392,8 +392,8 @@ function getCategoryColor(category: string) {
       </div>
 
       {/* Quick Actions */}
-<div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6">
-          <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+<div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mb-6">
+            <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <span className="text-2xl">📁</span>
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">My Receipts</div>
@@ -421,15 +421,22 @@ function getCategoryColor(category: string) {
             <div className="text-xs text-gray-500 dark:text-gray-400">Charts & categories</div>
           </div>
         </Link>
-                <Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+<Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <span className="text-2xl">⚙️</span>
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Settings</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Preferences</div>
           </div>
         </Link>
+        <Link href="/dashboard/email-inbox" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+          <span className="text-2xl">📧</span>
+          <div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">Email Receipts</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Forward & manage</div>
+          </div>
+        </Link>
       </div>
-
+      
       {/* Budget Status */}
       {budgetStatus.length > 0 && (
         <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-4 mb-6">
