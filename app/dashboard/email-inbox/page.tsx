@@ -227,6 +227,8 @@ await supabase
           line_index: index + 1,
         }));
         await supabase.from('receipt_items').insert(htmlItems);
+        console.log('📋 emailReceipt.ocr_raw_text:', emailReceipt.ocr_raw_text?.substring(0, 100));
+      console.log('📋 emailReceipt.email_text:', emailReceipt.email_text?.substring(0, 100));
       } else if (emailReceipt.ocr_raw_text || emailReceipt.email_text) {
         // Use clean text only — skip if it looks like raw MIME
 const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || '';
