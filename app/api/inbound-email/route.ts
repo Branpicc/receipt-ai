@@ -343,6 +343,15 @@ email_text: text || extractTextFromMime(rawEmail || ''),
       if (htmlContent) {
         htmlLineItems = extractBestBuyItems(htmlContent);
         console.log('🛒 HTML line items found:', htmlLineItems.length);
+        if (htmlLineItems.length === 0 && htmlContent) {
+        // Log a sample of the HTML to debug
+        const sampleText = htmlContent
+          .replace(/<[^>]+>/g, '\n')
+          .replace(/\s{3,}/g, '\n')
+          .trim()
+          .substring(0, 500);
+        console.log('🛒 HTML text sample:', sampleText);
+      }
       }
     }
 
