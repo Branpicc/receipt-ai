@@ -292,12 +292,22 @@ email_text: text || extractTextFromMime(rawEmail || ''),
           emailContent = `Subject: ${subject}\n` + emailContent;
         }
         // Clean the content before parsing
-emailContent = emailContent
-          .replace(/^[\s\S]*?(?=Thank you for your order|Server:|Check #|\d+ Mango|\d+ Nutella|#\d{3}\s+\d{2}|Your receipt|Transaction Information)/m, '')
-                    .replace(/=\r?\n/g, '')
-          .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
-          .replace(/\[image:[^\]]+\]/g, '')
-          .trim();
+// Extract just the plain text body from MIME
+        const plainTextMatch = emailContent.match(/Content-Type: text\/plain[^\n]*\n(?:[^\n]+\n)*\n([\s\S]*?)(?=\n--[a-zA-Z0-9])/i);
+        if (plainTextMatch) {
+          emailContent = plainTextMatch[1]
+            .replace(/=\r?\n/g, '')
+            .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
+            .replace(/\[image:[^\]]+\]/g, '')
+            .trim();
+        } else {
+          emailContent = emailContent
+            .replace(/^[\s\S]*?(?=Thank you for your order|Server:|Check #|Transaction Information|Thank you for shopping)/m, '')
+            .replace(/=\r?\n/g, '')
+            .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
+            .replace(/\[image:[^\]]+\]/g, '')
+            .trim();
+        }
         console.log('📧 Cleaned email content preview:', emailContent.substring(0, 200));
         extractedData = parseEmailText(emailContent);
 
