@@ -79,6 +79,8 @@ function ReceiptsPageContent() {
 
   // Status filter
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   // Date filter
   const [dateFilter, setDateFilter] = useState<DateFilter>("any");
@@ -125,7 +127,7 @@ function ReceiptsPageContent() {
   // Reload receipts when filters or selected client change
   useEffect(() => {
     if (firmId) loadReceipts();
-  }, [firmId, statusFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId, selectedClient]);
+}, [firmId, statusFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId, selectedClient, vendorSearch, categoryFilter]);
 
   // Load folders on initial load and when switching to folder view or client changes
   useEffect(() => {
@@ -186,6 +188,19 @@ function ReceiptsPageContent() {
         case "categorized": filtered = withFlags.filter((r) => r.approved_category); break;
         case "uncategorized": filtered = withFlags.filter((r) => !r.approved_category); break;
         case "flagged": filtered = withFlags.filter((r) => r.has_flags); break;
+      }
+
+      // Vendor search filter
+      if (vendorSearch.trim()) {
+        filtered = filtered.filter(r => 
+          r.vendor?.toLowerCase().includes(vendorSearch.toLowerCase())
+        );
+      }
+      // Category filter
+      if (categoryFilter !== "all") {
+        filtered = filtered.filter(r => 
+          r.approved_category === categoryFilter || r.suggested_category === categoryFilter
+        );
       }
 
       setReceipts(filtered);
@@ -444,12 +459,49 @@ function exportQuickBooksCSV() {
             {btn.icon} {btn.label}
           </button>
         ))}
+</div>
+      {/* Vendor search and category filter */}
+      <div className="flex flex-wrap gap-3 mt-3">
+        <input
+          type="text"
+          placeholder="🔍 Search vendor..."
+          value={vendorSearch}
+          onChange={(e) => setVendorSearch(e.target.value)}
+          className="flex-1 min-w-[200px] text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+        />
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+        >
+          <option value="all">All Categories</option>
+          <option value="Meals & Entertainment">Meals & Entertainment</option>
+          <option value="Office Supplies & Expenses">Office Supplies & Expenses</option>
+          <option value="Vehicle Expenses & Fuel">Vehicle Expenses & Fuel</option>
+          <option value="Travel Expenses">Travel Expenses</option>
+          <option value="Advertising & Promotion">Advertising & Promotion</option>
+          <option value="Professional Fees">Professional Fees</option>
+          <option value="Telephone & Internet">Telephone & Internet</option>
+          <option value="Software & Subscriptions">Software & Subscriptions</option>
+          <option value="Equipment & Tools">Equipment & Tools</option>
+          <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Rent & Lease">Rent & Lease</option>
+          <option value="Other Expenses">Other Expenses</option>
+        </select>
+        {(vendorSearch || categoryFilter !== "all") && (
+          <button
+            onClick={() => { setVendorSearch(""); setCategoryFilter("all"); }}
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 border border-gray-300 dark:border-dark-border rounded-lg"
+          >
+            ✕ Clear
+          </button>
+        )}
       </div>
     </div>
   );
-
   // Shared receipt grid
-  const ReceiptGrid = () => (
+  //   const ReceiptGrid = () => (
     <>
       {loading ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading receipts...</div>
@@ -465,10 +517,38 @@ function exportQuickBooksCSV() {
               : `No ${statusFilter.replace("_", " ")} receipts found.`}
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {receipts.map((receipt) => (
-            <Link
+) : (
+        <div className="space-y-6">
+          {(() => {
+            // Group receipts by year and month
+            const groups: Record<string, typeof receipts> = {};
+            receipts.forEach(receipt => {
+              const date = receipt.receipt_date || receipt.created_at;
+              const d = new Date(date);
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              if (!groups[key]) groups[key] = [];
+              groups[key].push(receipt);
+            });
+            const sortedKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+            const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return sortedKeys.map(key => {
+              const [year, month] = key.split('-');
+              const monthName = monthNames[parseInt(month) - 1];
+              const groupReceipts = groups[key];
+              const groupTotal = groupReceipts.reduce((sum, r) => sum + (r.total_cents || 0), 0);
+              return (
+                <div key={key}>
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 dark:border-dark-border">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      {monthName} {year}
+                    </h3>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {groupReceipts.length} receipt{groupReceipts.length !== 1 ? 's' : ''} · ${(groupTotal / 100).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groupReceipts.map((receipt) => (
+                                  <Link
               key={receipt.id}
               href={`/dashboard/receipts/${receipt.id}`}
               className="block p-4 rounded-xl border border-gray-200 dark:border-dark-border hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500"
@@ -514,10 +594,15 @@ function exportQuickBooksCSV() {
                   </span>
                 )}
               </div>
-            </Link>
-          ))}
+</Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
-      )}
+            )}
     </>
   );
 
