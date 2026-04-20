@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       sgMail.default.setApiKey(process.env.SENDGRID_API_KEY!);
       await sgMail.default.send({
         to: email,
-        from: 'noreply@receipture.ca',
+from: { email: 'noreply@receipture.ca', name: 'Receipture' },
         subject: `You've been invited to join ${firmName} on Receipture`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
