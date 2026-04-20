@@ -63,7 +63,7 @@ function ReceiptsPageContent() {
   const searchParams = useSearchParams();
   const { selectedClient, isFiltered } = useClientContext();
 
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
+const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -77,11 +77,11 @@ function ReceiptsPageContent() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [activeFolderName, setActiveFolderName] = useState<string>("");
 
-  // Status filter
+// Status filter
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [vendorSearch, setVendorSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-
+  
   // Date filter
   const [dateFilter, setDateFilter] = useState<DateFilter>("any");
   const [dateSearchType, setDateSearchType] = useState<"receipt_date" | "created_at">("receipt_date");
@@ -190,20 +190,7 @@ function ReceiptsPageContent() {
         case "flagged": filtered = withFlags.filter((r) => r.has_flags); break;
       }
 
-      // Vendor search filter
-      if (vendorSearch.trim()) {
-        filtered = filtered.filter(r => 
-          r.vendor?.toLowerCase().includes(vendorSearch.toLowerCase())
-        );
-      }
-      // Category filter
-      if (categoryFilter !== "all") {
-        filtered = filtered.filter(r => 
-          r.approved_category === categoryFilter || r.suggested_category === categoryFilter
-        );
-      }
-
-      setReceipts(filtered);
+setAllReceipts(filtered);
     } catch (err) {
       console.error("Load receipts error:", err);
     } finally {
@@ -500,6 +487,14 @@ function exportQuickBooksCSV() {
       </div>
     </div>
   );
+
+// Apply client-side filters without re-fetching
+  const receipts = allReceipts.filter(r => {
+    if (vendorSearch.trim() && !r.vendor?.toLowerCase().includes(vendorSearch.toLowerCase())) return false;
+    if (categoryFilter !== "all" && r.approved_category !== categoryFilter && r.suggested_category !== categoryFilter) return false;
+    return true;
+  });
+
 // Shared receipt grid
   const ReceiptGrid = () => (
     <>
