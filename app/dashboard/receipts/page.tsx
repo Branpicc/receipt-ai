@@ -81,7 +81,7 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [vendorSearch, setVendorSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  
+
   // Date filter
   const [dateFilter, setDateFilter] = useState<DateFilter>("any");
   const [dateSearchType, setDateSearchType] = useState<"receipt_date" | "created_at">("receipt_date");
@@ -360,9 +360,9 @@ function exportQuickBooksCSV() {
   ];
 
   // Shared filters bar — used in receipt list view AND inside folders
-  const FiltersBar = () => (
+const filtersBarJSX = (
     <div className="space-y-3 mb-6">
-      {/* Date filter */}
+            {/* Date filter */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Date:</span>
         {dateButtons.map((btn) => (
@@ -675,7 +675,7 @@ function exportQuickBooksCSV() {
         {/* ── ALL RECEIPTS VIEW ── */}
         {mainView === "receipts" && !activeFolderId && (
           <>
-            <FiltersBar />
+{filtersBarJSX}
             <ReceiptGrid />
           </>
         )}
@@ -768,7 +768,7 @@ function exportQuickBooksCSV() {
               <span className="text-gray-400 dark:text-gray-500">/</span>
               <span className="text-gray-700 dark:text-gray-300 font-medium">{activeFolderName}</span>
             </div>
-            <FiltersBar />
+{filtersBarJSX}
             <ReceiptGrid />
           </>
         )}
