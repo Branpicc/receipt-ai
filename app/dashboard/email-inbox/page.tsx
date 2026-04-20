@@ -245,10 +245,22 @@ const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || ''
 for (let i = 0; i < textLines.length; i++) {
           const line = textLines[i];
 
+// Best Buy format: price at end of line "...H $1,889.99" or "...N $69.99"
+          const bbInline = line.match(/^(.+?)\s+[HN]\s+\$?([\d,]+\.?\d*)$/);
+          if (bbInline) {
+            const desc = bbInline[1].trim();
+            const price = Math.round(parseFloat(bbInline[2].replace(/,/g, '')) * 100);
+            if (price > 0 && price < 500000 && desc.length > 3 &&
+                !/^(subtotal|tax|total|payment|approved|finance|transaction|date|auth|val|store|gst|hst|item #|covered|contract|start|expiry)/i.test(desc)) {
+              lineItems.push({ receipt_id: receipt.id, description: desc.substring(0, 100), quantity: 1, unit_price_cents: price, total_cents: price, line_index: lineItems.length + 1 });
+              continue;
+            }
+          }
+
           // Best Buy format: "H $1,889.99" or "N $69.99" on line after description
           const bbPrice = line.match(/^[HN]\s+\$?([\d,]+\.?\d*)$/);
           if (bbPrice && i > 0) {
-            const desc = textLines[i - 1].trim();
+                        const desc = textLines[i - 1].trim();
             const price = Math.round(parseFloat(bbPrice[1].replace(/,/g, '')) * 100);
             if (price > 0 && price < 500000 && desc.length > 3 &&
                 !/^(subtotal|tax|total|payment|approved|finance|transaction|date|auth|val|store|gst|hst|h |n )/i.test(desc)) {

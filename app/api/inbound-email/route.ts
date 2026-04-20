@@ -375,7 +375,7 @@ await supabase
           tax_cents: extractedData.tax_cents || null,
           line_items_json: htmlLineItems.length > 0 ? htmlLineItems : null,
           extraction_status: 'completed',
-          ocr_raw_text: cleanRawText || extractedData.raw_text,
+ocr_raw_text: extractedData.raw_text || cleanRawText,
           suggested_category: categorization.suggested_category,
           payment_method: extractedData.payment_method || null,
           card_brand: extractedData.card_brand || null,
