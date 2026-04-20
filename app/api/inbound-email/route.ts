@@ -462,6 +462,9 @@ function parseEmailText(text: string): any {
   const KNOWN_EMAIL_VENDORS: Record<string, string> = {
     'amazon': 'Amazon',
     'meta': 'Meta',
+    'bestbuy': 'Best Buy',
+    'best-buy': 'Best Buy',
+    'bestbuy.ca': 'Best Buy',
     'facebook': 'Meta',
     'nintendo': 'Nintendo',
     'google': 'Google',
@@ -478,7 +481,19 @@ function parseEmailText(text: string): any {
   };
 
 let vendor: string | null = null;
-  
+
+  // Check for specific store names first before product names
+  if (/best buy/i.test(text)) vendor = 'Best Buy';
+  else if (/walmart/i.test(text)) vendor = 'Walmart';
+  else if (/costco/i.test(text)) vendor = 'Costco';
+  else if (/canadian tire/i.test(text)) vendor = 'Canadian Tire';
+  else if (/home depot/i.test(text)) vendor = 'Home Depot';
+  else if (/staples/i.test(text)) vendor = 'Staples';
+  else if (/tim hortons/i.test(text)) vendor = 'Tim Hortons';
+  else if (/starbucks/i.test(text)) vendor = 'Starbucks';
+  else if (/mcdonalds|mcdonald's/i.test(text)) vendor = "McDonald's";
+  else if (/harvey's/i.test(text)) vendor = "Harvey's";
+
   // Try to extract vendor from Toast/restaurant email subject pattern
   // "Receipt for Order #85 at HEAL Wellness"
   const atVendorMatch = text.match(/(?:order|receipt)\s+(?:#\d+\s+)?at\s+([^\n<]+)/i);
@@ -584,6 +599,13 @@ let vendor: string | null = null;
     const taxPercent = line.match(/tax\s+\(\d+%\)[:\s]+(?:ca\$?|cdn\$?|cad\$?)?\s*([\d,.]+)/i);
     if (taxPercent) {
       tax_cents = Math.round(parseFloat(taxPercent[1].replace(/,/g, '')) * 100);
+      break;
+    }
+
+    // "HST 13.00% of $2,539.98 $330.20"
+    const hstPercent = line.match(/hst\s+[\d.]+%\s+of\s+\$[\d,]+\s+\$?([\d,]+\.?\d*)/i);
+    if (hstPercent) {
+      tax_cents = Math.round(parseFloat(hstPercent[1].replace(/,/g, '')) * 100);
       break;
     }
 
