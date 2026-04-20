@@ -602,8 +602,8 @@ let vendor: string | null = null;
       break;
     }
 
-    // "HST 13.00% of $2,539.98 $330.20"
-    const hstPercent = line.match(/hst\s+[\d.]+%\s+of\s+\$[\d,]+\s+\$?([\d,]+\.?\d*)/i);
+// "HST 13.00% of $2,539.98 $330.20"
+    const hstPercent = line.match(/hst\s+[\d.]+%\s+of\s+\$[\d,.]+\s+\$?([\d,]+\.?\d*)/i);
     if (hstPercent) {
       tax_cents = Math.round(parseFloat(hstPercent[1].replace(/,/g, '')) * 100);
       break;
@@ -649,6 +649,20 @@ let card_last_four: string | null = null;
 const cardMatch = line.match(/(?:mastercard|visa|amex)[^\d]*[·*]{4}\s*(\d{4})/i) ||
                       line.match(/card\s+number[:\s]+[*·\s]+(\d{4})/i);
     if (cardMatch) card_last_four = cardMatch[1];
+
+// Best Buy format: "************3896 SC BBF $2,940.17"
+    const bbCard = line.match(/\*+(\d{4})\s+SC\s+BBF/i);
+    if (bbCard) {
+      card_last_four = bbCard[1];
+      card_brand = 'Visa'; // Best Buy uses Visa financing
+      payment_method = 'card';
+    }
+    // Generic masked card: "************1234"
+    const maskedCard = line.match(/\*{4,}(\d{4})/);
+    if (maskedCard && !card_last_four) {
+      card_last_four = maskedCard[1];
+    }
+
 // Toast format: "Mastercardxxxxxxxx2054" or "Mastercard xxxxxxxx2054"
     const toastCard = line.match(/(mastercard|visa|amex)\s*x+(\d{4})/i);
     if (toastCard) {
