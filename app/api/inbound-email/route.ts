@@ -251,11 +251,11 @@ email_text: text || extractTextFromMime(rawEmail || ''),
     }
 
 } else if (text || html || rawEmail) {
-        try {
+      try {
         // Strip HTML tags for text parsing - handle forwarded emails
         let emailContent = text || '';
         if (!emailContent && html) {
-                    emailContent = html
+                              emailContent = html
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
             .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
             .replace(/<br\s*\/?>/gi, '\n')
@@ -291,6 +291,15 @@ email_text: text || extractTextFromMime(rawEmail || ''),
         if (subject) {
           emailContent = `Subject: ${subject}\n` + emailContent;
         }
+        // Clean the content before parsing
+        emailContent = emailContent
+          .replace(/^[\s\S]*?(?=Thank you for your order|Server:|Check #|\d+ Mango|\d+ Nutella|Subtotal)/m, '')
+          .replace(/=\r?\n/g, '')
+          .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
+          .replace(/\[image:[^\]]+\]/g, '')
+          .trim();
+        console.log('📧 Cleaned email content preview:', emailContent.substring(0, 200));
+        extractedData = parseEmailText(emailContent);
         extractedData = parseEmailText(emailContent);
 
                 // Use from_email as vendor hint if no vendor detected
