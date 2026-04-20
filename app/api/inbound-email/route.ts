@@ -292,9 +292,9 @@ email_text: text || extractTextFromMime(rawEmail || ''),
           emailContent = `Subject: ${subject}\n` + emailContent;
         }
         // Clean the content before parsing
-        emailContent = emailContent
-          .replace(/^[\s\S]*?(?=Thank you for your order|Server:|Check #|\d+ Mango|\d+ Nutella|Subtotal)/m, '')
-          .replace(/=\r?\n/g, '')
+emailContent = emailContent
+          .replace(/^[\s\S]*?(?=Thank you for your order|Server:|Check #|\d+ Mango|\d+ Nutella|#\d{3}\s+\d{2}|Your receipt|Transaction Information)/m, '')
+                    .replace(/=\r?\n/g, '')
           .replace(/=[0-9A-F]{2}/gi, (m: string) => String.fromCharCode(parseInt(m.slice(1), 16)))
           .replace(/\[image:[^\]]+\]/g, '')
           .trim();
