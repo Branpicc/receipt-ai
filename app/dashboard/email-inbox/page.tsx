@@ -242,6 +242,11 @@ const rawTextSource = emailReceipt.ocr_raw_text || emailReceipt.email_text || ''
         const secondForward = strippedText.indexOf('---------- Forwarded', 10);
         const rawText = secondForward > 0 ? strippedText.substring(0, secondForward) : strippedText;
         console.log('📋 Raw text for line items:', rawText.substring(0, 300));
+        // Test BB pattern on a specific line
+        const testLines = rawText.split('\n');
+        testLines.forEach((tl: string, idx: number) => {
+          if (/\s+[HN]\s+\$/.test(tl)) console.log('🎯 BB match candidate:', JSON.stringify(tl.trim()));
+        });
         const lineItems: any[] = [];
         const textLines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
         
