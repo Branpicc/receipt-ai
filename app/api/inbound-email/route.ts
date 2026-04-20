@@ -564,6 +564,7 @@ let vendor: string | null = null;
   let tax_cents: number | null = null;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
+    if (/tax/i.test(line)) console.log('🧾 Tax line found:', JSON.stringify(line));
         // "Tax Collected: CDN$ 1.30"
     const taxCollected = line.match(/tax\s+collected[:\s]+(?:cdn\$?|ca\$?|cad\$?)?\s*([\d,.]+)/i);
     if (taxCollected) {
