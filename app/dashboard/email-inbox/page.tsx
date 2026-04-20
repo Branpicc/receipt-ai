@@ -259,17 +259,29 @@ const bbInline = line.match(/^(.+?)\s+[HN]\s+\$?([\d,]+\.?\d*)$/);
             let desc = bbInline[1].trim();
             const price = Math.round(parseFloat(bbInline[2].replace(/,/g, '')) * 100);
             // Clean up description - remove price overrides and item numbers
+// For lines like "Expiry Date: 2029-01-27 H $649.99" use previous line as description
+            if (/^(expiry date|item #|approved price override|covered item|contract id|start date)/i.test(desc)) {
+              // Use the line before this as the description
+              if (i > 0) {
+                const prevLine = textLines[i - 1].trim();
+                if (prevLine.length > 3 && !/^(item #|covered|contract|start date|expiry|approved price)/i.test(prevLine)) {
+                  desc = prevLine;
+                } else if (i > 1) {
+                  desc = textLines[i - 2].trim();
+                }
+              }
+            }
+            // Clean up remaining prefixes
             desc = desc
-              .replace(/Approved Price Override[^)]+\)\s*/i, '')
-              .replace(/Item #:\s*\d+\s*/i, '')
-              .replace(/Expiry Date:[^\s]+\s*/i, '')
+              .replace(/^Approved Price Override[^)]+\)\s*/i, '')
+              .replace(/^Item #:\s*\d+\s*/i, '')
               .trim();
-            if (price > 0 && price < 500000 && desc.length > 3) {
+                          if (price > 0 && price < 500000 && desc.length > 3) {
               lineItems.push({ receipt_id: receipt.id, description: desc.substring(0, 100), quantity: 1, unit_price_cents: price, total_cents: price, line_index: lineItems.length + 1 });
               continue;
             }
           }
-          
+
           // Best Buy format: "H $1,889.99" or "N $69.99" on line after description
           const bbPrice = line.match(/^[HN]\s+\$?([\d,]+\.?\d*)$/);
           if (bbPrice && i > 0) {
