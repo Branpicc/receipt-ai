@@ -49,12 +49,16 @@ async function loadAndApplyTheme() {
 }
 
 function applyTheme(theme: "light" | "dark" | "system") {
+  console.log('🎨 applyTheme called with:', theme);
   if (theme === "system") {
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    console.log('🎨 System preference isDark:', isDark);
     document.documentElement.classList.toggle("dark", isDark);
   } else {
+    console.log('🎨 Setting dark class to:', theme === "dark");
     document.documentElement.classList.toggle("dark", theme === "dark");
   }
+  console.log('🎨 HTML classes after apply:', document.documentElement.className);
 }
 
   async function loadUserRole() {
