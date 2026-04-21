@@ -155,19 +155,18 @@ async function uploadReceipt() {
   }
 }
 
-  if (loading) {
+if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-white">Loading...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <p className="text-gray-900 dark:text-white">Loading...</p>
       </div>
     );
   }
-
   if (error && userRole !== "client") {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl p-6 max-w-sm text-center">
-          <div className="text-5xl mb-4">🚫</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm text-center">
+                    <div className="text-5xl mb-4">🚫</div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
@@ -181,14 +180,14 @@ async function uploadReceipt() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-900 flex flex-col">
+return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Header */}
-      <div className="bg-gray-800 p-4 flex items-center justify-between">
-        <h1 className="text-white text-lg font-semibold">📸 Capture Receipt</h1>
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+        <h1 className="text-gray-900 dark:text-white text-lg font-semibold">📸 Capture Receipt</h1>
         <button
           onClick={() => router.push("/dashboard")}
-          className="text-white text-sm"
+          className="text-gray-600 dark:text-white text-sm"
         >
           Cancel
         </button>
@@ -221,21 +220,21 @@ async function uploadReceipt() {
               alt="Captured receipt"
               className="w-full rounded-xl mb-4"
             />
-            <div className="bg-white rounded-xl p-4 mb-4">
-              <p className="text-gray-900 font-medium text-center">
+<div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-4">
+              <p className="text-gray-900 dark:text-white font-medium text-center">
                 Does the text look clear?
               </p>
-              <p className="text-gray-600 text-sm text-center mt-1">
+              <p className="text-gray-600 dark:text-gray-400 text-sm text-center mt-1">
                 Make sure all details are readable
               </p>
             </div>
-          </div>
+                      </div>
         )}
       </div>
 
       {/* Action Buttons */}
-      <div className="bg-gray-800 p-4 space-y-3">
-        {!capturedImage ? (
+<div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
+          {!capturedImage ? (
           <button
             onClick={capturePhoto}
             disabled={!stream}
@@ -252,14 +251,14 @@ async function uploadReceipt() {
             >
               {uploading ? "Uploading..." : "✅ Submit Receipt"}
             </button>
-            <button
+<button
               onClick={retake}
               disabled={uploading}
-              className="w-full py-3 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700 disabled:opacity-50"
+              className="w-full py-3 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white rounded-xl font-semibold hover:bg-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
             >
               🔄 Retake Photo
             </button>
-          </>
+                      </>
         )}
       </div>
     </div>

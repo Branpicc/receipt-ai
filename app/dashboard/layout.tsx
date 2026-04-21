@@ -49,6 +49,7 @@ async function loadAndApplyTheme() {
 }
 
 function applyTheme(theme: "light" | "dark" | "system") {
+  localStorage.setItem('receipture-theme', theme);
   console.log('🎨 applyTheme called with:', theme);
   if (theme === "system") {
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
