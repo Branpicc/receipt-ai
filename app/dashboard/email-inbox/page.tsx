@@ -22,12 +22,16 @@ type EmailReceipt = {
   converted_receipt_id: string | null;
 purpose_text?: string | null;
   line_items_json?: any[] | null;
+  suggested_category?: string | null;
+  approved_category?: string | null;
 };
 
 type TabType = "pending" | "approved" | "rejected";
 
 export default function EmailInboxPage() {
   const [activeTab, setActiveTab] = useState<TabType>("pending");
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [emailReceipts, setEmailReceipts] = useState<EmailReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [emailAddress, setEmailAddress] = useState("");
@@ -411,6 +415,12 @@ alert(`✅ Receipt approved${categorization.suggested_category ? ` and categoriz
     }
   }
 
+const filteredEmails = emailReceipts.filter(email => {
+    if (vendorSearch.trim() && !email.vendor?.toLowerCase().includes(vendorSearch.toLowerCase())) return false;
+    if (categoryFilter !== "all" && email.suggested_category !== categoryFilter && email.approved_category !== categoryFilter) return false;
+    return true;
+  });
+
   const copyEmail = () => {
     navigator.clipboard.writeText(emailAddress);
     alert("✅ Email address copied!");
@@ -522,13 +532,50 @@ alert(`✅ Receipt approved${categorization.suggested_category ? ` and categoriz
             Rejected
           </button>
         </nav>
+</div>
+      {/* Search and filter */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <input
+          type="text"
+          placeholder="🔍 Search vendor..."
+          value={vendorSearch}
+          onChange={(e) => setVendorSearch(e.target.value)}
+          className="flex-1 min-w-[200px] text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+        />
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+        >
+          <option value="all">All Categories</option>
+          <option value="Meals & Entertainment">Meals & Entertainment</option>
+          <option value="Office Supplies & Expenses">Office Supplies & Expenses</option>
+          <option value="Vehicle Expenses & Fuel">Vehicle Expenses & Fuel</option>
+          <option value="Travel Expenses">Travel Expenses</option>
+          <option value="Advertising & Promotion">Advertising & Promotion</option>
+          <option value="Professional Fees">Professional Fees</option>
+          <option value="Telephone & Internet">Telephone & Internet</option>
+          <option value="Software & Subscriptions">Software & Subscriptions</option>
+          <option value="Equipment & Tools">Equipment & Tools</option>
+          <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Rent & Lease">Rent & Lease</option>
+          <option value="Other Expenses">Other Expenses</option>
+        </select>
+        {(vendorSearch || categoryFilter !== "all") && (
+          <button
+            onClick={() => { setVendorSearch(""); setCategoryFilter("all"); }}
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 border border-gray-300 dark:border-dark-border rounded-lg"
+          >
+            ✕ Clear
+          </button>
+        )}
       </div>
-
       {/* Email Receipts List */}
       {loading ? (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>
-      ) : emailReceipts.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-lg border-2 border-dashed border-gray-300 dark:border-dark-border">
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>
+) : filteredEmails.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-lg border-2 border-dashed border-gray-300 dark:border-dark-border">
           <div className="text-4xl mb-3">
             {activeTab === "pending" ? "📭" : activeTab === "approved" ? "✅" : "❌"}
           </div>
@@ -541,8 +588,8 @@ alert(`✅ Receipt approved${categorization.suggested_category ? ` and categoriz
         </div>
       ) : (
         <div className="space-y-4">
-          {emailReceipts.map((email) => (
-<div
+{filteredEmails.map((email) => (
+  <div
               key={email.id}
               onClick={() => setSelectedEmail(email)}
               className={`rounded-lg border p-6 cursor-pointer ${
