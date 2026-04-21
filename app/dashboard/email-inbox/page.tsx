@@ -403,6 +403,7 @@ alert(`✅ Receipt approved${categorization.suggested_category ? ` and categoriz
 async function deleteEmailRecord(emailReceiptId: string) {
     if (!confirm("Remove this email from the inbox? The approved receipt will not be affected.")) return;
     try {
+      await supabase.from("sms_queue").delete().eq("email_receipt_id", emailReceiptId);
       await supabase.from("email_receipts").delete().eq("id", emailReceiptId);
       setSelectedIds(new Set());
       loadEmailReceipts();
@@ -415,14 +416,16 @@ async function deleteEmailRecord(emailReceiptId: string) {
     if (selectedIds.size === 0) return;
     if (!confirm(`Remove ${selectedIds.size} email(s) from the inbox? Approved receipts will not be affected.`)) return;
     try {
-      await supabase.from("email_receipts").delete().in("id", Array.from(selectedIds));
+      const ids = Array.from(selectedIds);
+      await supabase.from("sms_queue").delete().in("email_receipt_id", ids);
+      await supabase.from("email_receipts").delete().in("id", ids);
       setSelectedIds(new Set());
       loadEmailReceipts();
     } catch (error) {
       console.error("Bulk delete error:", error);
     }
   }
-
+  
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
