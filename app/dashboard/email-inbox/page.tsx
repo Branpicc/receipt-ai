@@ -32,6 +32,7 @@ export default function EmailInboxPage() {
   const [activeTab, setActiveTab] = useState<TabType>("pending");
   const [vendorSearch, setVendorSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [emailReceipts, setEmailReceipts] = useState<EmailReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [emailAddress, setEmailAddress] = useState("");
@@ -399,6 +400,46 @@ alert(`✅ Receipt approved${categorization.suggested_category ? ` and categoriz
     }
   }
 
+async function deleteEmailRecord(emailReceiptId: string) {
+    if (!confirm("Remove this email from the inbox? The approved receipt will not be affected.")) return;
+    try {
+      await supabase.from("email_receipts").delete().eq("id", emailReceiptId);
+      setSelectedIds(new Set());
+      loadEmailReceipts();
+    } catch (error) {
+      console.error("Delete error:", error);
+    }
+  }
+
+  async function deleteSelectedEmails() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Remove ${selectedIds.size} email(s) from the inbox? Approved receipts will not be affected.`)) return;
+    try {
+      await supabase.from("email_receipts").delete().in("id", Array.from(selectedIds));
+      setSelectedIds(new Set());
+      loadEmailReceipts();
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredEmails.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredEmails.map(e => e.id)));
+    }
+  }
+
   async function restoreReceipt(emailReceiptId: string) {
     if (!confirm("Restore this receipt to pending?")) return;
 
@@ -571,6 +612,29 @@ const filteredEmails = emailReceipts.filter(email => {
           </button>
         )}
       </div>
+
+      {/* Bulk actions bar */}
+      {(activeTab === "approved" || activeTab === "rejected") && filteredEmails.length > 0 && (
+        <div className="flex items-center gap-3 mb-3">
+          <input
+            type="checkbox"
+            checked={selectedIds.size === filteredEmails.length && filteredEmails.length > 0}
+            onChange={toggleSelectAll}
+            className="w-4 h-4 rounded border-gray-300 text-accent-500"
+          />
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+          </span>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={deleteSelectedEmails}
+              className="ml-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
+            >
+              🗑️ Delete {selectedIds.size} selected
+            </button>
+          )}
+        </div>
+      )}
       {/* Email Receipts List */}
       {loading ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>
@@ -589,20 +653,30 @@ const filteredEmails = emailReceipts.filter(email => {
       ) : (
         <div className="space-y-4">
 {filteredEmails.map((email) => (
-  <div
+<div
               key={email.id}
-              onClick={() => setSelectedEmail(email)}
-              className={`rounded-lg border p-6 cursor-pointer ${
-                                activeTab === "approved" 
+              className={`rounded-lg border p-6 ${
+                                                activeTab === "approved" 
                   ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20" :
                 activeTab === "rejected" 
                   ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20" :
                 "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface"
               }`}
             >
+<div className="flex items-start gap-3 mb-4">
+                {(activeTab === "approved" || activeTab === "rejected") && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(email.id)}
+                    onChange={() => toggleSelect(email.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1 w-4 h-4 rounded border-gray-300 text-accent-500 flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 cursor-pointer" onClick={() => setSelectedEmail(email)}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-gray-900 dark:text-white">
                       {email.vendor || "Unknown Vendor"}
                     </h3>
@@ -649,8 +723,10 @@ const filteredEmails = emailReceipts.filter(email => {
                 </p>
               </div>
 
+</div>
+              </div>
               {/* Actions */}
-{activeTab === "pending" && (
+              {activeTab === "pending" && (
                 <div className="flex gap-3">
                   <button
                     onClick={(e) => { e.stopPropagation(); approveReceipt(email.id); }}
