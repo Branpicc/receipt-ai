@@ -10,6 +10,7 @@ export type ExtractedReceiptData = {
   date: string | null;
   total_cents: number | null;
   tax_cents: number | null;
+  gratuity_cents: number | null;
   line_items: LineItem[];
   raw_text: string;
   confidence: number;
@@ -62,20 +63,21 @@ export async function extractReceiptData(
     const annotations = response?.textAnnotations;
 
     if (!annotations || annotations.length === 0) {
-      return {
-        vendor: null,
-        date: null,
-        total_cents: null,
-        tax_cents: null,
-        line_items: [],
-        raw_text: "",
-        confidence: 0,
-        payment_method: null,
-        card_brand: null,
-        card_last_four: null,
-        card_entry_method: null,
-      };
-    }
+return {
+      vendor: null,
+      date: null,
+      total_cents: null,
+      tax_cents: null,
+      gratuity_cents: null,
+      line_items: [],
+      raw_text: "",
+      confidence: 0,
+      payment_method: null,
+      card_brand: null,
+      card_last_four: null,
+      card_entry_method: null,
+    };
+      }
 
     const fullText = annotations[0]?.description || "";
     const extracted = parseReceiptText(fullText);
@@ -347,6 +349,19 @@ if (/^total[:\s$]/i.test(line) && !/subtotal/i.test(line)) {
 }
 
 // ── TAX EXTRACTION ────────────────────────────────────────────────────────────
+
+function extractGratuity(lines: string[]): number | null {
+  for (const line of lines) {
+    const gratLine = line.match(/^(?:gratuity|tip|service\s+charge|service\s+fee)[:\s]+\$?([\d,.]+)$/i);
+    if (gratLine) return Math.round(parseFloat(gratLine[1].replace(/,/g, '')) * 100);
+    const gratCad = line.match(/^(?:gratuity|tip)[:\s]+(?:cad|cdn|ca)?\$?\s*([\d,.]+)$/i);
+    if (gratCad) return Math.round(parseFloat(gratCad[1].replace(/,/g, '')) * 100);
+    // "Gratuity   CAD 6.51" with spaces
+    const gratSpace = line.match(/^(?:gratuity|tip)\s+(?:cad\s+|cdn\s+|ca\s+)?([\d,.]+)$/i);
+    if (gratSpace) return Math.round(parseFloat(gratSpace[1].replace(/,/g, '')) * 100);
+  }
+  return null;
+}
 
 function extractTax(lines: string[]): number | null {
   const taxAmounts: number[] = [];
@@ -745,22 +760,24 @@ function parseReceiptText(text: string): {
   date: string | null;
   total_cents: number | null;
   tax_cents: number | null;
+  gratuity_cents: number | null;
   line_items: LineItem[];
   payment_method: string | null;
   card_brand: string | null;
   card_last_four: string | null;
-  card_entry_method: string | null;
+card_entry_method: string | null;
 } {
-  const lines = text.split("\n").map(l => l.trim());
-
-  const vendor = extractVendor(lines);
+  const lines = text.split("\n").map((l: string) => l.trim());
+  
+const vendor = extractVendor(lines);
   const date = extractDate(lines);
   const total_cents = extractTotal(lines);
   const tax_cents = extractTax(lines);
+  const gratuity_cents = extractGratuity(lines);
   const { payment_method, card_brand, card_last_four, card_entry_method } = parsePaymentInfo(lines);
 
   const expectedSubtotal = total_cents && tax_cents ? total_cents - tax_cents : null;
   const line_items = extractLineItems(lines, expectedSubtotal);
 
-  return { vendor, date, total_cents, tax_cents, line_items, payment_method, card_brand, card_last_four, card_entry_method };
+return { vendor, date, total_cents, tax_cents, gratuity_cents, line_items, payment_method, card_brand, card_last_four, card_entry_method };
 }

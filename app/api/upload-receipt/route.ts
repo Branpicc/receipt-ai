@@ -201,6 +201,14 @@ await supabase
           },
         ]);
         console.log("✅ Tax saved:", extracted.tax_cents);
+        // Save gratuity if present
+        if (extracted.gratuity_cents && extracted.gratuity_cents > 0) {
+          await supabase
+            .from("receipts")
+            .update({ gratuity_cents: extracted.gratuity_cents })
+            .eq("id", receiptId);
+          console.log("✅ Gratuity saved:", extracted.gratuity_cents);
+        }
       }
 
       // 7. Check payment card against registered client cards

@@ -32,7 +32,8 @@ type Receipt = {
   card_last_four?: string | null;
   card_entry_method?: string | null;
   source?: string | null;
-  ocr_raw_text?: string | null;
+ocr_raw_text?: string | null;
+  gratuity_cents?: number | null;
 };
 
 type Folder = {
@@ -737,11 +738,17 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                 <div className="grid grid-cols-2 gap-3">
                   <div className="text-gray-500 dark:text-gray-400">Subtotal</div>
                   <div className="text-right text-gray-900 dark:text-white">{subtotalText}</div>
-                  <div className="text-gray-500 dark:text-gray-400">Taxes</div>
+<div className="text-gray-500 dark:text-gray-400">Taxes</div>
                   <div className="text-right text-gray-900 dark:text-white">{taxText}</div>
+                  {receipt.gratuity_cents && receipt.gratuity_cents > 0 ? (
+                    <>
+                      <div className="text-gray-500 dark:text-gray-400">Gratuity / Tip</div>
+                      <div className="text-right text-gray-900 dark:text-white">${(receipt.gratuity_cents / 100).toFixed(2)} CAD</div>
+                    </>
+                  ) : null}
                   <div className="font-medium text-gray-900 dark:text-white">Total</div>
                   <div className="text-right font-medium text-gray-900 dark:text-white">{amountText}</div>
-                </div>
+                                  </div>
 
                 <div className="border-b pb-6">
                   <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Expense Category</div>
