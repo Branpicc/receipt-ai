@@ -302,12 +302,14 @@ async function generateCurrentMonthReport() {
                       </div>
                     )}
                   </div>
-                  <div className={`rounded-xl border p-4 ${
-                    selectedReport.total_flagged > 0
-                      ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                      : 'bg-white dark:bg-dark-surface border-gray-200 dark:border-dark-border'
-                  }`}>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Flagged</div>
+<Link
+                    href={selectedReport.total_flagged > 0 ? `/dashboard/flags?client=${clientId}` : '#'}
+                    className={`rounded-xl border p-4 block ${
+                      selectedReport.total_flagged > 0
+                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer'
+                        : 'bg-white dark:bg-dark-surface border-gray-200 dark:border-dark-border'
+                    }`}>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Flagged {selectedReport.total_flagged > 0 && '→'}</div>
                     <div className={`text-2xl font-bold ${
                       selectedReport.total_flagged > 0
                         ? 'text-red-600 dark:text-red-400'
@@ -315,8 +317,8 @@ async function generateCurrentMonthReport() {
                     }`}>
                       {selectedReport.total_flagged}
                     </div>
-                  </div>
-                </div>
+                  </Link>
+                                  </div>
 
                 {/* Tax savings callout */}
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">

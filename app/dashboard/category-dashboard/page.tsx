@@ -232,6 +232,7 @@ export default function CategoryDashboardPage() {
     : [];
 
   const showBudgetSection = dateRange === "month" && budgetComparisons.length > 0;
+  const showSpendingPie = dateRange !== "month" || budgetComparisons.length === 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
@@ -397,6 +398,44 @@ export default function CategoryDashboardPage() {
           </div>
         )}
 
+{/* Spending breakdown pie chart for non-month views */}
+{dateRange !== "month" && summaries.length > 0 && (
+            <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              📊 Spending by Category
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+data={summaries.map(s => ({ name: s.category, value: s.total_cents / 100 }))}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="value"
+                  >
+                    {summaries.map((_, i) => (
+                      <Cell key={i} fill={["#3b82f6","#10b981","#f59e0b","#8b5cf6","#ec4899","#14b8a6","#f97316","#06b6d4"][i % 8]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => [`$${Number(v).toFixed(2)}`, '']} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2">
+                {summaries.map((s, i) => (
+                  <div key={s.category} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ["#3b82f6","#10b981","#f59e0b","#8b5cf6","#ec4899","#14b8a6","#f97316","#06b6d4"][i % 8] }} />
+                      <span className="text-gray-700 dark:text-gray-300">{s.category}</span>
+                    </div>
+<span className="font-semibold text-gray-900 dark:text-white">${(s.total_cents / 100).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* No budgets set — prompt client to set them */}
         {isClient && dateRange === "month" && budgetComparisons.length === 0 && !loading && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
@@ -474,14 +513,14 @@ export default function CategoryDashboardPage() {
                       onClick={() => setSelectedCategory(
                         selectedCategory === summary.category ? null : summary.category
                       )}
-                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                         selectedCategory === summary.category
                           ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
-                          : isOverBudget
+                          : isOverBudget && showBudgetSection
                           ? "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/10"
                           : "border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500"
                       }`}
-                    >
+                                          >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 dark:text-white">{summary.category}</span>

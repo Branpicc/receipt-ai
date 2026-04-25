@@ -71,12 +71,11 @@ console.log('📋 Found receipts:', receipts?.length, 'total cents:', receipts?.
     }
 
     // Get budgets
-    const { data: budgets } = await supabase
+const { data: budgets } = await supabase
       .from('category_budgets')
       .select('category, monthly_budget_cents')
-      .eq('firm_id', firmId)
-      .eq('client_id', clientId);
-
+      .eq('firm_id', firmId);
+      
     // Build category breakdown
     const categoryMap = new Map<string, { count: number; total_cents: number }>();
     receipts?.forEach(r => {

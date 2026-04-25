@@ -135,6 +135,7 @@ return (
               <span className="font-medium">Receipts</span>
             </Link>
           </li>
+{!isFirmAdmin && (
           <li>
             <Link
               href="/capture"
@@ -148,7 +149,8 @@ return (
               <span className="font-medium">Quick Capture</span>
             </Link>
           </li>
-<li>
+          )}
+          <li>
             <Link
               href="/dashboard/budget-settings"
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -636,7 +638,7 @@ href="/dashboard/reports/clients"
         </main>
               
 {/* Floating Upload Button - accountants and firm admins only */}
-{mounted && (userRole === 'firm_admin' || userRole === 'owner') && <UploadFab />}
+{mounted && userRole === 'client' && <UploadFab />}
       </div>
     </OnboardingWrapper>
   </ClientProvider>

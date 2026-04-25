@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
+import * as XLSX from 'xlsx';
 import { supabase } from "@/lib/supabaseClient";
+import { getMyFirmId } from "@/lib/getFirmId";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
@@ -311,36 +313,93 @@ setAllReceipts(filtered);
     setStatusFilter("all");
     setDateFilter("any");
   }
-function exportExcel() {
-    if (receipts.length === 0) { alert("No receipts to export."); return; }
-    const headers = ["Date", "Vendor", "Category", "Total", "Tax", "Payment Method", "Card", "Purpose", "Status"];
-    const rows = receipts.map(r => [
-      r.receipt_date || "",
-      r.vendor || "",
-      r.approved_category || r.suggested_category || "Uncategorized",
-      ((r.total_cents || 0) / 100).toFixed(2),
-      "",
-      "",
-      "",
-      "",
-      r.status || "",
-    ]);
-    // Build CSV with Excel-friendly formatting
-    const csv = [headers, ...rows].map(row => 
-      row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")
-    ).join("\n");
-    const BOM = "\uFEFF"; // UTF-8 BOM for Excel
-    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Receipts-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+async function exportExcel() {
+      if (receipts.length === 0) { alert("No receipts to export."); return; }
+    
+    const wb = XLSX.utils.book_new();
+    
+    // Fetch receipts with client info
+const exportFirmId = await getMyFirmId();
+    const { data: fullReceipts } = await supabase
+      .from('receipts')
+      .select('id, vendor, receipt_date, total_cents, status, approved_category, suggested_category, client_id, clients(name)')
+.eq('firm_id', exportFirmId)
+      .in('id', receipts.map(r => r.id));
+      
+    // Summary sheet
+    const summaryData: any[][] = [
+      ['Receipture Export', new Date().toLocaleDateString()],
+      ['Total Receipts', receipts.length],
+      ['Total Value', `$${(receipts.reduce((s, r) => s + (r.total_cents || 0), 0) / 100).toFixed(2)}`],
+      [],
+      ['Category', 'Receipt Count', 'Total Amount'],
+    ];
+    const catGroups: Record<string, {count: number, total: number}> = {};
+    receipts.forEach(r => {
+      const cat = r.approved_category || r.suggested_category || 'Uncategorized';
+      if (!catGroups[cat]) catGroups[cat] = { count: 0, total: 0 };
+      catGroups[cat].count++;
+      catGroups[cat].total += r.total_cents || 0;
+    });
+    Object.entries(catGroups).sort((a, b) => b[1].total - a[1].total).forEach(([cat, data]) => {
+      summaryData.push([cat, data.count, `$${(data.total / 100).toFixed(2)}`]);
+    });
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+    // Group by client
+    const clientGroups: Record<string, {name: string, receipts: any[]}> = {};
+    (fullReceipts || receipts).forEach((r: any) => {
+      const clientName = r.clients?.name || 'Unknown Client';
+      const clientId = r.client_id || 'unknown';
+      if (!clientGroups[clientId]) clientGroups[clientId] = { name: clientName, receipts: [] };
+      clientGroups[clientId].receipts.push(r);
+    });
+
+    // One sheet per client
+    Object.values(clientGroups).forEach(({ name, receipts: clientReceipts }) => {
+      const rows: any[][] = [
+        [name],
+        [`Total: ${clientReceipts.length} receipts | $${(clientReceipts.reduce((s: number, r: any) => s + (r.total_cents || 0), 0) / 100).toFixed(2)}`],
+        [],
+        ['Date', 'Vendor', 'Category', 'Total (CAD)', 'Status'],
+      ];
+
+      // Group by month within client
+      const monthGroups: Record<string, any[]> = {};
+      clientReceipts.forEach((r: any) => {
+        const key = r.receipt_date ? r.receipt_date.substring(0, 7) : 'Unknown';
+        if (!monthGroups[key]) monthGroups[key] = [];
+        monthGroups[key].push(r);
+      });
+
+      Object.keys(monthGroups).sort((a, b) => b.localeCompare(a)).forEach(month => {
+        const monthTotal = monthGroups[month].reduce((s: number, r: any) => s + (r.total_cents || 0), 0);
+        const [year, monthNum] = month.split('-').map(Number);
+        const monthName = new Date(year, monthNum - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+        rows.push([monthName, '', '', `$${(monthTotal / 100).toFixed(2)}`, '']);
+        monthGroups[month].forEach((r: any) => {
+          rows.push([
+            r.receipt_date || '',
+            r.vendor || '',
+            r.approved_category || r.suggested_category || 'Uncategorized',
+            (r.total_cents || 0) / 100,
+            r.status || '',
+          ]);
+        });
+        rows.push([]);
+      });
+
+      const sheetName = name.substring(0, 31).replace(/[\\/*?[\]]/g, '');
+      const sheet = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, sheet, sheetName);
+    });
+
+XLSX.writeFile(wb, `Receipts-${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-function exportQuickBooksCSV() {
-    if (receipts.length === 0) { alert("No receipts to export."); return; }
+  function exportQuickBooksCSV() {
+        if (receipts.length === 0) { alert("No receipts to export."); return; }
     const headers = ["Date", "Description", "Account", "Amount", "Tax Amount", "Memo", "Vendor"];
     const rows = receipts.map(r => [
       r.receipt_date || "",

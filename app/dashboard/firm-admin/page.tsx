@@ -41,7 +41,7 @@ export default function FirmAdminDashboard() {
 
   useEffect(() => {
     if (userRole === "firm_admin" || userRole === "owner") {
-      loadAnalytics();
+loadAnalytics(dateRange);
     }
   }, [userRole, dateRange]);
 
@@ -56,8 +56,8 @@ export default function FirmAdminDashboard() {
     }
   }
 
-  async function loadAnalytics() {
-    try {
+async function loadAnalytics(range = dateRange) {
+      try {
       setLoading(true);
       const firmId = await getMyFirmId();
 
@@ -65,14 +65,14 @@ export default function FirmAdminDashboard() {
       let startDate: string | null = null;
       const now = new Date();
       
-      if (dateRange === "week") {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      } else if (dateRange === "month") {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      } else if (dateRange === "quarter") {
+if (range === "week") {
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+} else if (range === "month") {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      } else if (range === "quarter") {
         const quarter = Math.floor(now.getMonth() / 3);
         startDate = new Date(now.getFullYear(), quarter * 3, 1).toISOString();
-      } else if (dateRange === "year") {
+      } else if (range === "year") {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
 
@@ -159,26 +159,18 @@ export default function FirmAdminDashboard() {
             };
           }
 
-          const { count: totalR } = await supabase
-            .from("receipts")
-            .select("*", { count: "exact", head: true })
-            .eq("firm_id", firmId)
-            .in("client_id", clientIds);
-
-          const { count: catR } = await supabase
-            .from("receipts")
-            .select("*", { count: "exact", head: true })
-            .eq("firm_id", firmId)
-            .in("client_id", clientIds)
-            .not("approved_category", "is", null);
-
-          const { count: reviewR } = await supabase
-            .from("receipts")
-            .select("*", { count: "exact", head: true })
-            .eq("firm_id", firmId)
-            .in("client_id", clientIds)
-            .eq("status", "needs_review");
-
+let totalRQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).in("client_id", clientIds);
+          let catRQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).in("client_id", clientIds).not("approved_category", "is", null);
+          let reviewRQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).in("client_id", clientIds).eq("status", "needs_review");
+          if (startDate) {
+            totalRQ = totalRQ.gte("created_at", startDate);
+            catRQ = catRQ.gte("created_at", startDate);
+            reviewRQ = reviewRQ.gte("created_at", startDate);
+          }
+          const { count: totalR } = await totalRQ;
+          const { count: catR } = await catRQ;
+          const { count: reviewR } = await reviewRQ;
+          
           return {
             accountant_id: acc.id,
             accountant_email: acc.display_name || acc.auth_user_id,

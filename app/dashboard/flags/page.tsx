@@ -28,8 +28,8 @@ type Flag = {
 };
 
 type FilterType = "all" | "unresolved" | "resolved";
-type SeverityFilter = "all" | "high" | "medium" | "low";
-type FlagTypeFilter = "all" | "mismatch" | "missing_info" | "duplicate" | "manual";
+type SeverityFilter = "all" | "high" | "medium" | "low" | "warn";
+type FlagTypeFilter = "all" | "mismatch" | "unrecognized_card" | "missing_info" | "duplicate" | "manual";
 
 export default function FlagsPage() {
   const router = useRouter();
@@ -196,6 +196,8 @@ setFlags(transformedFlags as Flag[]);
         return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300";
       case "low":
         return "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300";
+        case "warn":
+        return "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300";
       default:
         return "bg-gray-100 dark:bg-gray-900/30 text-gray-800 dark:text-gray-300";
     }
@@ -203,6 +205,8 @@ setFlags(transformedFlags as Flag[]);
 
   function getFlagTypeIcon(flagType: string) {
     switch (flagType) {
+      case "unrecognized_card":
+        return "Unrecognized Card";
       case "mismatch":
         return "⚠️";
       case "missing_info":
@@ -306,10 +310,11 @@ setFlags(transformedFlags as Flag[]);
                 className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
               >
                 <option value="all">All Severities</option>
-                <option value="high">High</option>
+<option value="high">High</option>
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
-              </select>
+                <option value="warn">Warning</option>
+                              </select>
             </div>
 
             {/* Flag Type Filter */}
@@ -323,11 +328,12 @@ setFlags(transformedFlags as Flag[]);
                 className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
               >
                 <option value="all">All Types</option>
-                <option value="mismatch">Mismatches</option>
+<option value="mismatch">Mismatches</option>
+                <option value="unrecognized_card">Unrecognized Card</option>
                 <option value="missing_info">Missing Info</option>
                 <option value="duplicate">Duplicates</option>
                 <option value="manual">Manual Flags</option>
-              </select>
+                              </select>
             </div>
           </div>
         </div>

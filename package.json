@@ -19,7 +19,8 @@
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
     "stripe": "^20.3.1",
-    "twilio": "^5.13.1"
+    "twilio": "^5.13.1",
+    "xlsx": "^0.18.5"
   },
   "optionalDependencies": {
     "sharp": "^0.34.5"
