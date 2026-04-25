@@ -53,10 +53,10 @@ const [accountants, setAccountants] = useState<{ id: string; display_name: strin
     loadRole();
   }, []);
 
-  // Reload stats when selected client changes
+// Reload stats when selected client or accountant changes
   useEffect(() => {
     if (userRole) loadStats(userRole);
-  }, [selectedClient]);
+  }, [selectedClient, selectedAccountantId]);
 
 async function loadRole() {
   const role = await getUserRole();
@@ -97,12 +97,22 @@ async function loadAccountants() {
     }
   }
 
-  async function loadStats(role: string | null) {
+async function loadStats(role: string | null) {
     try {
       const firmId = await getMyFirmId();
-
       // If accountant has selected a specific client, scope all queries to that client
       const clientFilter = isFiltered && selectedClient ? selectedClient.id : null;
+      
+      // If firm admin selected a specific accountant, get their assigned clients
+      let accountantClientIds: string[] | null = null;
+      if (selectedAccountantId && (role === "firm_admin" || role === "owner")) {
+        const { data: assignedClients } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("firm_id", firmId)
+          .eq("assigned_accountant_id", selectedAccountantId);
+        accountantClientIds = assignedClients?.map(c => c.id) || [];
+      }
 
       // For client role, get their own client_id
       let ownClientId: string | null = null;
@@ -121,9 +131,10 @@ async function loadAccountants() {
       const effectiveClientId = ownClientId || clientFilter;
 
       // Total receipts
-      let totalQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId);
+let totalQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId);
       if (effectiveClientId) totalQ = totalQ.eq("client_id", effectiveClientId);
-      const { count: total } = await totalQ;
+      else if (accountantClientIds) totalQ = totalQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
+            const { count: total } = await totalQ;
 
       // This month
       const startOfMonth = new Date();
@@ -131,16 +142,19 @@ async function loadAccountants() {
       startOfMonth.setHours(0, 0, 0, 0);
       let monthQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).gte("created_at", startOfMonth.toISOString());
       if (effectiveClientId) monthQ = monthQ.eq("client_id", effectiveClientId);
+      else if (accountantClientIds) monthQ = monthQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
       const { count: thisMonth } = await monthQ;
 
       // Pending review
-      let pendingQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).eq("status", "needs_review");
+let pendingQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).eq("status", "needs_review");
       if (effectiveClientId) pendingQ = pendingQ.eq("client_id", effectiveClientId);
+      else if (accountantClientIds) pendingQ = pendingQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
       const { count: pending } = await pendingQ;
 
       // Categorized
-      let catQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).not("approved_category", "is", null);
+let catQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).not("approved_category", "is", null);
       if (effectiveClientId) catQ = catQ.eq("client_id", effectiveClientId);
+      else if (accountantClientIds) catQ = catQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
       const { count: categorized } = await catQ;
 
       // Flagged
@@ -179,9 +193,10 @@ async function loadAccountants() {
       // Recent activity
       if (role === "firm_admin" || role === "owner" || role === "accountant") {
         let recentQ = supabase.from("receipts").select("id, vendor, total_cents, created_at").eq("firm_id", firmId).order("created_at", { ascending: false }).limit(5);
-        if (effectiveClientId) recentQ = recentQ.eq("client_id", effectiveClientId);
+if (effectiveClientId) recentQ = recentQ.eq("client_id", effectiveClientId);
+        else if (accountantClientIds) recentQ = recentQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
         const { data: recentReceipts } = await recentQ;
-        setRecentActivity((recentReceipts as RecentActivity[]) || []);
+                setRecentActivity((recentReceipts as RecentActivity[]) || []);
       }
 
       setStats({

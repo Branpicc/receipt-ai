@@ -27,8 +27,8 @@ export default function RootLayout({
 }>) {
   return (
 <html lang="en" suppressHydrationWarning>
-      <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('receipture-theme')||'system';if(t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();` }} />
-                  <head>
+                    <head>
+                    <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('receipture-theme')||'system';if(t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();` }} />
 <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#3B82F6" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

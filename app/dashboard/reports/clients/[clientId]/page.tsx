@@ -26,6 +26,7 @@ type ClientReport = {
     percentage: number;
     is_over_budget: boolean;
   }[];
+  ai_summary?: string | null;
   generated_at: string;
 };
 
@@ -35,7 +36,8 @@ const CHART_COLORS = [
 ];
 
 function formatMonth(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-CA', { year: 'numeric', month: 'long' });
+  const [year, month] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('en-CA', { year: 'numeric', month: 'long' });
 }
 
 function formatCents(cents: number) {
@@ -102,17 +104,37 @@ export default function ClientReportsPage() {
     }
   }
 
-  async function generateCurrentMonthReport() {
-    setGenerating(true);
+async function generateComprehensiveReport() {
     try {
+      setGenerating(true);
       const firmId = await getMyFirmId();
       const now = new Date();
-      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const response = await fetch('/api/generate-comprehensive-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, firmId, month: currentMonth }),
+      });
+            if (!response.ok) throw new Error('Failed to generate report');
+      alert('✅ Comprehensive report with AI summary generated!');
+      await loadReports();
+    } catch (err: any) {
+      alert('Failed to generate report: ' + err.message);
+    } finally {
+      setGenerating(false);
+    }
+  }
 
+async function generateCurrentMonthReport() {
+    try {
+      setGenerating(true);
+      const firmId = await getMyFirmId();
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const response = await fetch('/api/generate-monthly-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, firmId, month }),
+        body: JSON.stringify({ clientId, firmId, month: currentMonth }),
       });
 
       if (!response.ok) throw new Error('Failed to generate report');
@@ -154,16 +176,25 @@ export default function ClientReportsPage() {
             <p className="text-gray-600 dark:text-gray-400 mt-1">{clientName}</p>
           </div>
           <div className="flex items-center gap-3">
-            {isFirmAdmin && (
-              <button
-                onClick={generateCurrentMonthReport}
-                disabled={generating}
-                className="px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                {generating ? "Generating..." : "⚡ Generate This Month"}
-              </button>
+{isFirmAdmin && (
+              <>
+                <button
+                  onClick={generateComprehensiveReport}
+                  disabled={generating}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {generating ? "Generating..." : "🤖 AI Comprehensive Report"}
+                </button>
+                <button
+                  onClick={generateCurrentMonthReport}
+                  disabled={generating}
+                  className="px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {generating ? "Generating..." : "⚡ Generate This Month"}
+                </button>
+              </>
             )}
-<Link
+            <Link
   href="/dashboard/reports/clients"
   className="text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800 dark:hover:text-gray-200"
 >
@@ -226,11 +257,28 @@ export default function ClientReportsPage() {
             </div>
 
             {/* Report detail */}
-            {selectedReport && (
+{selectedReport && (
               <div className="lg:col-span-3 space-y-6">
-
+                {/* AI Summary */}
+                {selectedReport.ai_summary && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                      🤖 AI Report Summary
+                    </h3>
+<div className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: selectedReport.ai_summary
+                        .replace(/^## (.+)$/gm, '<h3 class="font-semibold mt-4 mb-1">$1</h3>')
+                        .replace(/^# (.+)$/gm, '<h2 class="font-bold text-lg mt-2 mb-2">$1</h2>')
+                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\n\n/g, '<br/><br/>')
+                        .replace(/^\d+\.\s/gm, '<br/>• ')
+                        .replace(/^---$/gm, '<hr/>')
+                      }}
+                    />
+                                      </div>
+                )}
                 {/* Summary cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-4">
                     <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Spend</div>
                     <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -392,10 +440,40 @@ export default function ClientReportsPage() {
                   </div>
                 )}
 
+{/* Report Totals Summary */}
+                <div className="bg-gray-50 dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📊 Report Summary</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Total Receipts</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{selectedReport.total_receipts}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Total Value</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{formatCents(selectedReport.total_spend_cents)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Total Tax</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{formatCents(selectedReport.total_tax_cents)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Flagged</div>
+                      <div className="font-semibold text-red-600 dark:text-red-400">{selectedReport.total_flagged}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Email Receipts</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{selectedReport.total_emails}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Categories</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{selectedReport.category_breakdown.length}</div>
+                    </div>
+                  </div>
+                </div>
                 <div className="text-xs text-gray-400 dark:text-gray-500 text-right">
                   Generated: {new Date(selectedReport.generated_at).toLocaleString()}
                 </div>
-              </div>
+                              </div>
             )}
           </div>
         )}

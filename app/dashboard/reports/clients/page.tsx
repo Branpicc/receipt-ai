@@ -183,8 +183,7 @@ export default function ReportsIndexPage() {
                   {withReports.map((client) => (
                     <Link
                       key={client.id}
-                      href={`/dashboard/reports/${client.id}`}
-                      className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl p-5 hover:border-accent-500 dark:hover:border-accent-500 hover:shadow-md transition-all group"
+href={`/dashboard/reports/clients/${client.id}`}                      className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl p-5 hover:border-accent-500 dark:hover:border-accent-500 hover:shadow-md transition-all group"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
@@ -239,7 +238,7 @@ export default function ReportsIndexPage() {
                   {withoutReports.map((client) => (
                     <Link
                       key={client.id}
-                      href={`/dashboard/reports/${client.id}`}
+href={`/dashboard/reports/clients/${client.id}`}
                       className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-xl p-5 hover:border-accent-400 dark:hover:border-accent-400 transition-all group opacity-75 hover:opacity-100"
                     >
                       <div className="flex items-center gap-3">

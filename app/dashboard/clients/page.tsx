@@ -126,10 +126,11 @@ async function loadAccountants(fId: string) {
         })
         .eq("id", clientId);
 
-      if (error) throw error;
-
+if (error) throw error;
       await loadClients(firmId);
-    } catch (error: any) {
+      // Notify ClientContext to refresh client list
+      window.dispatchEvent(new Event('receipture:clients-updated'));
+        } catch (error: any) {
       console.error("Failed to assign client:", error);
       alert("Failed to assign client: " + error.message);
     } finally {

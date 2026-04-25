@@ -15,18 +15,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing clientId or firmId' }, { status: 400 });
     }
 
-    // Default to last month if no month provided
-    const reportDate = month ? new Date(month) : (() => {
+// Use month string directly to avoid timezone issues
+    let reportMonth: string;
+    if (month) {
+      reportMonth = month.substring(0, 7) + '-01';
+    } else {
       const d = new Date();
       d.setDate(1);
       d.setMonth(d.getMonth() - 1);
-      return d;
-    })();
-
-    const reportMonth = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, '0')}-01`;
-    const startDate = new Date(reportMonth);
-    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0, 23, 59, 59);
-
+      reportMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    }
+    console.log('📅 Generating report for month:', reportMonth, 'from input:', month);
+const [yearNum, monthNum] = reportMonth.split('-').map(Number);
+    const startDate = new Date(yearNum, monthNum - 1, 1);
+    const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
+        
     // Load all receipts for this client in this month
 const { data: receipts, error: receiptsError } = await supabase
   .from('receipts')
@@ -36,6 +39,7 @@ const { data: receipts, error: receiptsError } = await supabase
   .gte('receipt_date', reportMonth)
   .lte('receipt_date', endDate.toISOString().split('T')[0]);
   
+console.log('📋 Receipts query - month:', reportMonth, 'end:', endDate.toISOString().split('T')[0], 'found:', receipts?.length, 'error:', receiptsError?.message);
     if (receiptsError) throw receiptsError;
 
     // Load taxes for these receipts

@@ -1,10 +1,10 @@
 // app/api/cron/monthly-reports/route.ts
-// Called by Vercel Cron on the last day of each month
+// Called by Vercel Cron on the 1st of each month at 12am UTC
 // Add to vercel.json:
 // {
 //   "crons": [{
 //     "path": "/api/cron/monthly-reports",
-//     "schedule": "0 2 28-31 * *"
+//     "schedule": "0 0 1 * *"
 //   }]
 // }
 
@@ -23,19 +23,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Only run on the actual last day of the month
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  const isLastDayOfMonth = tomorrow.getDate() === 1;
-
-  if (!isLastDayOfMonth) {
+  // Only run on the actual first day of the month
+const now = new Date();
+  const isFirstDayOfMonth = now.getDate() === 1;
+  if (!isFirstDayOfMonth) {
     return NextResponse.json({
       skipped: true,
-      message: `Not the last day of month (day ${now.getDate()})`,
+      message: `Not the first day of month (day ${now.getDate()})`,
     });
   }
-
+  
   try {
     // Get all active clients across all firms
     const { data: clients, error } = await supabase
@@ -56,7 +53,7 @@ export async function GET(request: NextRequest) {
     for (const client of clients || []) {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_APP_URL}/api/generate-monthly-report`,
+`${process.env.NEXT_PUBLIC_APP_URL}/api/generate-comprehensive-report`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

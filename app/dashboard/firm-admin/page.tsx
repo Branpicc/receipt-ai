@@ -9,12 +9,11 @@ import { useRouter } from "next/navigation";
 type AccountantStats = {
   accountant_id: string;
   accountant_email: string;
+  total_clients: number;
   total_receipts: number;
-  categorized: number;
+  categorized_receipts: number;
   needs_review: number;
-  flagged: number;
   completion_rate: number;
-  avg_processing_time: number; // in days
 };
 
 type FirmOverview = {
@@ -130,9 +129,68 @@ export default function FirmAdminDashboard() {
         overall_completion_rate: totalReceipts > 0 ? Math.round((categorized / totalReceipts) * 100) : 0,
       });
 
-      // Load accountant stats (placeholder - would need assigned_accountant_id in clients table)
-      // For now, showing mock data structure
-      setAccountantStats([]);
+// Load accountant performance stats
+      const { data: accountants } = await supabase
+        .from("firm_users")
+        .select("id, display_name, auth_user_id")
+        .eq("firm_id", firmId)
+        .eq("role", "accountant");
+
+      if (accountants && accountants.length > 0) {
+        const stats = await Promise.all(accountants.map(async (acc) => {
+          // Get clients assigned to this accountant
+          const { data: assignedClients } = await supabase
+            .from("clients")
+            .select("id")
+            .eq("firm_id", firmId)
+            .eq("assigned_accountant_id", acc.id);
+          
+          const clientIds = assignedClients?.map(c => c.id) || [];
+          
+          if (clientIds.length === 0) {
+            return {
+              accountant_id: acc.id,
+              accountant_email: acc.display_name || acc.auth_user_id,
+              total_clients: 0,
+              total_receipts: 0,
+              categorized_receipts: 0,
+              needs_review: 0,
+              completion_rate: 0,
+            };
+          }
+
+          const { count: totalR } = await supabase
+            .from("receipts")
+            .select("*", { count: "exact", head: true })
+            .eq("firm_id", firmId)
+            .in("client_id", clientIds);
+
+          const { count: catR } = await supabase
+            .from("receipts")
+            .select("*", { count: "exact", head: true })
+            .eq("firm_id", firmId)
+            .in("client_id", clientIds)
+            .not("approved_category", "is", null);
+
+          const { count: reviewR } = await supabase
+            .from("receipts")
+            .select("*", { count: "exact", head: true })
+            .eq("firm_id", firmId)
+            .in("client_id", clientIds)
+            .eq("status", "needs_review");
+
+          return {
+            accountant_id: acc.id,
+            accountant_email: acc.display_name || acc.auth_user_id,
+            total_clients: clientIds.length,
+            total_receipts: totalR || 0,
+            categorized_receipts: catR || 0,
+            needs_review: reviewR || 0,
+            completion_rate: totalR ? Math.round(((catR || 0) / totalR) * 100) : 0,
+          };
+        }));
+        setAccountantStats(stats);
+      }
 
     } catch (error: any) {
       console.error("Failed to load analytics:", error);
@@ -293,13 +351,13 @@ export default function FirmAdminDashboard() {
           {accountantStats.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 dark:text-gray-500 text-5xl mb-4">📊</div>
-              <p className="text-gray-500 dark:text-gray-400 mb-2">
-                Accountant performance tracking coming soon
+<p className="text-gray-500 dark:text-gray-400 mb-2">
+                No accountants found
               </p>
               <p className="text-sm text-gray-400 dark:text-gray-500">
-                This feature requires client-to-accountant assignment system
+                Invite accountants from the Team page to see performance tracking
               </p>
-            </div>
+                          </div>
           ) : (
             <div className="space-y-4">
               {accountantStats.map((stat) => (
@@ -315,25 +373,37 @@ export default function FirmAdminDashboard() {
                       {stat.completion_rate}% complete
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 gap-4 text-sm">
+<div className="grid grid-cols-4 gap-4 text-sm">
                     <div>
-                      <div className="text-gray-500 dark:text-gray-400">Total</div>
+                      <div className="text-gray-500 dark:text-gray-400">Clients</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{stat.total_clients}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Receipts</div>
                       <div className="font-semibold text-gray-900 dark:text-white">{stat.total_receipts}</div>
                     </div>
                     <div>
-                      <div className="text-gray-500 dark:text-gray-400">Done</div>
-                      <div className="font-semibold text-green-600 dark:text-green-400">{stat.categorized}</div>
+                      <div className="text-gray-500 dark:text-gray-400">Categorized</div>
+                      <div className="font-semibold text-green-600 dark:text-green-400">{stat.categorized_receipts}</div>
                     </div>
                     <div>
-                      <div className="text-gray-500 dark:text-gray-400">Review</div>
+                      <div className="text-gray-500 dark:text-gray-400">Needs Review</div>
                       <div className="font-semibold text-orange-600 dark:text-orange-400">{stat.needs_review}</div>
                     </div>
-                    <div>
-                      <div className="text-gray-500 dark:text-gray-400">Flagged</div>
-                      <div className="font-semibold text-red-600 dark:text-red-400">{stat.flagged}</div>
+                  </div>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      <span>Completion rate</span>
+                      <span>{stat.completion_rate}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-dark-hover rounded-full h-2">
+                      <div
+                        className="bg-green-500 h-2 rounded-full transition-all"
+                        style={{ width: `${stat.completion_rate}%` }}
+                      />
                     </div>
                   </div>
-                </div>
+                                  </div>
               ))}
             </div>
           )}

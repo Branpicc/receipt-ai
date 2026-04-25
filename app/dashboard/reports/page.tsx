@@ -6,7 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
 
-type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly";
+type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly" | "comprehensive";
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -171,11 +171,14 @@ export default function ReportsPage() {
   }
 
 async function fetchTaxCodesReport(firmId: string) {
-  // Since there's no tax_code column, group by approved/suggested category
-  const { data, error } = await supabase
+  let query = supabase
     .from("receipts")
     .select("approved_category, suggested_category, total_cents")
     .eq("firm_id", firmId);
+  if (selectedClient) query = query.eq("client_id", selectedClient);
+  if (dateFrom) query = query.gte("receipt_date", dateFrom);
+  if (dateTo) query = query.lte("receipt_date", dateTo);
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -240,10 +243,14 @@ const clientName = client?.name || "Unknown";
   }
 
 async function fetchCategoriesReport(firmId: string) {
-  const { data, error } = await supabase
+  let query = supabase
     .from("receipts")
     .select("approved_category, suggested_category, total_cents")
     .eq("firm_id", firmId);
+  if (selectedClient) query = query.eq("client_id", selectedClient);
+  if (dateFrom) query = query.gte("receipt_date", dateFrom);
+  if (dateTo) query = query.lte("receipt_date", dateTo);
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -326,27 +333,37 @@ function getCategoryTaxCode(category: string): string {
     );
   }
 
-  const reportTypes = [
+const reportTypes = [
     { value: "receipts", label: "Receipt Summary", icon: "📄", desc: "All receipts with details" },
     { value: "tax_codes", label: "Tax Code Report", icon: "🧾", desc: "Grouped by T2125 codes" },
     { value: "clients", label: "Client Report", icon: "👥", desc: "Per-client breakdown" },
     { value: "categories", label: "Category Report", icon: "📊", desc: "Expenses by category" },
-    { value: "monthly", label: "Monthly Summary", icon: "📅", desc: "Month-over-month" }
+    { value: "monthly", label: "Monthly Summary", icon: "📅", desc: "Month-over-month" },
+    { value: "comprehensive", label: "Comprehensive Report", icon: "📋", desc: "AI-powered full report" },
   ];
 
   return (
     <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Export Reports
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Generate detailed reports for accounting and analysis
-          </p>
+{/* Header */}
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              Export Reports
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Generate detailed reports for accounting and analysis
+            </p>
+          </div>
+          
+<a
+href="/dashboard/reports/clients"
+            className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+          >
+            📋 Client Monthly Reports
+          </a>
         </div>
-
+        
         {/* Report Type Selection */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -376,9 +393,9 @@ function getCategoryTaxCode(category: string): string {
           </div>
         </div>
 
-        {/* Filters */}
-        {selectedReport === "receipts" && (
-          <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+{/* Filters */}
+        {(selectedReport === "receipts" || selectedReport === "tax_codes" || selectedReport === "categories" || selectedReport === "monthly") && (
+                    <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Filters
             </h2>

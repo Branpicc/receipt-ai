@@ -113,12 +113,17 @@ export default function CategoryDashboardPage() {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
 
-      // Load budgets
-      const { data: budgetsData } = await supabase
+// Load budgets - filter by client if selected
+      let budgetQuery = supabase
         .from("category_budgets")
         .select("*")
         .eq("firm_id", firmId);
-
+      if (userRole === "client" && clientId) {
+        budgetQuery = budgetQuery.eq("client_id", clientId);
+      } else if (isFiltered && selectedClient) {
+        budgetQuery = budgetQuery.eq("client_id", selectedClient.id);
+      }
+      const { data: budgetsData } = await budgetQuery;
       setBudgets(budgetsData || []);
 
       // Build receipts query
@@ -136,7 +141,8 @@ export default function CategoryDashboardPage() {
         // Accountant has selected a specific client
         query = query.eq("client_id", selectedClient.id);
       }
-
+// Only show categorized receipts for the chart
+      query = query.not("approved_category", "is", null);
       if (startDate) {
         query = query.gte("receipt_date", startDate);
       }

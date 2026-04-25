@@ -311,6 +311,33 @@ setAllReceipts(filtered);
     setStatusFilter("all");
     setDateFilter("any");
   }
+function exportExcel() {
+    if (receipts.length === 0) { alert("No receipts to export."); return; }
+    const headers = ["Date", "Vendor", "Category", "Total", "Tax", "Payment Method", "Card", "Purpose", "Status"];
+    const rows = receipts.map(r => [
+      r.receipt_date || "",
+      r.vendor || "",
+      r.approved_category || r.suggested_category || "Uncategorized",
+      ((r.total_cents || 0) / 100).toFixed(2),
+      "",
+      "",
+      "",
+      "",
+      r.status || "",
+    ]);
+    // Build CSV with Excel-friendly formatting
+    const csv = [headers, ...rows].map(row => 
+      row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")
+    ).join("\n");
+    const BOM = "\uFEFF"; // UTF-8 BOM for Excel
+    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Receipts-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
 function exportQuickBooksCSV() {
     if (receipts.length === 0) { alert("No receipts to export."); return; }
@@ -619,13 +646,20 @@ const filtersBarJSX = (
           </div>
 <div className="flex items-center gap-3">
             <button
-              onClick={exportQuickBooksCSV}
+onClick={exportQuickBooksCSV}
               disabled={receipts.length === 0}
               className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
             >
-              📥 Export QuickBooks CSV
+              📥 QuickBooks CSV
             </button>
-            <Link
+            <button
+              onClick={exportExcel}
+              disabled={receipts.length === 0}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              📊 Export Excel
+            </button>
+                        <Link
               href="/dashboard"
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
             >

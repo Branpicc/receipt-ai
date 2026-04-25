@@ -41,12 +41,19 @@ export function ClientProvider({ children, userRole }: { children: ReactNode; us
 
   const isAccountantOrAdmin = userRole === "accountant" || userRole === "firm_admin" || userRole === "owner";
 
-  useEffect(() => {
+useEffect(() => {
     if (isAccountantOrAdmin) {
       loadClients();
     }
   }, [userRole]);
 
+  // Expose a way to force refresh from outside
+  useEffect(() => {
+    const handler = () => loadClients();
+    window.addEventListener('receipture:clients-updated', handler);
+    return () => window.removeEventListener('receipture:clients-updated', handler);
+  }, []);
+  
   async function loadClients() {
     setLoadingClients(true);
     try {
