@@ -23,7 +23,11 @@ export type ExtractedReceiptData = {
 export async function extractReceiptData(
   imageUrl: string
 ): Promise<ExtractedReceiptData> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_VISION_API_KEY;
+  // Accept either name during the rename transition. Once Vercel has only the
+  // un-prefixed name, drop the fallback.
+  const apiKey =
+    process.env.GOOGLE_VISION_API_KEY ||
+    process.env.NEXT_PUBLIC_GOOGLE_VISION_API_KEY;
 
   if (!apiKey) {
     throw new Error("Google Vision API key not configured");
