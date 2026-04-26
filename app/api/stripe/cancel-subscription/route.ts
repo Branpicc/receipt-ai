@@ -1,29 +1,43 @@
 // app/api/stripe/cancel-subscription/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
+import { createClient } from '@supabase/supabase-js';
+import { requireFirmMember } from '@/lib/apiAuth';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
-    const { subscriptionId } = await request.json();
+    const { firmId } = await request.json();
 
-    if (!subscriptionId) {
-      return NextResponse.json(
-        { error: 'Missing subscriptionId' },
-        { status: 400 }
-      );
+    if (!firmId) {
+      return NextResponse.json({ error: 'Missing firmId' }, { status: 400 });
     }
 
-    console.log('Canceling subscription:', subscriptionId);
+    const auth = await requireFirmMember(request, firmId, {
+      roles: ['firm_admin', 'owner'],
+    });
+    if (auth instanceof NextResponse) return auth;
 
-    // Cancel the subscription immediately
-    const subscription = await stripe.subscriptions.cancel(subscriptionId);
+    const { data: firm } = await supabase
+      .from('firms')
+      .select('stripe_subscription_id')
+      .eq('id', firmId)
+      .single();
 
-    console.log('Subscription canceled:', subscription.id);
+    if (!firm?.stripe_subscription_id) {
+      return NextResponse.json({ error: 'No active subscription to cancel' }, { status: 404 });
+    }
 
-    return NextResponse.json({ 
+    const subscription = await stripe.subscriptions.cancel(firm.stripe_subscription_id);
+
+    return NextResponse.json({
       success: true,
       subscriptionId: subscription.id,
-      status: subscription.status
+      status: subscription.status,
     });
   } catch (error: any) {
     console.error('Cancel subscription error:', error);

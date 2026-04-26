@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { requireFirmMember } from "@/lib/apiAuth";
 
 // Use service role for admin operations
 const supabaseAdmin = createClient(
@@ -43,36 +44,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get current user from auth header
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader) {
+    // Authenticate caller and require firm_admin or owner
+    const auth = await requireFirmMember(request, firmId, {
+      roles: ["firm_admin", "owner"],
+    });
+    if (auth instanceof NextResponse) return auth;
+    const { firmUser } = auth;
+
+    // Only owners may invite a firm_admin (prevent admin proliferation)
+    if (role === "firm_admin" && firmUser.role !== "owner") {
       return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Invalid authentication" },
-        { status: 401 }
-      );
-    }
-
-    // Get firm_user id for invited_by
-    const { data: firmUser, error: firmUserError } = await supabaseAdmin
-      .from("firm_users")
-      .select("id")
-      .eq("auth_user_id", user.id)
-      .eq("firm_id", firmId)
-      .single();
-
-    if (firmUserError || !firmUser) {
-      return NextResponse.json(
-        { error: "User not found in firm" },
+        { error: "Only the firm owner can invite a firm admin" },
         { status: 403 }
       );
     }

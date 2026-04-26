@@ -81,6 +81,11 @@ export default function ReportsIndexPage() {
     setGeneratingAll(true);
     try {
       const firmId = await getMyFirmId();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Your session expired. Please log in again.");
+        return;
+      }
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
@@ -91,7 +96,10 @@ export default function ReportsIndexPage() {
         try {
           const response = await fetch("/api/generate-monthly-report", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`,
+            },
             body: JSON.stringify({ clientId: client.id, firmId, month }),
           });
           if (response.ok) succeeded++;

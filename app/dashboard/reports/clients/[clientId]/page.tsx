@@ -108,11 +108,19 @@ async function generateComprehensiveReport() {
     try {
       setGenerating(true);
       const firmId = await getMyFirmId();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Your session expired. Please log in again.');
+        return;
+      }
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const response = await fetch('/api/generate-comprehensive-report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ clientId, firmId, month: currentMonth }),
       });
             if (!response.ok) throw new Error('Failed to generate report');
@@ -129,11 +137,19 @@ async function generateCurrentMonthReport() {
     try {
       setGenerating(true);
       const firmId = await getMyFirmId();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Your session expired. Please log in again.');
+        return;
+      }
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const response = await fetch('/api/generate-monthly-report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ clientId, firmId, month: currentMonth }),
       });
 

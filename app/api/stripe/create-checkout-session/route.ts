@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, STRIPE_PRICES } from '@/lib/stripe';
 import { createClient } from '@supabase/supabase-js';
+import { requireFirmMember } from '@/lib/apiAuth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +16,11 @@ export async function POST(request: NextRequest) {
     if (!planName || !firmId) {
       return NextResponse.json({ error: 'Missing planName or firmId' }, { status: 400 });
     }
+
+    const auth = await requireFirmMember(request, firmId, {
+      roles: ['firm_admin', 'owner'],
+    });
+    if (auth instanceof NextResponse) return auth;
 
     // Map plan name to price ID
     let priceId: string;

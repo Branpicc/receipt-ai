@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import { requireFirmMember } from "@/lib/apiAuth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,6 +19,11 @@ export async function POST(request: NextRequest) {
     if (!firmId) {
       return NextResponse.json({ error: "Missing firmId" }, { status: 400 });
     }
+
+    const auth = await requireFirmMember(request, firmId, {
+      roles: ["firm_admin", "owner"],
+    });
+    if (auth instanceof NextResponse) return auth;
 
     // Get firm's Stripe customer ID
     const { data: firm, error: firmError } = await supabase

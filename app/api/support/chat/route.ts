@@ -1,9 +1,31 @@
 // app/api/support/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthedUser } from '@/lib/apiAuth';
+
+const MAX_MESSAGES = 20;
+const MAX_MESSAGE_CHARS = 4000;
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthedUser(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { messages, userName } = await request.json();
+
+    if (!Array.isArray(messages)) {
+      return NextResponse.json({ error: 'messages must be an array' }, { status: 400 });
+    }
+    if (messages.length > MAX_MESSAGES) {
+      return NextResponse.json({ error: `Too many messages (max ${MAX_MESSAGES})` }, { status: 400 });
+    }
+    for (const m of messages) {
+      if (typeof m?.content === 'string' && m.content.length > MAX_MESSAGE_CHARS) {
+        return NextResponse.json(
+          { error: `Message too long (max ${MAX_MESSAGE_CHARS} chars)` },
+          { status: 400 }
+        );
+      }
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isAuthorizedCron, requireFirmMember } from '@/lib/apiAuth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +12,11 @@ export async function POST(request: NextRequest) {
     const { clientId, firmId, month } = await request.json();
     if (!clientId || !firmId) {
       return NextResponse.json({ error: 'Missing clientId or firmId' }, { status: 400 });
+    }
+
+    if (!isAuthorizedCron(request)) {
+      const auth = await requireFirmMember(request, firmId);
+      if (auth instanceof NextResponse) return auth;
     }
 
 let reportMonth: string;

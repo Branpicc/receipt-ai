@@ -230,9 +230,17 @@ if (role === "client" && firmUser?.client_id) {
         content: m.message,
       }));
 
+const { data: { session: chatSession } } = await supabase.auth.getSession();
+if (!chatSession) {
+  setLoading(false);
+  return;
+}
 const response = await fetch("/api/support/chat", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${chatSession.access_token}`,
+  },
   body: JSON.stringify({
     messages: conversationHistory.slice(-10),
     userName,

@@ -154,10 +154,18 @@ export default function BillingPage() {
     try {
       setLoading(tier);
       const firmId = await getMyFirmId();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Your session expired. Please log in again.");
+        return;
+      }
 
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           planName: tier,
           firmId,
@@ -180,9 +188,17 @@ export default function BillingPage() {
     try {
       setLoading("portal");
       const firmId = await getMyFirmId();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Your session expired. Please log in again.");
+        return;
+      }
       const response = await fetch("/api/stripe/create-portal-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ firmId }),
       });
       const { url } = await response.json();

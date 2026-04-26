@@ -56,7 +56,10 @@ const now = new Date();
 `${process.env.NEXT_PUBLIC_APP_URL}/api/generate-comprehensive-report`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+            },
             body: JSON.stringify({
               clientId: client.id,
               firmId: client.firm_id,

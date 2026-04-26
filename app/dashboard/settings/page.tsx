@@ -897,9 +897,17 @@ onClick={() => {
     onClick={async () => {
       try {
         // Check eligibility for retention offer
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          alert('Your session expired. Please log in again.');
+          return;
+        }
         const eligibilityRes = await fetch('/api/retention/check-eligibility', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({ firmId: user.firmId }),
         });
         
@@ -919,15 +927,14 @@ if (eligibility.eligible) {
           );
           
           if (accepted) {
-            // Accept retention offer
+            // Accept retention offer (server re-derives card fingerprint from firmId)
             const acceptRes = await fetch('/api/retention/accept-offer', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                firmId: user.firmId,
-                cardFingerprint: eligibility.cardFingerprint,
-                customerId: eligibility.customerId,
-              }),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ firmId: user.firmId }),
             });
             
             if (acceptRes.ok) {
