@@ -71,7 +71,6 @@ export default function CategoryDashboardPage() {
   }, []);
 
   useEffect(() => {
-    // Only load dashboard once we know the role (and client_id if applicable)
     if (userRole !== null) {
       loadDashboard();
     }
@@ -80,7 +79,6 @@ export default function CategoryDashboardPage() {
   async function loadUserContext() {
     const role = await getUserRole();
     setUserRole(role);
-
     if (role === "client") {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -113,7 +111,7 @@ export default function CategoryDashboardPage() {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
 
-// Load budgets - filter by client if selected
+      // Load budgets - filter by client if applicable
       let budgetQuery = supabase
         .from("category_budgets")
         .select("*")
@@ -135,13 +133,10 @@ export default function CategoryDashboardPage() {
       // Scope to client if applicable
       if (userRole === "client" && clientId) {
         query = query.eq("client_id", clientId);
-        // Clients only see categorized receipts
-        query = query.not("approved_category", "is", null);
       } else if (isFiltered && selectedClient) {
-        // Accountant has selected a specific client
         query = query.eq("client_id", selectedClient.id);
       }
-// Only show categorized receipts for the chart
+      // Only show categorized receipts for the chart
       query = query.not("approved_category", "is", null);
       if (startDate) {
         query = query.gte("receipt_date", startDate);
