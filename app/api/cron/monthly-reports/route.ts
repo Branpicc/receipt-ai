@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Only run on the actual first day of the month
-const now = new Date();
+  const now = new Date();
   const isFirstDayOfMonth = now.getDate() === 1;
   if (!isFirstDayOfMonth) {
     return NextResponse.json({
@@ -32,6 +32,11 @@ const now = new Date();
       message: `Not the first day of month (day ${now.getDate()})`,
     });
   }
+
+  // We run on the 1st, but the report is for the month that just ended.
+  // Subtract one month; Date wraps year for January correctly.
+  const reportPeriod = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const reportMonth = `${reportPeriod.getFullYear()}-${String(reportPeriod.getMonth() + 1).padStart(2, '0')}-01`;
   
   try {
     // Get all active clients across all firms
@@ -63,8 +68,7 @@ const now = new Date();
             body: JSON.stringify({
               clientId: client.id,
               firmId: client.firm_id,
-              // Current month (cron runs on last day, so this month)
-              month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+              month: reportMonth,
             }),
           }
         );

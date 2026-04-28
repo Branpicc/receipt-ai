@@ -250,8 +250,6 @@ async function handleMultipleFiles(files: FileList | null) {
         try {
           let uploadFile = file;
           try { uploadFile = await convertHeicToJpg(file); } catch { uploadFile = file; }
-// Generate a shared batch ID for this upload session
-          const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
 
           const formData = new FormData();
           formData.append("file", uploadFile);
