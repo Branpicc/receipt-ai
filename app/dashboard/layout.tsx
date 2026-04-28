@@ -632,13 +632,18 @@ href="/dashboard/reports/clients"
                     <SettingsIcon className="w-5 h-5" />
                     <span className="font-medium">Settings</span>
                   </Link>
-                  <button
-                    onClick={handleSignOut}
-                    title="Sign out"
-                    className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
+                  <div className="relative group">
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
+                      Sign out
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 items-center">

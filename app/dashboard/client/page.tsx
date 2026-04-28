@@ -482,15 +482,19 @@ function getCategoryColor(category: string) {
             {recentReceipts.map((receipt) => (
               <Link key={receipt.id} href={`/dashboard/receipts/${receipt.id}`} className="px-4 py-3 flex items-center justify-between active:bg-gray-50 dark:active:bg-dark-hover">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{receipt.vendor || "Unknown vendor"}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {receipt.receipt_date ? new Date(receipt.receipt_date).toLocaleDateString() : new Date(receipt.created_at).toLocaleDateString()}
-{receipt.approved_category && (
-                      <span className={`ml-1 text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryColor(receipt.approved_category)}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {receipt.vendor || "Unknown vendor"}
+                    </span>
+                    {receipt.approved_category && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${getCategoryColor(receipt.approved_category)}`}>
                         {receipt.approved_category}
                       </span>
                     )}
-                                      </div>
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {receipt.receipt_date ? new Date(receipt.receipt_date).toLocaleDateString() : new Date(receipt.created_at).toLocaleDateString()}
+                  </div>
                 </div>
                 <div className="text-sm font-bold text-gray-900 dark:text-white ml-3 whitespace-nowrap">${(receipt.total_cents / 100).toFixed(2)}</div>
               </Link>
