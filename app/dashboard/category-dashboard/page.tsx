@@ -7,6 +7,7 @@ import { getUserRole } from "@/lib/getUserRole";
 import Link from "next/link";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useClientContext } from "@/lib/ClientContext";
+import { Wallet, BarChart3, AlertTriangle, Lightbulb } from "lucide-react";
 
 type CategorySummary = {
   category: string;
@@ -111,17 +112,27 @@ export default function CategoryDashboardPage() {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
 
-      // Load budgets - filter by client if applicable
-      let budgetQuery = supabase
-        .from("category_budgets")
-        .select("*")
-        .eq("firm_id", firmId);
-      if (userRole === "client" && clientId) {
-        budgetQuery = budgetQuery.eq("client_id", clientId);
-      } else if (isFiltered && selectedClient) {
-        budgetQuery = budgetQuery.eq("client_id", selectedClient.id);
+      // Load budgets — prefer per-client overrides, fall back to firm-wide defaults
+      const targetClientId =
+        userRole === "client" ? clientId : isFiltered && selectedClient ? selectedClient.id : null;
+
+      let budgetsData: CategoryBudget[] | null = null;
+      if (targetClientId) {
+        const { data } = await supabase
+          .from("category_budgets")
+          .select("*")
+          .eq("firm_id", firmId)
+          .eq("client_id", targetClientId);
+        if (data && data.length > 0) budgetsData = data;
       }
-      const { data: budgetsData } = await budgetQuery;
+      if (!budgetsData) {
+        const { data } = await supabase
+          .from("category_budgets")
+          .select("*")
+          .eq("firm_id", firmId)
+          .is("client_id", null);
+        budgetsData = data;
+      }
       setBudgets(budgetsData || []);
 
       // Build receipts query
@@ -278,8 +289,8 @@ export default function CategoryDashboardPage() {
         {showBudgetSection && (
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                💰 Monthly Budget vs Actual Spending
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Wallet className="w-5 h-5" /> Monthly Budget vs Actual Spending
               </h2>
               <Link
                 href="/dashboard/budget-settings"
@@ -369,8 +380,8 @@ export default function CategoryDashboardPage() {
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bc.isOverBudget ? "#ef4444" : bc.color }} />
                         <span className="font-medium text-gray-900 dark:text-white text-sm">{bc.category}</span>
                         {bc.isOverBudget && (
-                          <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded">
-                            ⚠️ Over
+                          <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> Over
                           </span>
                         )}
                       </div>
@@ -396,8 +407,8 @@ export default function CategoryDashboardPage() {
 {/* Spending breakdown pie chart for non-month views */}
 {dateRange !== "month" && summaries.length > 0 && (
             <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              📊 Spending by Category
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" /> Spending by Category
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ResponsiveContainer width="100%" height={280}>
@@ -435,7 +446,7 @@ data={summaries.map(s => ({ name: s.category, value: s.total_cents / 100 }))}
         {isClient && dateRange === "month" && budgetComparisons.length === 0 && !loading && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
             <div className="flex items-start gap-3">
-              <div className="text-2xl">💡</div>
+              <Lightbulb className="w-6 h-6 text-blue-700 dark:text-blue-300 flex-shrink-0" />
               <div>
                 <p className="font-medium text-blue-900 dark:text-blue-200 mb-1">Set up your budget</p>
                 <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
@@ -520,8 +531,8 @@ className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 dark:text-white">{summary.category}</span>
                           {isOverBudget && showBudgetSection && (
-                            <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded font-medium">
-                              ⚠️ Over Budget
+                            <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded font-medium inline-flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> Over Budget
                             </span>
                           )}
                         </div>

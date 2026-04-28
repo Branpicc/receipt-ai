@@ -178,10 +178,19 @@ async function loadRecentEdits(clientId: string, firmId: string) {
   }
   
   async function loadBudgetStatus(clientId: string, firmId: string) {
-    const { data: budgets } = await supabase
+    // Prefer per-client overrides, fall back to firm-wide defaults
+    let budgets = (await supabase
       .from("category_budgets")
       .select("category, monthly_budget_cents")
-      .eq("firm_id", firmId);
+      .eq("firm_id", firmId)
+      .eq("client_id", clientId)).data;
+    if (!budgets || budgets.length === 0) {
+      budgets = (await supabase
+        .from("category_budgets")
+        .select("category, monthly_budget_cents")
+        .eq("firm_id", firmId)
+        .is("client_id", null)).data;
+    }
     if (!budgets || budgets.length === 0) return;
 
     const startOfMonth = new Date();

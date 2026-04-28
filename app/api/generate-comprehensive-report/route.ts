@@ -76,11 +76,19 @@ console.log('📋 Found receipts:', receipts?.length, 'total cents:', receipts?.
       flaggedCount = new Set(flags?.map(f => f.receipt_id) || []).size;
     }
 
-    // Get budgets
-const { data: budgets } = await supabase
+    // Get budgets — prefer per-client, fall back to firm-wide defaults
+    let { data: budgets } = await supabase
       .from('category_budgets')
       .select('category, monthly_budget_cents')
-      .eq('firm_id', firmId);
+      .eq('firm_id', firmId)
+      .eq('client_id', clientId);
+    if (!budgets || budgets.length === 0) {
+      ({ data: budgets } = await supabase
+        .from('category_budgets')
+        .select('category, monthly_budget_cents')
+        .eq('firm_id', firmId)
+        .is('client_id', null));
+    }
       
     // Build category breakdown
     const categoryMap = new Map<string, { count: number; total_cents: number }>();

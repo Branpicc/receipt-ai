@@ -89,11 +89,19 @@ console.log('📋 Receipts query - month:', reportMonth, 'end:', endDate.toISOSt
       emailCount = count || 0;
     }
 
-    // Load budgets for comparison
-    const { data: budgets } = await supabase
+    // Load budgets for comparison — prefer per-client, fall back to firm-wide
+    let { data: budgets } = await supabase
       .from('category_budgets')
       .select('category, monthly_budget_cents')
-      .eq('firm_id', firmId);
+      .eq('firm_id', firmId)
+      .eq('client_id', clientId);
+    if (!budgets || budgets.length === 0) {
+      ({ data: budgets } = await supabase
+        .from('category_budgets')
+        .select('category, monthly_budget_cents')
+        .eq('firm_id', firmId)
+        .is('client_id', null));
+    }
 
     // Build category breakdown
     const categoryMap = new Map<string, { count: number; total_cents: number }>();
