@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
+import { Bell, Mail, FileText, AlertTriangle, Eye, X } from "lucide-react";
 
 type Notification = {
   id: string;
@@ -140,13 +141,14 @@ const { data: notifs, error } = await notifQuery;
     }
   }
 
-  function getNotificationIcon(type: string) {
+  function NotificationIcon({ type }: { type: string }) {
+    const className = "w-5 h-5 text-gray-700 dark:text-gray-300";
     switch (type) {
-      case 'email_received': return '📧';
-      case 'receipt_uploaded': return '📄';
-      case 'receipt_flagged': return '⚠️';
-      case 'receipt_needs_review': return '👀';
-      default: return '🔔';
+      case 'email_received': return <Mail className={className} />;
+      case 'receipt_uploaded': return <FileText className={className} />;
+      case 'receipt_flagged': return <AlertTriangle className={className} />;
+      case 'receipt_needs_review': return <Eye className={className} />;
+      default: return <Bell className={className} />;
     }
   }
 
@@ -178,7 +180,7 @@ const { data: notifs, error } = await notifQuery;
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
       >
-        <span className="text-2xl">🔔</span>
+        <Bell className="w-6 h-6 text-gray-700 dark:text-gray-300" />
         {hasUnread && (
           <span className="absolute top-1 right-1 bg-red-600 dark:bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -204,7 +206,7 @@ const { data: notifs, error } = await notifQuery;
               onClick={() => setIsOpen(false)}
               className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
           </div>
 
@@ -218,13 +220,13 @@ const { data: notifs, error } = await notifQuery;
               </div>
               <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                 {summary.emailsCount > 0 && (
-                  <div>📧 {summary.emailsCount} emailed receipt{summary.emailsCount !== 1 ? 's' : ''} pending</div>
+                  <div className="flex items-center gap-2"><Mail className="w-4 h-4 flex-shrink-0" /> {summary.emailsCount} emailed receipt{summary.emailsCount !== 1 ? 's' : ''} pending</div>
                 )}
                 {summary.needsReviewCount > 0 && (
-                  <div>📄 {summary.needsReviewCount} receipt{summary.needsReviewCount !== 1 ? 's' : ''} need review</div>
+                  <div className="flex items-center gap-2"><FileText className="w-4 h-4 flex-shrink-0" /> {summary.needsReviewCount} receipt{summary.needsReviewCount !== 1 ? 's' : ''} need review</div>
                 )}
                 {summary.flaggedCount > 0 && (
-                  <div>⚠️ {summary.flaggedCount} receipt{summary.flaggedCount !== 1 ? 's' : ''} flagged</div>
+                  <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 flex-shrink-0" /> {summary.flaggedCount} receipt{summary.flaggedCount !== 1 ? 's' : ''} flagged</div>
                 )}
               </div>
             </div>
@@ -253,7 +255,7 @@ const { data: notifs, error } = await notifQuery;
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl">{getNotificationIcon(notification.type)}</span>
+                      <NotificationIcon type={notification.type} />
                       <div className="flex-1 min-w-0">
                         <div className={`text-sm ${!notification.read ? 'font-semibold' : 'font-medium'} text-gray-900 dark:text-white`}>
                           {notification.title}

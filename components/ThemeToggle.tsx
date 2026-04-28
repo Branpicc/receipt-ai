@@ -1,6 +1,7 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeProvider";
+import { Sun, Moon, Lightbulb } from "lucide-react";
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -24,7 +25,7 @@ export default function ThemeToggle() {
           }`}
         >
           <div className="flex items-center justify-center gap-2">
-            <span className="text-xl">☀️</span>
+            <Sun className="w-5 h-5" />
             <span className="font-medium">Light</span>
           </div>
         </button>
@@ -38,15 +39,16 @@ export default function ThemeToggle() {
           }`}
         >
           <div className="flex items-center justify-center gap-2">
-            <span className="text-xl">🌙</span>
+            <Moon className="w-5 h-5" />
             <span className="font-medium">Dark</span>
           </div>
         </button>
       </div>
 
-      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
+        <Lightbulb className="w-4 h-4 mt-0.5 text-blue-700 dark:text-blue-300 flex-shrink-0" />
         <p className="text-sm text-blue-800 dark:text-blue-300">
-          💡 Your theme preference is saved and will persist across sessions
+          Your theme preference is saved and will persist across sessions
         </p>
       </div>
     </div>

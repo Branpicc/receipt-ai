@@ -1,14 +1,36 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import UploadFab from "@/components/UploadFab";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { ClientProvider } from "@/lib/ClientContext";
+import {
+  Settings as SettingsIcon,
+  LogOut,
+  Home,
+  Folder,
+  FolderOpen,
+  Camera,
+  Wallet,
+  Mail,
+  MessageSquare,
+  BarChart3,
+  Flag,
+  Users,
+  Building2,
+  ClipboardList,
+  User,
+  TrendingUp,
+  Receipt,
+  Edit3,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -21,13 +43,17 @@ export default function DashboardLayout({
   const [teamOpen, setTeamOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
-useEffect(() => {
-  setMounted(true);
-  loadUserRole();
-  loadAndApplyTheme();
-}, []);
+  useEffect(() => {
+    loadUserRole();
+    loadAndApplyTheme();
+  }, []);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
 async function loadAndApplyTheme() {
   try {
@@ -50,16 +76,12 @@ async function loadAndApplyTheme() {
 
 function applyTheme(theme: "light" | "dark" | "system") {
   localStorage.setItem('receipture-theme', theme);
-  console.log('🎨 applyTheme called with:', theme);
   if (theme === "system") {
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    console.log('🎨 System preference isDark:', isDark);
     document.documentElement.classList.toggle("dark", isDark);
   } else {
-    console.log('🎨 Setting dark class to:', theme === "dark");
     document.documentElement.classList.toggle("dark", theme === "dark");
   }
-  console.log('🎨 HTML classes after apply:', document.documentElement.className);
 }
 
   async function loadUserRole() {
@@ -88,13 +110,13 @@ return (
                 {sidebarOpen ? (
                   <h1 className="text-xl font-bold text-gray-900 dark:text-white">Receipture</h1>
                 ) : (
-                  <span className="text-2xl">📱</span>
+                  <span className="text-xl font-bold text-accent-600 dark:text-accent-400">R</span>
                 )}
                 <button
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 >
-                  {sidebarOpen ? "←" : "→"}
+                  {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                 </button>
               </div>
             </div>
@@ -114,7 +136,7 @@ return (
               : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
           }`}
         >
-          <span className="text-xl">🏠</span>
+          <Home className="w-5 h-5" />
           <span className="font-medium">Dashboard</span>
         </Link>
       </li>
@@ -131,7 +153,7 @@ return (
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              <span className="text-xl">📁</span>
+              <Folder className="w-5 h-5" />
               <span className="font-medium">Receipts</span>
             </Link>
           </li>
@@ -145,7 +167,7 @@ return (
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              <span className="text-xl">📸</span>
+              <Camera className="w-5 h-5" />
               <span className="font-medium">Quick Capture</span>
             </Link>
           </li>
@@ -159,7 +181,7 @@ return (
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              <span className="text-xl">💰</span>
+              <Wallet className="w-5 h-5" />
               <span className="font-medium">Budget</span>
             </Link>
           </li>
@@ -173,7 +195,7 @@ return (
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              <span className="text-xl">📧</span>
+              <Mail className="w-5 h-5" />
               <span className="font-medium">Email Receipts</span>
             </Link>
           </li>
@@ -187,7 +209,7 @@ return (
         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
     }`}
   >
-    <span className="text-xl">💬</span>
+    <MessageSquare className="w-5 h-5" />
     <span className="font-medium">Messages</span>
   </Link>
 </li>
@@ -203,9 +225,9 @@ return (
               onClick={() => setOperationsOpen(!operationsOpen)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
             >
-              <span className="text-xl">📊</span>
+              <BarChart3 className="w-5 h-5" />
               <span className="flex-1 text-left font-medium">Operations</span>
-              <span className="text-sm">{operationsOpen ? '▼' : '▶'}</span>
+              {operationsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           </li>
           {operationsOpen && (
@@ -219,7 +241,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">📁</span>
+                  <Folder className="w-4 h-4" />
                   <span className="text-sm">Receipts</span>
                 </Link>
               </li>
@@ -232,7 +254,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">📧</span>
+                  <Mail className="w-4 h-4" />
                   <span className="text-sm">Email Inbox</span>
                 </Link>
               </li>
@@ -245,7 +267,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">📂</span>
+                  <FolderOpen className="w-4 h-4" />
                   <span className="text-sm">Categories</span>
                 </Link>
               </li>
@@ -258,7 +280,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">🚩</span>
+                  <Flag className="w-4 h-4" />
                   <span className="text-sm">Flags</span>
                 </Link>
               </li>
@@ -271,7 +293,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">💰</span>
+                  <Wallet className="w-4 h-4" />
                   <span className="text-sm">Spending Budget</span>
                 </Link>
               </li>
@@ -284,9 +306,9 @@ return (
               onClick={() => setTeamOpen(!teamOpen)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
             >          
-              <span className="text-xl">👥</span>
+              <Users className="w-5 h-5" />
               <span className="flex-1 text-left font-medium">Team & Clients</span>
-              <span className="text-sm">{teamOpen ? '▼' : '▶'}</span>
+              {teamOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           </li>
           {teamOpen && (
@@ -300,7 +322,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">🏢</span>
+                  <Building2 className="w-4 h-4" />
                   <span className="text-sm">Clients</span>
                 </Link>
               </li>
@@ -314,7 +336,7 @@ return (
         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
     }`}
   >
-    <span className="text-lg">💬</span>
+    <MessageSquare className="w-4 h-4" />
     <span className="text-sm">Messages</span>
   </Link>
 </li>
@@ -328,7 +350,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                   }`}
                 >
-                  <span className="text-lg">📋</span>
+                  <ClipboardList className="w-4 h-4" />
                   <span className="text-sm">Requests</span>
                 </Link>
               </li>
@@ -342,7 +364,7 @@ return (
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                     }`}
                   >
-                    <span className="text-lg">👤</span>
+                    <User className="w-4 h-4" />
                     <span className="text-sm">Team</span>
                   </Link>
                 </li>
@@ -356,9 +378,9 @@ return (
               onClick={() => setReportsOpen(!reportsOpen)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
             >
-              <span className="text-xl">📈</span>
+              <TrendingUp className="w-5 h-5" />
               <span className="flex-1 text-left font-medium">Reports</span>
-              <span className="text-sm">{reportsOpen ? '▼' : '▶'}</span>
+              {reportsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           </li>
           {reportsOpen && (
@@ -373,7 +395,7 @@ return (
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                     }`}
                   >
-                    <span className="text-lg">📊</span>
+                    <BarChart3 className="w-4 h-4" />
                     <span className="text-sm">Analytics</span>
                   </Link>
                 </li>
@@ -387,7 +409,7 @@ return (
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
                     }`}
                 >
-                  <span className="text-lg">🧾</span>
+                  <Receipt className="w-4 h-4" />
                   <span className="text-sm">Tax Codes</span>
                 </Link>
               </li>
@@ -400,7 +422,7 @@ href="/dashboard/reports/clients"
         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
     }`}
   >
-    <span className="text-lg">📊</span>
+    <BarChart3 className="w-4 h-4" />
     <span className="text-sm">Client Reports</span>
   </Link>
 </li>
@@ -413,7 +435,7 @@ href="/dashboard/reports/clients"
         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
     }`}
   >
-    <span className="text-lg">✏️</span>
+    <Edit3 className="w-4 h-4" />
     <span className="text-sm">Edit History</span>
   </Link>
 </li>
@@ -437,7 +459,7 @@ href="/dashboard/reports/clients"
               : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
           }`}
         >
-          🏠
+          <Home className="w-5 h-5" />
         </Link>
 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
   Dashboard
@@ -457,7 +479,7 @@ href="/dashboard/reports/clients"
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              📁
+              <Folder className="w-5 h-5" />
             </Link>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Receipts
@@ -473,7 +495,7 @@ href="/dashboard/reports/clients"
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              📸
+              <Camera className="w-5 h-5" />
             </Link>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Quick Capture
@@ -489,7 +511,7 @@ href="/dashboard/reports/clients"
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              💰
+              <Wallet className="w-5 h-5" />
             </Link>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Budget
@@ -506,7 +528,7 @@ href="/dashboard/reports/clients"
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              📧
+              <Mail className="w-5 h-5" />
             </Link>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Email Receipts
@@ -523,7 +545,7 @@ href="/dashboard/reports/clients"
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              💬
+              <MessageSquare className="w-5 h-5" />
             </Link>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Messages
@@ -544,7 +566,7 @@ href="/dashboard/reports/clients"
               }}
               className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
             >
-              📊
+              <BarChart3 className="w-5 h-5" />
             </button>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Operations
@@ -559,7 +581,7 @@ href="/dashboard/reports/clients"
               }}
               className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
             >
-              👥
+              <Users className="w-5 h-5" />
             </button>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Team & Clients
@@ -574,7 +596,7 @@ href="/dashboard/reports/clients"
               }}
               className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
             >
-              📈
+              <TrendingUp className="w-5 h-5" />
             </button>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
               Reports
@@ -602,24 +624,47 @@ href="/dashboard/reports/clients"
               )}
 
               {sidebarOpen ? (
-                <Link
-                  href="/dashboard/settings"
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                >
-                  <span className="text-xl">⚙️</span>
-                  <span className="font-medium">Settings</span>
-                </Link>
-              ) : (
-                <div className="relative group">
+                <div className="flex gap-2">
                   <Link
                     href="/dashboard/settings"
+                    className="flex-1 flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                  >
+                    <SettingsIcon className="w-5 h-5" />
+                    <span className="font-medium">Settings</span>
+                  </Link>
+                  <button
+                    onClick={handleSignOut}
+                    title="Sign out"
                     className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
                   >
-                    ⚙️
-                  </Link>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
-                    Settings
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 items-center">
+                  <div className="relative group">
+                    <Link
+                      href="/dashboard/settings"
+                      className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                    >
+                      <SettingsIcon className="w-5 h-5" />
+                    </Link>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
+                      Settings
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    </div>
+                  </div>
+                  <div className="relative group">
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
+                      Sign out
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -636,9 +681,6 @@ href="/dashboard/reports/clients"
           
           {children}
         </main>
-              
-{/* Floating Upload Button - accountants and firm admins only */}
-{mounted && userRole === 'client' && <UploadFab />}
       </div>
     </OnboardingWrapper>
   </ClientProvider>

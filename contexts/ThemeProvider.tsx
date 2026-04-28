@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Theme = "light" | "dark" | "system";
+const STORAGE_KEY = "receipture-theme";
 
 type ThemeContextType = {
   theme: Theme;
@@ -13,79 +14,90 @@ type ThemeContextType = {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function readLocalTheme(): Theme {
+  if (typeof window === "undefined") return "system";
+  const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
+  return stored === "light" || stored === "dark" || stored === "system"
+    ? stored
+    : "system";
+}
+
+function applyTheme(newTheme: Theme) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (newTheme === "system") {
+    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    root.classList.toggle("dark", isDark);
+    root.classList.toggle("light", !isDark);
+  } else {
+    root.classList.remove("light", "dark");
+    root.classList.add(newTheme);
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [mounted, setMounted] = useState(false);
+  // Hydrate from localStorage synchronously on first render so the client and
+  // the inline <head> script agree, and there's no flash on subsequent navs.
+  const [theme, setThemeState] = useState<Theme>(() => readLocalTheme());
 
   useEffect(() => {
-    setMounted(true);
-    loadThemeFromDatabase();
+    applyTheme(theme);
+  }, [theme]);
+
+  // Reconcile with server-stored preference once we have a session. If it
+  // differs, write it back to localStorage so future loads are correct.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+        const { data } = await supabase
+          .from("user_preferences")
+          .select("theme")
+          .eq("user_id", user.id)
+          .single();
+        const remote = data?.theme as Theme | undefined;
+        if (cancelled) return;
+        if (remote && remote !== theme) {
+          window.localStorage.setItem(STORAGE_KEY, remote);
+          setThemeState(remote);
+        }
+      } catch {
+        // No session, no preference row — leave local state as-is
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function loadThemeFromDatabase() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        // Not logged in, use system preference
-        applyTheme("system");
-        return;
+  function persist(newTheme: Theme) {
+    setThemeState(newTheme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, newTheme);
+    }
+    // Fire-and-forget Supabase upsert; UI doesn't wait
+    void (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await supabase
+          .from("user_preferences")
+          .upsert({ user_id: user.id, theme: newTheme }, { onConflict: "user_id" });
+      } catch {
+        // Best-effort — local persistence already happened
       }
-
-      const { data } = await supabase
-        .from("user_preferences")
-        .select("theme")
-        .eq("user_id", user.id)
-        .single();
-
-      const savedTheme = (data?.theme as Theme) || "system";
-      setThemeState(savedTheme);
-      applyTheme(savedTheme);
-      
-      console.log("🎨 Theme loaded from database:", savedTheme);
-    } catch (error) {
-      console.error("Failed to load theme:", error);
-      applyTheme("system");
-    }
-  }
-
-  useEffect(() => {
-    if (mounted) {
-      applyTheme(theme);
-    }
-  }, [theme, mounted]);
-
-  function applyTheme(newTheme: Theme) {
-    const root = document.documentElement;
-    
-    if (newTheme === "system") {
-      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.classList.toggle("dark", isDark);
-      root.classList.toggle("light", !isDark);
-    } else {
-      root.classList.remove("light", "dark");
-      root.classList.add(newTheme);
-    }
-    
-    console.log("🎨 Theme applied:", newTheme);
+    })();
   }
 
   const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
-    setThemeState(newTheme);
+    const next: Theme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+    persist(next);
   };
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-  };
-
-  // Prevent flash of unstyled content
-  if (!mounted) {
-    return <>{children}</>;
-  }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme: persist }}>
       {children}
     </ThemeContext.Provider>
   );
