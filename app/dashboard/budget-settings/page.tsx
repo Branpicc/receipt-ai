@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useClientContext } from "@/lib/ClientContext";
+import { useEditMode } from "@/lib/EditMode";
 import { Lightbulb } from "lucide-react";
 import { TAX_CATEGORIES as AVAILABLE_CATEGORIES } from "@/lib/taxCategories";
 
@@ -132,7 +133,9 @@ export default function BudgetSettingsPage() {
 
   const totalBudget = Object.values(editingBudgets).reduce((sum, val) => sum + val, 0);
   const isClient = userRole === "client";
-  const canEdit = userRole !== null;
+  const { editMode, isOwner } = useEditMode();
+  // Owner is read-only by default; toggle in the sidebar enables edits.
+  const canEdit = userRole !== null && !(isOwner && !editMode);
   const showScopePicker = !isClient;
 
   const scopeLabel = clients.find(c => c.id === scope)?.name || "";

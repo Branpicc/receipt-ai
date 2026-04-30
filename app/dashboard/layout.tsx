@@ -8,6 +8,8 @@ import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { ClientProvider } from "@/lib/ClientContext";
+import { EditModeProvider } from "@/lib/EditMode";
+import EditModeToggle from "@/components/EditModeToggle";
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -94,6 +96,7 @@ const isAccountant = userRole === "accountant" || userRole === "owner" || userRo
 const isClient = userRole === "client";
 
 return (
+  <EditModeProvider userRole={userRole}>
   <ClientProvider userRole={userRole}>
     <OnboardingWrapper>
             <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
@@ -625,6 +628,9 @@ href="/dashboard/reports/clients"
                 </div>
               )}
 
+              {/* Owner edit-mode toggle (only renders for owners) */}
+              {sidebarOpen ? <EditModeToggle /> : <div className="mb-2 flex justify-center"><EditModeToggle collapsed /></div>}
+
               {sidebarOpen ? (
                 <div className="flex gap-2">
                   <Link
@@ -691,5 +697,6 @@ href="/dashboard/reports/clients"
       </div>
     </OnboardingWrapper>
   </ClientProvider>
+  </EditModeProvider>
   );
 }

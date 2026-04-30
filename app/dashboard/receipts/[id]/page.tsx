@@ -9,6 +9,7 @@ import { getUserRole } from "@/lib/getUserRole";
 import RequestChangesModal from "@/components/RequestChangesModal";
 import ReceiptEditSection from "@/components/ReceiptEditSection";
 import CategoryPicker from "@/components/CategoryPicker";
+import { useEditMode } from "@/lib/EditMode";
 
 type Receipt = {
   id: string;
@@ -411,6 +412,10 @@ useEffect(() => {
   }, [receiptId]);
 
 const isFirmAdmin = userRole === "firm_admin";
+  const { editMode, isOwner } = useEditMode();
+  // Owner sits in read-only mode by default; flips when they toggle edit mode.
+  // Firm admins are always read-only on this page.
+  const isReadOnly = isFirmAdmin || (isOwner && !editMode);
   const canEdit = userRole === "accountant" || userRole === "owner" || userRole === "client";
 
   function exportReceiptCSV() {
@@ -478,7 +483,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               {receipt.vendor || "Unknown vendor"}
-              {isFirmAdmin && (
+              {isReadOnly && (
                 <span className="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">(View Only)</span>
               )}
             </h1>
@@ -710,7 +715,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       <select
                         value={selectedFolderId}
                         onChange={(e) => setSelectedFolderId(e.target.value)}
-                        disabled={isFirmAdmin}
+                        disabled={isReadOnly}
                         className="flex-1 text-xs border border-gray-300 dark:border-dark-border rounded-lg px-2 py-1.5 bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="none">— No folder —</option>
@@ -720,7 +725,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       </select>
                       <button
                         onClick={assignFolder}
-                        disabled={savingFolder || isFirmAdmin || selectedFolderId === (receipt.folder_id ?? "none")}
+                        disabled={savingFolder || isReadOnly || selectedFolderId === (receipt.folder_id ?? "none")}
                         className="px-3 py-1.5 bg-accent-500 hover:bg-accent-600 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors"
                       >
                         {savingFolder ? "..." : folderSaved ? "✓" : "Save"}
@@ -763,12 +768,12 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       </div>
                       <button
                         onClick={async () => {
-                          if (isFirmAdmin) { alert("🔒 Firm admins cannot edit categories."); return; }
+                          if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                           const { error } = await supabase.from("receipts").update({ approved_category: null, category_approved_by: null, category_approved_at: null, status: "needs_review" }).eq("id", receiptId);
                           if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: null, status: "needs_review" } : prev); }
                         }}
-                        disabled={isFirmAdmin}
-                        className={`text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800 ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={isReadOnly}
+                        className={`text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         Change category
                       </button>
@@ -793,25 +798,25 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
 <div className="flex gap-2 mt-3">
                         <button
                           onClick={async () => {
-                            if (isFirmAdmin) { alert("🔒 Firm admins cannot approve categories."); return; }
+                            if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                             try {
                               const { error } = await supabase.from("receipts").update({ approved_category: receipt.suggested_category, category_approved_at: new Date().toISOString(), status: "approved" }).eq("id", receiptId);
                               if (error) throw error;
                               setReceipt((prev) => prev ? { ...prev, approved_category: receipt.suggested_category, status: "approved" } : prev);
                             } catch (e: any) { setErr(e.message || "Failed to approve category"); }
                           }}
-                          disabled={isFirmAdmin}
-                          className={`rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-medium hover:bg-green-700 ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          disabled={isReadOnly}
+                          className={`rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-medium hover:bg-green-700 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           ✓ Approve Category
                         </button>
                         <button
                           onClick={() => {
-                            if (isFirmAdmin) { alert("🔒 Firm admins cannot change categories."); return; }
+                            if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                             setShowCategoryPicker(true);
                           }}
-                          disabled={isFirmAdmin}
-                          className={`rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          disabled={isReadOnly}
+                          className={`rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           ✏️ Change
                         </button>
@@ -825,11 +830,11 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       </div>
                       <button
                         onClick={() => {
-                          if (isFirmAdmin) { alert("🔒 Firm admins cannot set categories."); return; }
+                          if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                           setShowCategoryPicker(true);
                         }}
-                        disabled={isFirmAdmin}
-                        className={`rounded-lg bg-accent-500 text-white px-4 py-2 text-sm font-medium hover:bg-accent-600 ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={isReadOnly}
+                        className={`rounded-lg bg-accent-500 text-white px-4 py-2 text-sm font-medium hover:bg-accent-600 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         Manually Set Category
                       </button>
@@ -880,12 +885,12 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       )}
                       <button
                         onClick={() => {
-                          if (isFirmAdmin) { alert("🔒 Firm admins cannot edit line items."); return; }
+                          if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                           setItems([...items, { id: `temp-${Date.now()}`, description: "", quantity: 1, unit_price_cents: 0, total_cents: 0 }]);
                           setLineItemsView('table');
                         }}
-                        disabled={isFirmAdmin}
-                        className={`text-sm rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 hover:bg-gray-50 dark:bg-dark-hover font-medium ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={isReadOnly}
+                        className={`text-sm rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 hover:bg-gray-50 dark:bg-dark-hover font-medium ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         + Add Item
                       </button>
@@ -960,7 +965,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       </div>
                       <button
                         onClick={async () => {
-                          if (isFirmAdmin) { alert("🔒 Firm admins cannot save line items."); return; }
+                          if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                           try {
                             setErr("");
                             await supabase.from("receipt_items").delete().eq("receipt_id", receiptId);
@@ -972,8 +977,8 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                             alert("Line items saved!");
                           } catch (e: any) { setErr(e.message || "Failed to save items"); }
                         }}
-                        disabled={isFirmAdmin}
-                        className={`rounded-lg bg-accent-500 text-white px-6 py-2 font-medium text-sm hover:bg-accent-600 ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={isReadOnly}
+                        className={`rounded-lg bg-accent-500 text-white px-6 py-2 font-medium text-sm hover:bg-accent-600 ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         Save Items
                       </button>
@@ -986,13 +991,13 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                     <div className="text-xs font-medium text-gray-500 dark:text-gray-400">Purpose of expense</div>
                     <div className="text-xs text-gray-400 dark:text-gray-500">Source: {receipt.purpose_source || "—"}</div>
                   </div>
-                  <textarea className="w-full rounded-xl border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-surface text-gray-900 dark:text-white p-3 text-sm" rows={3} placeholder="Example: Lunch meeting with client to discuss project scope." value={purposeDraft} onChange={(e) => !isFirmAdmin && setPurposeDraft(e.target.value)} disabled={isFirmAdmin} />
+                  <textarea className="w-full rounded-xl border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-surface text-gray-900 dark:text-white p-3 text-sm" rows={3} placeholder="Example: Lunch meeting with client to discuss project scope." value={purposeDraft} onChange={(e) => !isReadOnly && setPurposeDraft(e.target.value)} disabled={isReadOnly} />
                   <div className="mt-2 flex gap-2">
                     <button
-                      disabled={savingPurpose || isFirmAdmin}
-                      className={`rounded-xl bg-accent-500 text-white px-4 py-2 text-sm disabled:opacity-60 ${isFirmAdmin ? 'cursor-not-allowed' : ''}`}
+                      disabled={savingPurpose || isReadOnly}
+                      className={`rounded-xl bg-accent-500 text-white px-4 py-2 text-sm disabled:opacity-60 ${isReadOnly ? 'cursor-not-allowed' : ''}`}
                       onClick={async () => {
-                        if (isFirmAdmin) { alert("🔒 Firm admins cannot edit purpose."); return; }
+                        if (isReadOnly) { alert("🔒 Cannot edit in read-only mode."); return; }
                         try {
                           setSavingPurpose(true);
                           setErr("");
@@ -1006,7 +1011,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                         } catch (e: any) { setErr(e.message || "Failed to save purpose"); } finally { setSavingPurpose(false); }
                       }}
                     >
-                      {isFirmAdmin ? "View Only" : "Save purpose"}
+                      {isReadOnly ? "View Only" : "Save purpose"}
                     </button>
                     <button className="rounded-xl border px-4 py-2 text-sm" onClick={() => setPurposeDraft(receipt.purpose_text || "")}>Reset</button>
                   </div>
