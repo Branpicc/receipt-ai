@@ -1,47 +1,51 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
+/**
+ * Click-to-verify pattern: rather than running the verification on page
+ * mount (which is vulnerable to email-scanner pre-fetches consuming the
+ * token, browser hydration races, and any redirect chain that strips the
+ * query string), we render a "Verify email" button. The user has to
+ * actually click. Email scanners don't click buttons; pre-fetches don't
+ * POST. One extra click for the user, one fewer class of bug for us.
+ */
+
 type State =
-  | { kind: "loading" }
+  | { kind: "idle" }
+  | { kind: "verifying" }
   | { kind: "success"; alreadyVerified: boolean }
   | { kind: "error"; message: string };
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [state, setState] = useState<State>({ kind: "idle" });
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!token) {
-        if (!cancelled) setState({ kind: "error", message: "Missing verification token." });
+  async function verify() {
+    if (!token) {
+      setState({ kind: "error", message: "Missing verification token." });
+      return;
+    }
+    setState({ kind: "verifying" });
+    try {
+      const res = await fetch("/api/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setState({ kind: "error", message: data.error || "Verification failed." });
         return;
       }
-      try {
-        const res = await fetch("/api/verify-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
-          setState({ kind: "error", message: data.error || "Verification failed." });
-          return;
-        }
-        setState({ kind: "success", alreadyVerified: !!data.alreadyVerified });
-      } catch {
-        if (!cancelled) setState({ kind: "error", message: "Network error. Please try again." });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+      setState({ kind: "success", alreadyVerified: !!data.alreadyVerified });
+    } catch {
+      setState({ kind: "error", message: "Network error. Please try again." });
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg py-12 px-4">
@@ -50,9 +54,30 @@ function VerifyEmailContent() {
           Receipture
         </h1>
 
-        {state.kind === "loading" && (
+        {state.kind === "idle" && (
           <div className="rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface p-8 text-center">
-            <p className="text-gray-600 dark:text-gray-400">Verifying your email…</p>
+            <div className="text-4xl mb-4">✉️</div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              Verify your email
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              {token
+                ? "Click below to confirm your email address and finish setting up your Receipture account."
+                : "This link is missing its verification token. Open the verification email again from your inbox and click the button there."}
+            </p>
+            <button
+              onClick={verify}
+              disabled={!token}
+              className="px-6 py-3 bg-accent-600 text-white rounded-xl font-medium hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full"
+            >
+              Verify email
+            </button>
+          </div>
+        )}
+
+        {state.kind === "verifying" && (
+          <div className="rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface p-8 text-center">
+            <p className="text-gray-600 dark:text-gray-400">Verifying…</p>
           </div>
         )}
 
@@ -83,12 +108,22 @@ function VerifyEmailContent() {
               Verification failed
             </h2>
             <p className="text-sm text-red-800 dark:text-red-200 mb-6">{state.message}</p>
-            <Link
-              href="/login"
-              className="inline-block px-6 py-2 bg-accent-600 text-white rounded-xl font-medium hover:bg-accent-700 transition-colors"
-            >
-              Go to sign in
-            </Link>
+            <div className="flex flex-col gap-3">
+              {token && (
+                <button
+                  onClick={verify}
+                  className="px-6 py-2 bg-accent-600 text-white rounded-xl font-medium hover:bg-accent-700 transition-colors"
+                >
+                  Try again
+                </button>
+              )}
+              <Link
+                href="/login"
+                className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
+              >
+                Go to sign in
+              </Link>
+            </div>
           </div>
         )}
       </div>
