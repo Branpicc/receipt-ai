@@ -71,46 +71,54 @@ export default function FirstLoginTour() {
   const [stepIdx, setStepIdx] = useState(0);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || cancelled) return;
-        const { data: fu } = await supabase
-          .from("firm_users")
-          .select("role, email_verified_at, onboarding_completed, onboarding_skipped, tour_completed_at, tour_skipped_at")
-          .eq("auth_user_id", user.id)
-          .maybeSingle();
-        if (cancelled || !fu) return;
-        const tourEligibleRole = fu.role === "firm_admin" || fu.role === "accountant";
-        const verified = !!fu.email_verified_at;
-        const onboardingDone = !!fu.onboarding_completed || !!fu.onboarding_skipped;
-        const alreadyDone = !!fu.tour_completed_at || !!fu.tour_skipped_at;
-        if (tourEligibleRole && verified && onboardingDone && !alreadyDone) {
-          setAuthUserId(user.id);
-          setOpen(true);
-        } else {
-          setAuthUserId(user.id);
-        }
-      } catch {
-        // Quiet failure: don't block the dashboard if we can't read state.
+  // Re-check eligibility. Used both on first mount and whenever the
+  // existing onboarding emits "receipture:onboarding-finished" so the
+  // tour can fire the moment the onboarding gate lifts.
+  async function checkEligibility() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: fu } = await supabase
+        .from("firm_users")
+        .select("role, email_verified_at, onboarding_completed, onboarding_skipped, tour_completed_at, tour_skipped_at")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+      if (!fu) return;
+      setAuthUserId(user.id);
+      const tourEligibleRole = fu.role === "firm_admin" || fu.role === "accountant";
+      const verified = !!fu.email_verified_at;
+      const onboardingDone = !!fu.onboarding_completed || !!fu.onboarding_skipped;
+      const alreadyDone = !!fu.tour_completed_at || !!fu.tour_skipped_at;
+      if (tourEligibleRole && verified && onboardingDone && !alreadyDone) {
+        setStepIdx(0);
+        setOpen(true);
       }
-    })();
+    } catch {
+      // Quiet: don't block the dashboard if we can't read state.
+    }
+  }
+
+  useEffect(() => {
+    checkEligibility();
 
     function onReplay() {
       setStepIdx(0);
       setOpen(true);
     }
+    function onOnboardingFinished() {
+      checkEligibility();
+    }
     if (typeof window !== "undefined") {
       window.addEventListener("first-login-tour:start", onReplay);
+      window.addEventListener("receipture:onboarding-finished", onOnboardingFinished);
     }
     return () => {
-      cancelled = true;
       if (typeof window !== "undefined") {
         window.removeEventListener("first-login-tour:start", onReplay);
+        window.removeEventListener("receipture:onboarding-finished", onOnboardingFinished);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function persist(field: "tour_completed_at" | "tour_skipped_at") {

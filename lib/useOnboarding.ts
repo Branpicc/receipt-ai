@@ -63,6 +63,11 @@ export function useOnboarding() {
         .eq("firm_id", firmId);
 
       setShowOnboarding(false);
+      // Tell anyone listening (FirstLoginTour) that the onboarding gate
+      // just lifted — they can re-check their own eligibility now.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("receipture:onboarding-finished"));
+      }
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
     }
@@ -85,6 +90,9 @@ export function useOnboarding() {
         .eq("firm_id", firmId);
 
       setShowOnboarding(false);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("receipture:onboarding-finished"));
+      }
     } catch (error) {
       console.error("Failed to skip onboarding:", error);
     }

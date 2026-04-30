@@ -1233,30 +1233,44 @@ if (eligibility.eligible) {
 {activeTab === "advanced" && (
         <div className="space-y-6">
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Walkthroughs
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Replay either of Receipture's first-time walkthroughs.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={handleReplayTour}
-                disabled={replayingTour}
-                className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50"
-              >
-                {replayingTour ? "Restarting..." : "🎯 Replay onboarding"}
-              </button>
-              <button
-                onClick={handleReplaySidebarTour}
-                className="px-6 py-2 bg-white dark:bg-dark-surface text-gray-900 dark:text-white border border-gray-300 dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover"
-              >
-                🧭 Replay sidebar tour
-              </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
+                <div className="text-2xl mb-2">🎯</div>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                  Onboarding walkthrough
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                  The first-time onboarding modal that teaches the basics. Replaying reloads the page after restart.
+                </p>
+                <button
+                  onClick={handleReplayTour}
+                  disabled={replayingTour}
+                  className="w-full px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50 text-sm font-medium"
+                >
+                  {replayingTour ? "Restarting…" : "Replay onboarding"}
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
+                <div className="text-2xl mb-2">🧭</div>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                  Sidebar tour
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                  6-step centered guide pointing out where each section lives. Pops up immediately, no reload.
+                </p>
+                <button
+                  onClick={handleReplaySidebarTour}
+                  className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+                >
+                  Replay sidebar tour
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-              The onboarding walkthrough teaches the basics. The sidebar tour points out where each section lives — useful after a long break, or to re-orient if you forget where something is.
-            </p>
           </div>
 
           <div className="border-t border-gray-200 dark:border-dark-border pt-6">
