@@ -404,6 +404,22 @@ const { error } = await supabase
     }
   };
 
+  const handleReplaySidebarTour = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+      // Clear both markers so the tour wrapper re-arms.
+      await supabase
+        .from("firm_users")
+        .update({ tour_completed_at: null, tour_skipped_at: null })
+        .eq("auth_user_id", authUser.id);
+      window.dispatchEvent(new Event("first-login-tour:start"));
+    } catch (error) {
+      console.error("Failed to replay sidebar tour:", error);
+      alert("Failed to start tour. Please try again.");
+    }
+  };
+
 const loadHardDeleteUsers = async () => {
     if (!user || (user.role !== "firm_admin" && user.role !== "owner")) return;
     try {
@@ -1218,18 +1234,29 @@ if (eligibility.eligible) {
         <div className="space-y-6">
                     <div>
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Onboarding Tour
+              Walkthroughs
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Replay the onboarding tour to learn about Receipture features again
+              Replay either of Receipture's first-time walkthroughs.
             </p>
-            <button
-              onClick={handleReplayTour}
-              disabled={replayingTour}
-              className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50"
-            >
-              {replayingTour ? "Restarting..." : "🎯 Replay Tour"}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleReplayTour}
+                disabled={replayingTour}
+                className="px-6 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50"
+              >
+                {replayingTour ? "Restarting..." : "🎯 Replay onboarding"}
+              </button>
+              <button
+                onClick={handleReplaySidebarTour}
+                className="px-6 py-2 bg-white dark:bg-dark-surface text-gray-900 dark:text-white border border-gray-300 dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-dark-hover"
+              >
+                🧭 Replay sidebar tour
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+              The onboarding walkthrough teaches the basics. The sidebar tour points out where each section lives — useful after a long break, or to re-orient if you forget where something is.
+            </p>
           </div>
 
           <div className="border-t border-gray-200 dark:border-dark-border pt-6">

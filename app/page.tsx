@@ -253,12 +253,12 @@ export default function LandingPage() {
             >
               Sign In
             </Link>
-            <a
-              href="#demo"
+            <Link
+              href="/signup"
               className="text-sm font-semibold px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-lg shadow-blue-600/30"
             >
-              Request Demo
-            </a>
+              Start free trial
+            </Link>
           </div>
           <button className="md:hidden" onClick={() => setMenuOpen(!menuOpen)}>
             <span className={scrolled ? "text-gray-900" : "text-white"}>☰</span>
@@ -272,9 +272,13 @@ export default function LandingPage() {
               </a>
             ))}
             <Link href="/login" className="block text-gray-700 font-medium">Sign In</Link>
-            <a href="#demo" className="block bg-blue-600 text-white text-center py-2 rounded-xl font-semibold" onClick={() => setMenuOpen(false)}>
-              Request Demo
-            </a>
+            <Link
+              href="/signup"
+              className="block bg-blue-600 text-white text-center py-2 rounded-xl font-semibold"
+              onClick={() => setMenuOpen(false)}
+            >
+              Start free trial
+            </Link>
           </div>
         )}
       </nav>
@@ -311,17 +315,17 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center fade-up-delay-2">
-              <a
-                href="#demo"
+              <Link
+                href="/signup"
                 className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-2xl transition-all shadow-2xl shadow-blue-600/40 text-lg"
               >
-                Request a Demo →
-              </a>
+                Start free trial →
+              </Link>
               <a
-                href="#how-it-works"
+                href="#demo"
                 className="px-8 py-4 glass text-white font-semibold rounded-2xl transition-all hover:bg-white/10 text-lg"
               >
-                See How It Works
+                Or request a demo
               </a>
             </div>
 

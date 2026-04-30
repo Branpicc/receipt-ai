@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
+import EmailVerifyBanner from "@/components/EmailVerifyBanner";
+import FirstLoginTour from "@/components/FirstLoginTour";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { ClientProvider } from "@/lib/ClientContext";
 import { EditModeProvider } from "@/lib/EditMode";
@@ -721,8 +723,12 @@ href="/dashboard/reports/clients"
           <div className="absolute top-4 right-8 z-40">
             <NotificationBell />
           </div>
-          
+
+          <EmailVerifyBanner />
+
           {children}
+
+          <FirstLoginTour />
         </main>
       </div>
     </OnboardingWrapper>

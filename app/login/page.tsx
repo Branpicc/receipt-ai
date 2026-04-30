@@ -172,9 +172,16 @@ function LoginPageContent() {
               </div>
             )}
 
-            <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{" "}
-              <span className="text-gray-900 dark:text-white">Contact your firm administrator</span>
+            <div className="text-center text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <div>
+                Starting a new firm?{" "}
+                <a href="/signup" className="text-accent-600 dark:text-accent-400 hover:underline font-medium">
+                  Create an account
+                </a>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-500">
+                Joining an existing firm? Ask your firm administrator for an invite.
+              </div>
             </div>
           </div>
         )}
