@@ -89,9 +89,8 @@ useEffect(() => {
             )
           )
         `)
-        .eq("firm_id", firmId)
-        // Filter by selected client if one is chosen
-query = query.order("created_at", { ascending: false });
+        .eq("firm_id", firmId);
+      query = query.order("created_at", { ascending: false });
 
       // Accountant scope: restrict to assigned clients (unless a specific
       // client is chosen via the filter, which is already a tighter scope)
@@ -171,8 +170,12 @@ const transformedFlags = (data || []).map(flag => {
 
 setFlags(transformedFlags as Flag[]);
     } catch (error: any) {
-      console.error("Failed to load flags:", error);
-      alert("Failed to load flags: " + error.message);
+      // PostgREST errors carry the useful info on .details / .hint / .code,
+      // not .message (which is just "Bad Request" for 4xx responses).
+      const detail =
+        error?.details || error?.hint || error?.code || error?.message || "Unknown error";
+      console.error("Failed to load flags:", { message: error?.message, details: error?.details, hint: error?.hint, code: error?.code, error });
+      alert("Failed to load flags: " + detail);
     } finally {
       setLoading(false);
     }
