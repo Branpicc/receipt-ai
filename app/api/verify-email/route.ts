@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(row.auth_user_id);
       const { data: fu } = await supabaseAdmin
         .from("firm_users")
-        .select("full_name, firm_id")
+        .select("display_name, firm_id")
         .eq("auth_user_id", row.auth_user_id)
         .single();
       const firmId = fu?.firm_id;
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
         ? await supabaseAdmin.from("firms").select("name").eq("id", firmId).single()
         : { data: null };
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-      if (authUser.user?.email && fu?.full_name && firm?.name) {
-        await sendWelcomeEmail(authUser.user.email, fu.full_name, firm.name, `${baseUrl}/dashboard`);
+      if (authUser.user?.email && fu?.display_name && firm?.name) {
+        await sendWelcomeEmail(authUser.user.email, fu.display_name, firm.name, `${baseUrl}/dashboard`);
       }
     } catch (welcomeErr) {
       console.error("[verify-email] welcome email failed:", welcomeErr);

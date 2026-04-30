@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Already verified? Nothing to do.
     const { data: fu } = await supabaseAdmin
       .from("firm_users")
-      .select("full_name, email_verified_at")
+      .select("display_name, email_verified_at")
       .eq("auth_user_id", user.id)
       .maybeSingle();
     if (fu?.email_verified_at) {
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const verifyUrl = `${baseUrl}/verify-email?token=${token}`;
     try {
-      await sendVerifyEmail(user.email!, fu?.full_name || "", verifyUrl);
+      await sendVerifyEmail(user.email!, fu?.display_name || "", verifyUrl);
     } catch (emailErr) {
       const msg = (emailErr as { message?: string })?.message || String(emailErr);
       console.error("[resend-verification] send failed:", msg);

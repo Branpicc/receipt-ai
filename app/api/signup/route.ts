@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName },
+      user_metadata: { display_name: fullName },
     });
     if (createErr || !created.user) {
       return NextResponse.json(
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         firm_id: firm.id,
         auth_user_id: authUserId,
         role: "firm_admin",
-        full_name: fullName,
+        display_name: fullName,
         email_verified_at: null,
       }]);
     if (fuErr) {
