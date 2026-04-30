@@ -8,6 +8,7 @@ import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
 import RequestChangesModal from "@/components/RequestChangesModal";
 import ReceiptEditSection from "@/components/ReceiptEditSection";
+import CategoryPicker from "@/components/CategoryPicker";
 
 type Receipt = {
   id: string;
@@ -84,6 +85,7 @@ export default function ReceiptDetailPage(): JSX.Element {
   const [savingPurpose, setSavingPurpose] = useState(false);
   const [flags, setFlags] = useState<ReceiptFlag[]>([]);
   const [resolvingFlagId, setResolvingFlagId] = useState<string | null>(null);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolvingFlag, setResolvingFlag] = useState<ReceiptFlag | null>(null);
   const [resolveNote, setResolveNote] = useState("");
@@ -806,11 +808,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                         <button
                           onClick={() => {
                             if (isFirmAdmin) { alert("🔒 Firm admins cannot change categories."); return; }
-                            const newCategory = prompt("Enter category name:");
-                            if (!newCategory) return;
-                            supabase.from("receipts").update({ approved_category: newCategory, category_approved_at: new Date().toISOString(), status: "approved" }).eq("id", receiptId).then(({ error }) => {
-                              if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: newCategory, status: "approved" } : prev); }
-                            });
+                            setShowCategoryPicker(true);
                           }}
                           disabled={isFirmAdmin}
                           className={`rounded-lg border border-gray-300 dark:border-dark-border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:bg-dark-hover ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -828,17 +826,31 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       <button
                         onClick={() => {
                           if (isFirmAdmin) { alert("🔒 Firm admins cannot set categories."); return; }
-                          const newCategory = prompt("Enter category name:");
-                          if (!newCategory) return;
-                          supabase.from("receipts").update({ approved_category: newCategory, category_approved_at: new Date().toISOString(), status: "approved" }).eq("id", receiptId).then(({ error }) => {
-                            if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: newCategory, status: "approved" } : prev); }
-                          });
+                          setShowCategoryPicker(true);
                         }}
                         disabled={isFirmAdmin}
                         className={`rounded-lg bg-accent-500 text-white px-4 py-2 text-sm font-medium hover:bg-accent-600 ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         Manually Set Category
                       </button>
+                      {showCategoryPicker && (
+                        <div className="mt-3">
+                          <CategoryPicker
+                            initial={receipt.approved_category || receipt.suggested_category || ""}
+                            onSelect={async (newCategory) => {
+                              setShowCategoryPicker(false);
+                              const { error } = await supabase
+                                .from("receipts")
+                                .update({ approved_category: newCategory, category_approved_at: new Date().toISOString(), status: "approved" })
+                                .eq("id", receiptId);
+                              if (error) { setErr(error.message); } else {
+                                setReceipt((prev) => prev ? { ...prev, approved_category: newCategory, status: "approved" } : prev);
+                              }
+                            }}
+                            onCancel={() => setShowCategoryPicker(false)}
+                          />
+                        </div>
+                      )}
                       <button
                         onClick={async () => {
                           try {

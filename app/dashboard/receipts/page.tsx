@@ -68,6 +68,7 @@ function ReceiptsPageContent() {
   const { selectedClient, isFiltered } = useClientContext();
 
 const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -202,7 +203,31 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
         case "flagged": filtered = withFlags.filter((r) => r.has_flags); break;
       }
 
-setAllReceipts(filtered);
+      setAllReceipts(filtered);
+
+      // Separate count query for the displayed total — Supabase caps SELECT
+      // responses at 1000 rows even with .range(), so the array length is
+      // unreliable for the header count.
+      let countQuery = supabase
+        .from("receipts")
+        .select("id", { count: "exact", head: true })
+        .eq("firm_id", firmId);
+      if (userRole === "client" && clientId) {
+        countQuery = countQuery.eq("client_id", clientId);
+      } else if (isFiltered && selectedClient) {
+        countQuery = countQuery.eq("client_id", selectedClient.id);
+      } else {
+        const assignedIds = await getAssignedClientIds(firmId);
+        if (assignedIds !== null) {
+          if (assignedIds.length === 0) { setTotalCount(0); return; }
+          countQuery = countQuery.in("client_id", assignedIds);
+        }
+      }
+      if (activeFolderId) countQuery = countQuery.eq("folder_id", activeFolderId);
+      if (start) countQuery = countQuery.gte(dateSearchType, start);
+      if (end) countQuery = countQuery.lte(dateSearchType, end);
+      const { count } = await countQuery;
+      setTotalCount(count ?? null);
     } catch (err) {
       console.error("Load receipts error:", err);
     } finally {
@@ -707,9 +732,9 @@ const filtersBarJSX = (
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Receipts</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {activeFolderId
-                ? `${receipts.length} receipt${receipts.length !== 1 ? "s" : ""} in "${activeFolderName}"`
+                ? `${totalCount ?? receipts.length} receipt${(totalCount ?? receipts.length) !== 1 ? "s" : ""} in "${activeFolderName}"`
                 : mainView === "receipts"
-                ? `${receipts.length} ${statusFilter === "all" ? "total" : statusFilter.replace("_", " ")} receipt${receipts.length !== 1 ? "s" : ""}`
+                ? `${totalCount ?? receipts.length} ${statusFilter === "all" ? "total" : statusFilter.replace("_", " ")} receipt${(totalCount ?? receipts.length) !== 1 ? "s" : ""}`
                 : `${folders.length} folder${folders.length !== 1 ? "s" : ""}`}
             </p>
           </div>

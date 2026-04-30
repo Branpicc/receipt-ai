@@ -6,6 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useClientContext } from "@/lib/ClientContext";
 import { Lightbulb } from "lucide-react";
+import { TAX_CATEGORIES as AVAILABLE_CATEGORIES } from "@/lib/taxCategories";
 
 type CategoryBudget = {
   id: string;
@@ -13,24 +14,6 @@ type CategoryBudget = {
   monthly_budget_cents: number;
   client_id: string | null;
 };
-
-const AVAILABLE_CATEGORIES = [
-  "Advertising & Promotion",
-  "Bank Charges & Interest",
-  "Meals & Entertainment",
-  "Office Supplies & Expenses",
-  "Software & Subscriptions",
-  "Rent & Lease",
-  "Vehicle Expenses & Fuel",
-  "Repairs & Maintenance",
-  "Equipment & Tools",
-  "Telephone & Internet",
-  "Utilities",
-  "Professional Fees",
-  "Insurance",
-  "Travel Expenses",
-  "Other Expenses",
-];
 
 export default function BudgetSettingsPage() {
   const [, setBudgets] = useState<CategoryBudget[]>([]);
