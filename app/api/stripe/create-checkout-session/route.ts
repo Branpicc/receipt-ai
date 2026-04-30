@@ -69,9 +69,9 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/billing?canceled=true`,
       metadata: { firmId: firm.id },
       client_reference_id: firm.id,
-      // 14-day trial on first subscription
+      // 7-day trial on first subscription
       subscription_data: {
-        trial_period_days: 14,
+        trial_period_days: 7,
         metadata: { firmId: firm.id },
       },
     };
