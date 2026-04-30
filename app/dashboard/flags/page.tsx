@@ -69,9 +69,12 @@ useEffect(() => {
       setLoading(true);
       const firmId = await getMyFirmId();
 
-      // PostgREST was returning a bare 400 ("Bad Request") on the deeply
-      // nested embed receipts(...,clients(...)). Fetch flat first, then
-      // hydrate receipts + clients in two follow-up queries.
+      // Fetch all firm-scoped flags first. We deliberately do NOT pre-filter
+      // by client_id at the URL level — accountants can be assigned hundreds
+      // of clients with thousands of receipts, and stuffing every receipt_id
+      // into .in(...) blew past the Supabase edge gateway's URL limit. Flags
+      // are 1-2 orders of magnitude fewer than receipts, so we hydrate then
+      // filter client-side.
       let query = supabase
         .from("receipt_flags")
         .select(`
@@ -83,80 +86,61 @@ useEffect(() => {
           created_at,
           resolved_at
         `)
-        .eq("firm_id", firmId);
-      query = query.order("created_at", { ascending: false });
+        .eq("firm_id", firmId)
+        .order("created_at", { ascending: false });
 
-      // Accountant scope: restrict to assigned clients (unless a specific
-      // client is chosen via the filter, which is already a tighter scope)
-      const assignedIds = await getAssignedClientIds(firmId);
-
-      if (isFiltered && selectedClient) {
-        const { data: clientReceiptIds } = await supabase
-          .from("receipts")
-          .select("id")
-          .eq("firm_id", firmId)
-          .eq("client_id", selectedClient.id);
-        const ids = clientReceiptIds?.map(r => r.id) || [];
-        if (ids.length > 0) {
-          query = query.in("receipt_id", ids);
-        } else {
-          setFlags([]);
-          setLoading(false);
-          return;
-        }
-      } else if (assignedIds !== null) {
-        if (assignedIds.length === 0) {
-          setFlags([]);
-          setLoading(false);
-          return;
-        }
-        const { data: scopedReceipts } = await supabase
-          .from("receipts")
-          .select("id")
-          .eq("firm_id", firmId)
-          .in("client_id", assignedIds);
-        const ids = (scopedReceipts || []).map(r => r.id);
-        if (ids.length === 0) {
-          setFlags([]);
-          setLoading(false);
-          return;
-        }
-        query = query.in("receipt_id", ids);
-      }
-      
       // Status filter
       if (statusFilter === "unresolved") {
         query = query.is("resolved_at", null);
       } else if (statusFilter === "resolved") {
         query = query.not("resolved_at", "is", null);
       }
-
       // Severity filter
       if (severityFilter !== "all") {
         query = query.eq("severity", severityFilter);
       }
-
       // Flag type filter
       if (flagTypeFilter !== "all") {
         query = query.eq("flag_type", flagTypeFilter);
       }
 
+      const assignedIds = await getAssignedClientIds(firmId);
+      // Accountant with no assigned clients: nothing to show.
+      if (assignedIds !== null && assignedIds.length === 0) {
+        setFlags([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       const flagRows = data || [];
+      if (flagRows.length === 0) {
+        setFlags([]);
+        setLoading(false);
+        return;
+      }
 
-      // Hydrate receipts + clients via two follow-up queries (avoids the
-      // nested embed that was 400ing).
+      // Hydrate receipts + clients in chunks (some firms have many flagged
+      // receipts; .in(...) URLs still need to fit).
+      const CHUNK = 100;
+      const chunk = <T,>(arr: T[]) => {
+        const out: T[][] = [];
+        for (let i = 0; i < arr.length; i += CHUNK) out.push(arr.slice(i, i + CHUNK));
+        return out;
+      };
+
       const receiptIds = Array.from(new Set(flagRows.map(f => f.receipt_id).filter(Boolean)));
       const receiptMap = new Map<string, { vendor: string | null; total_cents: number | null; receipt_date: string | null; client_id: string | null }>();
       const clientMap = new Map<string, { name: string }>();
 
-      if (receiptIds.length > 0) {
-        const { data: receiptsData } = await supabase
-          .from("receipts")
-          .select("id, vendor, total_cents, receipt_date, client_id")
-          .in("id", receiptIds);
-        for (const r of receiptsData || []) {
+      const receiptBatches = await Promise.all(
+        chunk(receiptIds).map(ids =>
+          supabase.from("receipts").select("id, vendor, total_cents, receipt_date, client_id").in("id", ids)
+        )
+      );
+      for (const batch of receiptBatches) {
+        for (const r of batch.data || []) {
           receiptMap.set(r.id, {
             vendor: r.vendor,
             total_cents: r.total_cents,
@@ -164,28 +148,41 @@ useEffect(() => {
             client_id: r.client_id,
           });
         }
+      }
 
-        const clientIds = Array.from(new Set((receiptsData || []).map(r => r.client_id).filter(Boolean))) as string[];
-        if (clientIds.length > 0) {
-          const { data: clientsData } = await supabase
-            .from("clients")
-            .select("id, name")
-            .in("id", clientIds);
-          for (const c of clientsData || []) {
+      const clientIds = Array.from(new Set(Array.from(receiptMap.values()).map(r => r.client_id).filter(Boolean))) as string[];
+      if (clientIds.length > 0) {
+        const clientBatches = await Promise.all(
+          chunk(clientIds).map(ids =>
+            supabase.from("clients").select("id, name").in("id", ids)
+          )
+        );
+        for (const batch of clientBatches) {
+          for (const c of batch.data || []) {
             clientMap.set(c.id, { name: c.name });
           }
         }
       }
 
-      const transformedFlags: Flag[] = flagRows.map(flag => {
+      // Build the final list, filtering by accountant scope or selected
+      // client filter at the same time. A flag whose receipt is gone (rare,
+      // but possible if a deletion request was approved between fetches)
+      // is dropped.
+      const allowedClientIds: Set<string> | null =
+        isFiltered && selectedClient
+          ? new Set([selectedClient.id])
+          : assignedIds !== null
+          ? new Set(assignedIds)
+          : null;
+
+      const transformedFlags: Flag[] = [];
+      for (const flag of flagRows) {
         const receipt = receiptMap.get(flag.receipt_id);
-        const client = receipt?.client_id ? clientMap.get(receipt.client_id) : undefined;
-        return {
-          ...flag,
-          receipt,
-          client,
-        };
-      });
+        if (!receipt) continue;
+        if (allowedClientIds && receipt.client_id && !allowedClientIds.has(receipt.client_id)) continue;
+        const client = receipt.client_id ? clientMap.get(receipt.client_id) : undefined;
+        transformedFlags.push({ ...flag, receipt, client });
+      }
 
       setFlags(transformedFlags);
     } catch (error: any) {
