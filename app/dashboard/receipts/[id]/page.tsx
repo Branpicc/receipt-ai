@@ -7,9 +7,11 @@ import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
 import RequestChangesModal from "@/components/RequestChangesModal";
+import RequestDeletionModal from "@/components/RequestDeletionModal";
 import ReceiptEditSection from "@/components/ReceiptEditSection";
 import CategoryPicker from "@/components/CategoryPicker";
 import { useEditMode } from "@/lib/EditMode";
+import { Trash2 } from "lucide-react";
 
 type Receipt = {
   id: string;
@@ -101,6 +103,8 @@ export default function ReceiptDetailPage(): JSX.Element {
   const [lineItemsView, setLineItemsView] = useState<'table' | 'card'>('card');
   const [userRole, setUserRole] = useState<string | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showDeletionModal, setShowDeletionModal] = useState(false);
+  const [pendingDeletionAt, setPendingDeletionAt] = useState<string | null>(null);
   const [editHistory, setEditHistory] = useState<any[]>([]);
 
   // Folder state
@@ -366,6 +370,14 @@ useEffect(() => {
         await loadFlags();
         await loadEditHistory();
 
+        const { data: pendingDel } = await supabase
+          .from("deletion_requests")
+          .select("created_at")
+          .eq("receipt_id", receiptId)
+          .eq("status", "pending")
+          .maybeSingle();
+        setPendingDeletionAt(pendingDel?.created_at ?? null);
+
         const { data: itemRows, error: itemErr } = await supabase.from("receipt_items").select("id,description,quantity,unit_price_cents,total_cents").eq("receipt_id", receiptId).order("id", { ascending: true });
         if (itemErr) throw itemErr;
         setItems((itemRows as ReceiptItem[]) || []);
@@ -550,6 +562,30 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
             <button onClick={() => setShowRequestModal(true)} className="px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 font-medium transition-colors">
               📝 Request Changes
             </button>
+          </div>
+        )}
+
+        {userRole === "client" && !pendingDeletionAt && (
+          <div className="mt-4">
+            <button
+              onClick={() => setShowDeletionModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 font-medium text-sm transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Request deletion
+            </button>
+          </div>
+        )}
+
+        {pendingDeletionAt && (
+          <div className="mt-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm flex items-start gap-2">
+            <Trash2 className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <div>
+              <div className="font-medium text-amber-900 dark:text-amber-200">Deletion requested — pending review</div>
+              <div className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                Submitted {new Date(pendingDeletionAt).toLocaleString()}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1149,6 +1185,21 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
 
       {showRequestModal && (
                 <RequestChangesModal receiptId={receiptId} onClose={() => setShowRequestModal(false)} onSuccess={() => { setShowRequestModal(false); alert("✅ Change request sent to accountant!"); }} />
+      )}
+      {showDeletionModal && receipt && (
+        <RequestDeletionModal
+          receiptId={receiptId}
+          clientId={receipt.client_id}
+          vendor={receipt.vendor}
+          date={receipt.receipt_date}
+          totalCents={receipt.total_cents}
+          onClose={() => setShowDeletionModal(false)}
+          onSuccess={() => {
+            setShowDeletionModal(false);
+            setPendingDeletionAt(new Date().toISOString());
+            alert("Deletion request sent. An accountant will review it.");
+          }}
+        />
       )}
     </main>
   );

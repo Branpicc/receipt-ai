@@ -45,12 +45,28 @@ export default function DashboardLayout({
   const [teamOpen, setTeamOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
     loadUserRole();
     loadAndApplyTheme();
   }, []);
+
+  useEffect(() => {
+    if (!userRole || userRole === "client") return;
+    (async () => {
+      try {
+        const { count } = await supabase
+          .from("deletion_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending");
+        setPendingDeletionCount(count || 0);
+      } catch {
+        // Sidebar badge is decorative; quiet failure is fine.
+      }
+    })();
+  }, [userRole, pathname]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -441,7 +457,16 @@ href="/dashboard/reports/clients"
     }`}
   >
     <Edit3 className="w-4 h-4" />
-    <span className="text-sm">Edit History</span>
+    <span className="text-sm flex-1">Edit History</span>
+    {!isClient && pendingDeletionCount > 0 && (
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+        pathname.startsWith('/dashboard/reports/edits')
+          ? 'bg-white/20 text-white'
+          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+      }`}>
+        {pendingDeletionCount}
+      </span>
+    )}
   </Link>
 </li>
 
