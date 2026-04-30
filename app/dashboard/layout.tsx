@@ -55,7 +55,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!userRole || userRole === "client") return;
-    (async () => {
+    const refresh = async () => {
       try {
         const { count } = await supabase
           .from("deletion_requests")
@@ -65,7 +65,12 @@ export default function DashboardLayout({
       } catch {
         // Sidebar badge is decorative; quiet failure is fine.
       }
-    })();
+    };
+    refresh();
+    // The Edit History page emits this event after approve/deny so the
+    // badge updates without waiting for a navigation.
+    window.addEventListener("deletion-requests-changed", refresh);
+    return () => window.removeEventListener("deletion-requests-changed", refresh);
   }, [userRole, pathname]);
 
   async function handleSignOut() {
@@ -438,7 +443,7 @@ return (
   <Link
 href="/dashboard/reports/clients"
     className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-      pathname.startsWith('/dashboard/reports')
+      pathname.startsWith('/dashboard/reports/clients')
         ? 'bg-accent-500 text-white'
         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
     }`}

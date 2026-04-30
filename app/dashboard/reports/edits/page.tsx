@@ -54,6 +54,8 @@ export default function EditHistoryPage() {
   const [edits, setEdits] = useState<EditRecord[]>([]);
   const [deletions, setDeletions] = useState<DeletionRequest[]>([]);
   const [deletionSubTab, setDeletionSubTab] = useState<DeletionSubTab>("pending");
+  const [pendingDelCount, setPendingDelCount] = useState(0);
+  const [decidedDelCount, setDecidedDelCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [clientFilter, setClientFilter] = useState("");
@@ -210,6 +212,23 @@ export default function EditHistoryPage() {
       if (dateFrom) filtered = filtered.filter(d => new Date(d.created_at) >= new Date(dateFrom));
       if (dateTo) filtered = filtered.filter(d => new Date(d.created_at) <= new Date(dateTo + "T23:59:59"));
       setDeletions(filtered);
+
+      // Counts for the sub-tab labels — small head-only queries, both states.
+      const baseCount = supabase
+        .from("deletion_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("firm_id", firmId);
+      const [pendingRes, decidedRes] = await Promise.all([
+        baseCount.eq("status", "pending"),
+        // Re-build query because the chained one above is consumed once awaited.
+        supabase
+          .from("deletion_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("firm_id", firmId)
+          .in("status", ["approved", "denied"]),
+      ]);
+      setPendingDelCount(pendingRes.count || 0);
+      setDecidedDelCount(decidedRes.count || 0);
     } catch (err) {
       console.error("Failed to load deletions:", err);
     } finally {
@@ -266,9 +285,18 @@ export default function EditHistoryPage() {
       if (error) throw error;
 
       closeDecision();
+      // Bounce to Decided so the just-decided request is visible.
+      setDeletionSubTab("decided");
+      // Tell the sidebar to refresh its pending-count badge live.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("deletion-requests-changed"));
+      }
       await loadDeletions();
     } catch (err) {
-      alert("Failed: " + (err instanceof Error ? err.message : "unknown error"));
+      const msg =
+        (err as { message?: string })?.message ||
+        (typeof err === "string" ? err : "unknown error");
+      alert("Failed: " + msg);
     } finally {
       setSubmittingDecision(false);
     }
@@ -428,26 +456,36 @@ export default function EditHistoryPage() {
         {/* Deletions tab */}
         {tab === "deletions" && (
           <>
-            <div className="mb-4 flex gap-2">
+            <div className="mb-4 inline-flex p-1 rounded-lg bg-gray-100 dark:bg-dark-surface border border-gray-200 dark:border-dark-border">
               <button
                 onClick={() => setDeletionSubTab("pending")}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
                   deletionSubTab === "pending"
-                    ? "bg-accent-500 text-white"
-                    : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover"
+                    ? "bg-white dark:bg-dark-bg text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 Pending
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  pendingDelCount > 0
+                    ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300"
+                    : "bg-gray-200 dark:bg-dark-border text-gray-500 dark:text-gray-400"
+                }`}>
+                  {pendingDelCount}
+                </span>
               </button>
               <button
                 onClick={() => setDeletionSubTab("decided")}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
                   deletionSubTab === "decided"
-                    ? "bg-accent-500 text-white"
-                    : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover"
+                    ? "bg-white dark:bg-dark-bg text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 Decided
+                <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold bg-gray-200 dark:bg-dark-border text-gray-600 dark:text-gray-400">
+                  {decidedDelCount}
+                </span>
               </button>
             </div>
 

@@ -60,7 +60,10 @@ export default function RequestDeletionModal({
 
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit request");
+      const msg =
+        (err as { message?: string })?.message ||
+        (typeof err === "string" ? err : "Failed to submit request");
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
