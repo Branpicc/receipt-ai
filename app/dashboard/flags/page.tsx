@@ -7,6 +7,8 @@ import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
+import ClientFilterDropdown from "@/components/ClientFilterDropdown";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 
 type Flag = {
   id: string;
@@ -91,6 +93,10 @@ useEffect(() => {
         // Filter by selected client if one is chosen
 query = query.order("created_at", { ascending: false });
 
+      // Accountant scope: restrict to assigned clients (unless a specific
+      // client is chosen via the filter, which is already a tighter scope)
+      const assignedIds = await getAssignedClientIds(firmId);
+
       if (isFiltered && selectedClient) {
         const { data: clientReceiptIds } = await supabase
           .from("receipts")
@@ -105,6 +111,24 @@ query = query.order("created_at", { ascending: false });
           setLoading(false);
           return;
         }
+      } else if (assignedIds !== null) {
+        if (assignedIds.length === 0) {
+          setFlags([]);
+          setLoading(false);
+          return;
+        }
+        const { data: scopedReceipts } = await supabase
+          .from("receipts")
+          .select("id")
+          .eq("firm_id", firmId)
+          .in("client_id", assignedIds);
+        const ids = (scopedReceipts || []).map(r => r.id);
+        if (ids.length === 0) {
+          setFlags([]);
+          setLoading(false);
+          return;
+        }
+        query = query.in("receipt_id", ids);
       }
       
       // Status filter
@@ -206,7 +230,7 @@ setFlags(transformedFlags as Flag[]);
   function getFlagTypeIcon(flagType: string) {
     switch (flagType) {
       case "unrecognized_card":
-        return "Unrecognized Card";
+        return "💳";
       case "mismatch":
         return "⚠️";
       case "missing_info":
@@ -244,17 +268,8 @@ setFlags(transformedFlags as Flag[]);
           </p>
         </div>
 
-        {/* Client filter banner */}
-        {isFiltered && selectedClient && (
-          <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-700 rounded-lg">
-            <span className="text-sm text-accent-700 dark:text-accent-300 font-medium">
-              📁 Showing flags for: <strong>{selectedClient.name}</strong>
-            </span>
-            <span className="text-xs text-accent-500 dark:text-accent-400">
-              — To see all clients, clear the filter on the dashboard
-            </span>
-          </div>
-        )}
+        {/* Client filter — hidden for the `client` role */}
+        <ClientFilterDropdown />
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

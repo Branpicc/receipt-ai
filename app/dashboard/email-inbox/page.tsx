@@ -6,6 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
+import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 
 type EmailReceipt = {
   id: string;
@@ -503,17 +504,8 @@ const filteredEmails = emailReceipts.filter(email => {
         Review receipts received via email
       </p>
       
-{/* Client filter banner */}
-      {isFiltered && selectedClient && (
-        <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-700 rounded-lg">
-          <span className="text-sm text-accent-700 dark:text-accent-300 font-medium">
-            📁 Showing emails for: <strong>{selectedClient.name}</strong>
-          </span>
-          <span className="text-xs text-accent-500 dark:text-accent-400">
-            — To see all clients, clear the filter on the dashboard
-          </span>
-        </div>
-      )}
+      {/* Client filter — hidden for the `client` role */}
+      <ClientFilterDropdown />
 
       {/* Email Address Display */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">

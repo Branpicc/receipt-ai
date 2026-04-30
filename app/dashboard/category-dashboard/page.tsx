@@ -8,6 +8,7 @@ import Link from "next/link";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useClientContext } from "@/lib/ClientContext";
 import { Wallet, BarChart3, AlertTriangle, Lightbulb } from "lucide-react";
+import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 
 type CategorySummary = {
   category: string;
@@ -265,6 +266,9 @@ export default function CategoryDashboardPage() {
             ← Back
           </Link>
         </div>
+
+        {/* Client filter — accountant / firm_admin / owner only */}
+        {!isClient && <ClientFilterDropdown />}
 
         {/* Date Range Filter */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-4 mb-6 border border-transparent dark:border-dark-border">

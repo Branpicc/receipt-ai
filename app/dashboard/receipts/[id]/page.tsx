@@ -762,8 +762,8 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                       <button
                         onClick={async () => {
                           if (isFirmAdmin) { alert("🔒 Firm admins cannot edit categories."); return; }
-                          const { error } = await supabase.from("receipts").update({ approved_category: null, category_approved_by: null, category_approved_at: null }).eq("id", receiptId);
-                          if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: null } : prev); }
+                          const { error } = await supabase.from("receipts").update({ approved_category: null, category_approved_by: null, category_approved_at: null, status: "needs_review" }).eq("id", receiptId);
+                          if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: null, status: "needs_review" } : prev); }
                         }}
                         disabled={isFirmAdmin}
                         className={`text-sm text-gray-600 dark:text-gray-400 underline hover:text-gray-800 ${isFirmAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -793,9 +793,9 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                           onClick={async () => {
                             if (isFirmAdmin) { alert("🔒 Firm admins cannot approve categories."); return; }
                             try {
-                              const { error } = await supabase.from("receipts").update({ approved_category: receipt.suggested_category, category_approved_at: new Date().toISOString() }).eq("id", receiptId);
+                              const { error } = await supabase.from("receipts").update({ approved_category: receipt.suggested_category, category_approved_at: new Date().toISOString(), status: "approved" }).eq("id", receiptId);
                               if (error) throw error;
-                              setReceipt((prev) => prev ? { ...prev, approved_category: receipt.suggested_category } : prev);
+                              setReceipt((prev) => prev ? { ...prev, approved_category: receipt.suggested_category, status: "approved" } : prev);
                             } catch (e: any) { setErr(e.message || "Failed to approve category"); }
                           }}
                           disabled={isFirmAdmin}
@@ -808,8 +808,8 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                             if (isFirmAdmin) { alert("🔒 Firm admins cannot change categories."); return; }
                             const newCategory = prompt("Enter category name:");
                             if (!newCategory) return;
-                            supabase.from("receipts").update({ approved_category: newCategory, category_approved_at: new Date().toISOString() }).eq("id", receiptId).then(({ error }) => {
-                              if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev); }
+                            supabase.from("receipts").update({ approved_category: newCategory, category_approved_at: new Date().toISOString(), status: "approved" }).eq("id", receiptId).then(({ error }) => {
+                              if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: newCategory, status: "approved" } : prev); }
                             });
                           }}
                           disabled={isFirmAdmin}
@@ -830,8 +830,8 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                           if (isFirmAdmin) { alert("🔒 Firm admins cannot set categories."); return; }
                           const newCategory = prompt("Enter category name:");
                           if (!newCategory) return;
-                          supabase.from("receipts").update({ approved_category: newCategory, category_approved_at: new Date().toISOString() }).eq("id", receiptId).then(({ error }) => {
-                            if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: newCategory } : prev); }
+                          supabase.from("receipts").update({ approved_category: newCategory, category_approved_at: new Date().toISOString(), status: "approved" }).eq("id", receiptId).then(({ error }) => {
+                            if (error) { setErr(error.message); } else { setReceipt((prev) => prev ? { ...prev, approved_category: newCategory, status: "approved" } : prev); }
                           });
                         }}
                         disabled={isFirmAdmin}

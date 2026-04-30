@@ -7,6 +7,8 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
+import ClientFilterDropdown from "@/components/ClientFilterDropdown";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 
 type Receipt = {
   id: string;
@@ -147,14 +149,22 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
 
       let query = supabase
         .from("receipts")
-        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id")
+        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id, client_id, clients(name)")
         .eq("firm_id", firmId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, 49999);
 
       if (userRole === "client" && clientId) {
         query = query.eq("client_id", clientId);
       } else if (isFiltered && selectedClient) {
         query = query.eq("client_id", selectedClient.id);
+      } else {
+        // Accountant scope: restrict to assigned clients
+        const assignedIds = await getAssignedClientIds(firmId);
+        if (assignedIds !== null) {
+          if (assignedIds.length === 0) { setAllReceipts([]); setLoading(false); return; }
+          query = query.in("client_id", assignedIds);
+        }
       }
 
       // Filter to folder if inside one
@@ -727,17 +737,8 @@ onClick={exportQuickBooksCSV}
           </div>
                   </div>
 
-        {/* Client filter banner */}
-        {isFiltered && selectedClient && (
-          <div className="mb-4 flex items-center gap-3 px-4 py-2.5 bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-700 rounded-lg">
-            <span className="text-sm text-accent-700 dark:text-accent-300 font-medium">
-              📁 Showing receipts for: <strong>{selectedClient.name}</strong>
-            </span>
-            <span className="text-xs text-accent-500 dark:text-accent-400">
-              — To see all clients, clear the filter on the dashboard
-            </span>
-          </div>
-        )}
+        {/* Client filter — hidden for the `client` role (their clients list is empty) */}
+        <ClientFilterDropdown />
 
         {/* Main view tabs — hidden when inside a folder */}
         {!activeFolderId && (

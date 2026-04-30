@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import Link from "next/link";
 
 type ClientWithReport = {
@@ -30,14 +31,21 @@ export default function ReportsIndexPage() {
     try {
       const firmId = await getMyFirmId();
 
-      // Load all active clients
-      const { data: clientsData, error } = await supabase
+      // Load active clients (accountant scope: only assigned)
+      let clientsQuery = supabase
         .from("clients")
         .select("id, name, email_alias")
         .eq("firm_id", firmId)
         .eq("is_active", true)
         .order("name", { ascending: true });
 
+      const assignedIds = await getAssignedClientIds(firmId);
+      if (assignedIds !== null) {
+        if (assignedIds.length === 0) { setClients([]); return; }
+        clientsQuery = clientsQuery.in("id", assignedIds);
+      }
+
+      const { data: clientsData, error } = await clientsQuery;
       if (error) throw error;
 
       // Load latest report for each client

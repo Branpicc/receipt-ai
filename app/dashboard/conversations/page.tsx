@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 
 type Conversation = {
   id: string;
@@ -94,12 +95,26 @@ if (role === "client" && firmUser?.client_id) {
       }
 
       if (role !== "client") {
-        const { data: clientsData } = await supabase
+        let clientsQuery = supabase
           .from("clients")
           .select("id, name")
           .eq("firm_id", fId)
           .order("name");
-        setClients(clientsData || []);
+
+        // Accountant scope: only assigned clients
+        const assignedIds = await getAssignedClientIds(fId);
+        if (assignedIds !== null) {
+          if (assignedIds.length === 0) {
+            setClients([]);
+          } else {
+            clientsQuery = clientsQuery.in("id", assignedIds);
+            const { data: clientsData } = await clientsQuery;
+            setClients(clientsData || []);
+          }
+        } else {
+          const { data: clientsData } = await clientsQuery;
+          setClients(clientsData || []);
+        }
       }
     } catch (err) {
       console.error("Failed to load data:", err);

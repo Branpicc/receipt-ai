@@ -284,19 +284,21 @@ return (
                   <span className="text-sm">Flags</span>
                 </Link>
               </li>
-              <li className="ml-4">
-                <Link
-                  href="/dashboard/budget-settings"
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                    pathname === '/dashboard/budget-settings'
-                      ? 'bg-accent-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                  }`}
-                >
-                  <Wallet className="w-4 h-4" />
-                  <span className="text-sm">Spending Budget</span>
-                </Link>
-              </li>
+              {(userRole === "accountant" || userRole === "owner") && (
+                <li className="ml-4">
+                  <Link
+                    href="/dashboard/budget-settings"
+                    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                      pathname === '/dashboard/budget-settings'
+                        ? 'bg-accent-500 text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4" />
+                    <span className="text-sm">Spending Budget</span>
+                  </Link>
+                </li>
+              )}
             </>
           )}
 
@@ -327,19 +329,19 @@ return (
                 </Link>
               </li>
 
-              <li>
-  <Link
-    href="/dashboard/conversations"
-    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-      pathname.startsWith('/dashboard/conversations')
-        ? 'bg-accent-500 text-white'
-        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-    }`}
-  >
-    <MessageSquare className="w-4 h-4" />
-    <span className="text-sm">Messages</span>
-  </Link>
-</li>
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/conversations"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname.startsWith('/dashboard/conversations')
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span className="text-sm">Messages</span>
+                </Link>
+              </li>
 
               <li className="ml-4">
                 <Link

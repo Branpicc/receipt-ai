@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useClientContext } from "@/lib/ClientContext";
-import { Lightbulb, Lock } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 
 type CategoryBudget = {
   id: string;
@@ -40,9 +40,8 @@ export default function BudgetSettingsPage() {
   const [editingValues, setEditingValues] = useState<{ [key: string]: string }>({});
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  // Scope being edited:
-  //   ""           = firm-wide default
-  //   <clientId>   = per-client override
+  // The currently-edited client. Empty string only while we're still figuring
+  // out who to default to.
   const [scope, setScope] = useState<string>("");
   const { clients } = useClientContext();
 
@@ -50,8 +49,15 @@ export default function BudgetSettingsPage() {
     bootstrap();
   }, []);
 
+  // For non-client roles, default to the first client once the list arrives.
   useEffect(() => {
-    if (userRole !== null) {
+    if (userRole && userRole !== "client" && scope === "" && clients.length > 0) {
+      setScope(clients[0].id);
+    }
+  }, [clients, userRole, scope]);
+
+  useEffect(() => {
+    if (userRole !== null && scope !== "") {
       loadBudgets();
     }
   }, [scope, userRole]);
@@ -79,13 +85,11 @@ export default function BudgetSettingsPage() {
       setLoading(true);
       const firmId = await getMyFirmId();
 
-      let query = supabase.from("category_budgets").select("*").eq("firm_id", firmId);
-      if (scope === "") {
-        query = query.is("client_id", null);
-      } else {
-        query = query.eq("client_id", scope);
-      }
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from("category_budgets")
+        .select("*")
+        .eq("firm_id", firmId)
+        .eq("client_id", scope);
       if (error) throw error;
 
       setBudgets(data || []);
@@ -112,23 +116,18 @@ export default function BudgetSettingsPage() {
       setSaving(true);
       const firmId = await getMyFirmId();
 
-      // Delete only the rows in this scope, not other scopes
-      let deleteQuery = supabase
+      // Replace only this client's budgets; never touch other clients' rows
+      await supabase
         .from("category_budgets")
         .delete()
-        .eq("firm_id", firmId);
-      if (scope === "") {
-        deleteQuery = deleteQuery.is("client_id", null);
-      } else {
-        deleteQuery = deleteQuery.eq("client_id", scope);
-      }
-      await deleteQuery;
+        .eq("firm_id", firmId)
+        .eq("client_id", scope);
 
       const budgetsToInsert = Object.entries(editingBudgets)
         .filter(([, amount]) => amount > 0)
         .map(([category, amount]) => ({
           firm_id: firmId,
-          client_id: scope === "" ? null : scope,
+          client_id: scope,
           category,
           monthly_budget_cents: amount,
         }));
@@ -150,21 +149,47 @@ export default function BudgetSettingsPage() {
 
   const totalBudget = Object.values(editingBudgets).reduce((sum, val) => sum + val, 0);
   const isClient = userRole === "client";
-  const isFirmAdmin = userRole === "firm_admin";
-  const canEdit = !isFirmAdmin;
-  const showScopePicker =
-    !isClient && (userRole === "owner" || userRole === "firm_admin" || userRole === "accountant");
+  const canEdit = userRole !== null;
+  const showScopePicker = !isClient;
 
-  const scopeLabel =
-    scope === ""
-      ? "Firm-wide default"
-      : clients.find(c => c.id === scope)?.name || "Selected client";
+  const scopeLabel = clients.find(c => c.id === scope)?.name || "";
 
-  if (loading) {
+  if (userRole === "firm_admin") {
+    return (
+      <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Monthly Spending Budget
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-4">
+            Budgets are managed by accountants and the clients themselves.
+            You don&apos;t have access to set them here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || (showScopePicker && scope === "" && clients.length > 0)) {
     return (
       <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
         <div className="max-w-4xl mx-auto">
           <p className="text-gray-500 dark:text-gray-400">Loading budgets...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showScopePicker && clients.length === 0) {
+    return (
+      <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Monthly Spending Budget
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-4">
+            No clients yet. Add a client first, then set their budgets here.
+          </p>
         </div>
       </div>
     );
@@ -176,37 +201,28 @@ export default function BudgetSettingsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Monthly Spending Budget
-            {isFirmAdmin && (
-              <span className="ml-3 text-sm font-normal text-gray-500 dark:text-gray-400">(View Only)</span>
-            )}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             {isClient
               ? "Set monthly spending budgets for your expense categories."
-              : isFirmAdmin
-              ? "View monthly spending budgets for each expense category and client."
-              : "Set firm-wide defaults or per-client budget overrides for each category."}
+              : "Set monthly spending budgets per client. Pick a client below to view or edit theirs."}
           </p>
         </div>
 
         {showScopePicker && (
           <div className="mb-6 bg-white dark:bg-dark-surface rounded-lg shadow-sm p-4 border border-transparent dark:border-dark-border">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Editing budgets for
+              Client
             </label>
             <select
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
             >
-              <option value="">Firm-wide default</option>
               {clients.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Per-client budgets override the firm-wide default. If a client has no per-client budget for a category, the firm-wide default applies.
-            </p>
           </div>
         )}
 
@@ -280,26 +296,15 @@ export default function BudgetSettingsPage() {
           <div className="p-6 bg-gray-50 dark:bg-dark-bg border-t border-gray-200 dark:border-dark-border">
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                {isFirmAdmin ? (
-                  <>
-                    <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>Only accountants and clients can edit budgets</span>
-                  </>
-                ) : (
-                  <>
-                    <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>Set to $0 to disable budget tracking for a category</span>
-                  </>
-                )}
+                <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>Set to $0 to disable budget tracking for a category</span>
               </p>
               <button
                 onClick={saveBudgets}
                 disabled={saving || !canEdit}
-                className={`px-6 py-2 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                  !canEdit ? "bg-gray-400" : ""
-                }`}
+                className="px-6 py-2 bg-accent-500 text-white rounded-lg font-medium hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {!canEdit ? "View Only" : saving ? "Saving..." : "Save Budgets"}
+                {saving ? "Saving..." : "Save Budgets"}
               </button>
             </div>
           </div>

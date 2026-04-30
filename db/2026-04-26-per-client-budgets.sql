@@ -17,10 +17,15 @@ ALTER TABLE category_budgets
 CREATE INDEX IF NOT EXISTS idx_category_budgets_firm_client
   ON category_budgets (firm_id, client_id);
 
--- Optional: enforce one row per (firm, client, category). Skip if your
--- existing constraint name doesn't match — list it from
---   SELECT conname FROM pg_constraint WHERE conrelid = 'category_budgets'::regclass;
--- and drop/recreate explicitly.
+-- Drop the old (firm_id, category) unique constraint that prevented two rows
+-- with the same firm_id+category but different client_id (e.g. a firm-wide
+-- default and a per-client override would collide).
+ALTER TABLE category_budgets
+  DROP CONSTRAINT IF EXISTS category_budgets_firm_id_category_key;
+
+-- Enforce one row per (firm, client, category). NULL client_id is treated as
+-- a distinct value, so a firm-wide default and any per-client override can
+-- coexist.
 DO $$
 BEGIN
   IF NOT EXISTS (

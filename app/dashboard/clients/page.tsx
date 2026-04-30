@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import Link from "next/link";
 
 type ClientRow = {
