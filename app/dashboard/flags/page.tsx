@@ -69,6 +69,9 @@ useEffect(() => {
       setLoading(true);
       const firmId = await getMyFirmId();
 
+      // PostgREST was returning a bare 400 ("Bad Request") on the deeply
+      // nested embed receipts(...,clients(...)). Fetch flat first, then
+      // hydrate receipts + clients in two follow-up queries.
       let query = supabase
         .from("receipt_flags")
         .select(`
@@ -78,16 +81,7 @@ useEffect(() => {
           severity,
           message,
           created_at,
-          resolved_at,
-          receipts (
-            vendor,
-            total_cents,
-            receipt_date,
-            client_id,
-            clients (
-              name
-            )
-          )
+          resolved_at
         `)
         .eq("firm_id", firmId);
       query = query.order("created_at", { ascending: false });
@@ -148,33 +142,56 @@ useEffect(() => {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
+      const flagRows = data || [];
 
-// Transform nested data - handle Supabase array returns
-const transformedFlags = (data || []).map(flag => {
-  const receipt = Array.isArray(flag.receipts) ? flag.receipts[0] : flag.receipts;
-  const client = receipt?.clients ? (Array.isArray(receipt.clients) ? receipt.clients[0] : receipt.clients) : null;
-  
-  return {
-    ...flag,
-    receipt: receipt ? {
-      vendor: receipt.vendor,
-      total_cents: receipt.total_cents,
-      receipt_date: receipt.receipt_date,
-      client_id: receipt.client_id,
-    } : undefined,
-    client: client ? { name: client.name } : undefined,
-  };
-});
+      // Hydrate receipts + clients via two follow-up queries (avoids the
+      // nested embed that was 400ing).
+      const receiptIds = Array.from(new Set(flagRows.map(f => f.receipt_id).filter(Boolean)));
+      const receiptMap = new Map<string, { vendor: string | null; total_cents: number | null; receipt_date: string | null; client_id: string | null }>();
+      const clientMap = new Map<string, { name: string }>();
 
-setFlags(transformedFlags as Flag[]);
+      if (receiptIds.length > 0) {
+        const { data: receiptsData } = await supabase
+          .from("receipts")
+          .select("id, vendor, total_cents, receipt_date, client_id")
+          .in("id", receiptIds);
+        for (const r of receiptsData || []) {
+          receiptMap.set(r.id, {
+            vendor: r.vendor,
+            total_cents: r.total_cents,
+            receipt_date: r.receipt_date,
+            client_id: r.client_id,
+          });
+        }
+
+        const clientIds = Array.from(new Set((receiptsData || []).map(r => r.client_id).filter(Boolean))) as string[];
+        if (clientIds.length > 0) {
+          const { data: clientsData } = await supabase
+            .from("clients")
+            .select("id, name")
+            .in("id", clientIds);
+          for (const c of clientsData || []) {
+            clientMap.set(c.id, { name: c.name });
+          }
+        }
+      }
+
+      const transformedFlags: Flag[] = flagRows.map(flag => {
+        const receipt = receiptMap.get(flag.receipt_id);
+        const client = receipt?.client_id ? clientMap.get(receipt.client_id) : undefined;
+        return {
+          ...flag,
+          receipt,
+          client,
+        };
+      });
+
+      setFlags(transformedFlags);
     } catch (error: any) {
-      // PostgREST errors carry the useful info on .details / .hint / .code,
-      // not .message (which is just "Bad Request" for 4xx responses).
       const detail =
         error?.details || error?.hint || error?.code || error?.message || "Unknown error";
-      console.error("Failed to load flags:", { message: error?.message, details: error?.details, hint: error?.hint, code: error?.code, error });
+      console.error("Failed to load flags:", error);
       alert("Failed to load flags: " + detail);
     } finally {
       setLoading(false);
