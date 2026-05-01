@@ -153,6 +153,7 @@ console.log('📋 Receipts query - month:', reportMonth, 'end:', endDate.toISOSt
         firm_id: firmId,
         client_id: clientId,
         report_month: reportMonth,
+        report_type: 'monthly',
         total_spend_cents: totalSpendCents,
         total_tax_cents: totalTaxCents,
         total_receipts: receipts?.length || 0,
@@ -162,7 +163,7 @@ console.log('📋 Receipts query - month:', reportMonth, 'end:', endDate.toISOSt
         budget_comparison: budgetComparison,
         generated_at: new Date().toISOString(),
       }, {
-        onConflict: 'client_id,report_month',
+        onConflict: 'client_id,report_month,report_type',
       })
       .select()
       .single();

@@ -187,6 +187,7 @@ Keep each section brief and professional. Do not use placeholder text like [Clie
         firm_id: firmId,
         client_id: clientId,
         report_month: reportMonth,
+        report_type: 'monthly',
         total_spend_cents: totalSpendCents,
         total_tax_cents: totalTaxCents,
         total_receipts: receipts?.length || 0,
@@ -197,7 +198,7 @@ Keep each section brief and professional. Do not use placeholder text like [Clie
         ai_summary: aiSummary,
         generated_at: new Date().toISOString(),
       }, {
-        onConflict: 'client_id,report_month',
+        onConflict: 'client_id,report_month,report_type',
       })
       .select()
       .single();
