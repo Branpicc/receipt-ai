@@ -9,6 +9,7 @@ import UsageStats from "@/components/UsageStats";
 import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import ClientSelector from "@/components/ClientSelector";
 import { useClientContext } from "@/lib/ClientContext";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 
 type UploadProgress = {
   total: number;
@@ -114,6 +115,15 @@ async function loadStats(role: string | null) {
         accountantClientIds = assignedClients?.map(c => c.id) || [];
       }
 
+      // Accountant role: scope every stat to the clients assigned to THIS
+      // accountant. Without this, an accountant would see firm-wide totals
+      // including their colleagues' clients — privacy bug. Only applies
+      // when the user hasn't already drilled into a specific client.
+      if (role === "accountant" && !clientFilter) {
+        const ids = await getAssignedClientIds(firmId);
+        if (ids !== null) accountantClientIds = ids;
+      }
+
       // For client role, get their own client_id
       let ownClientId: string | null = null;
       if (role === "client") {
@@ -179,7 +189,7 @@ let catQ = supabase.from("receipts").select("*", { count: "exact", head: true })
         };
       }
 
-      // Client/accountant counts (firm admin only, not filtered by client)
+      // Client/accountant counts.
       let clientStats = { total: 0, assigned: 0 };
       let accountantCount = 0;
       if ((role === "firm_admin" || role === "owner") && !clientFilter) {
@@ -188,6 +198,10 @@ let catQ = supabase.from("receipts").select("*", { count: "exact", head: true })
         const { count: accountants } = await supabase.from("firm_users").select("*", { count: "exact", head: true }).eq("firm_id", firmId).eq("role", "accountant");
         clientStats = { total: totalClients || 0, assigned: assignedClients || 0 };
         accountantCount = accountants || 0;
+      } else if (role === "accountant" && !clientFilter && accountantClientIds) {
+        // Accountants see how many clients are assigned to them (the
+        // "assigned" count) rather than firm-wide totals.
+        clientStats = { total: accountantClientIds.length, assigned: accountantClientIds.length };
       }
 
       // Recent activity
@@ -346,8 +360,11 @@ if (userRole === 'client') {
   <ClientSelector accountantFilter={selectedAccountantId} />
 )}
 
-      {/* Firm Admin Comprehensive Overview */}
-      {isFirmAdmin ? (
+      {/* Firm Admin + Accountant Comprehensive Overview.
+          Accountants get the same rich layout as firm_admin but scoped to
+          their assigned clients (loadStats handles the scoping). Inner
+          firm-admin-only sub-elements are gated separately on isFirmAdmin. */}
+      {(isFirmAdmin || isAccountant) ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
@@ -401,8 +418,8 @@ if (userRole === 'client') {
               </div>
             )}
 
-            {/* Team — only show when not filtered */}
-            {!isFiltered && (
+            {/* Team — firm admin only when not filtered */}
+            {!isFiltered && isFirmAdmin && (
               <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">👥 Team</h3>
@@ -412,6 +429,20 @@ if (userRole === 'client') {
                   <div className="flex justify-between text-sm"><span className="text-gray-600 dark:text-gray-400">Accountants</span><span className="font-semibold text-gray-900 dark:text-white">{stats.totalAccountants}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600 dark:text-gray-400">Total Clients</span><span className="font-semibold text-gray-900 dark:text-white">{stats.totalClients}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600 dark:text-gray-400">Assigned</span><span className="font-semibold text-green-600 dark:text-green-400">{stats.assignedClients}</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* My Clients — accountants only when not filtered */}
+            {!isFiltered && isAccountant && (
+              <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">👥 My Clients</h3>
+                  <Link href="/dashboard/clients" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">View →</Link>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm"><span className="text-gray-600 dark:text-gray-400">Assigned to me</span><span className="font-semibold text-gray-900 dark:text-white">{stats.assignedClients}</span></div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">Stats above are scoped to your assigned clients only.</div>
                 </div>
               </div>
             )}
@@ -441,10 +472,12 @@ if (userRole === 'client') {
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Link href="/dashboard/firm-admin" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                <span className="text-2xl">📊</span>
-                <div><div className="font-medium text-gray-900 dark:text-white">Detailed Analytics</div><div className="text-sm text-gray-500 dark:text-gray-400">Deep dive reports</div></div>
-              </Link>
+              {isFirmAdmin && (
+                <Link href="/dashboard/firm-admin" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+                  <span className="text-2xl">📊</span>
+                  <div><div className="font-medium text-gray-900 dark:text-white">Detailed Analytics</div><div className="text-sm text-gray-500 dark:text-gray-400">Deep dive reports</div></div>
+                </Link>
+              )}
               <Link href="/dashboard/flags" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
                 <span className="text-2xl">🚩</span>
                 <div><div className="font-medium text-gray-900 dark:text-white">View All Flags</div><div className="text-sm text-gray-500 dark:text-gray-400">Unresolved issues</div></div>
@@ -453,10 +486,18 @@ if (userRole === 'client') {
                 <span className="text-2xl">📊</span>
                 <div><div className="font-medium text-gray-900 dark:text-white">Export Reports</div><div className="text-sm text-gray-500 dark:text-gray-400">Generate CSV/PDF</div></div>
               </Link>
-              <Link href="/dashboard/clients" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                <span className="text-2xl">➕</span>
-                <div><div className="font-medium text-gray-900 dark:text-white">Add New Client</div><div className="text-sm text-gray-500 dark:text-gray-400">Quick setup</div></div>
-              </Link>
+              {isFirmAdmin && (
+                <Link href="/dashboard/clients" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+                  <span className="text-2xl">➕</span>
+                  <div><div className="font-medium text-gray-900 dark:text-white">Add New Client</div><div className="text-sm text-gray-500 dark:text-gray-400">Quick setup</div></div>
+                </Link>
+              )}
+              {isAccountant && (
+                <Link href="/dashboard/email-inbox" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
+                  <span className="text-2xl">📧</span>
+                  <div><div className="font-medium text-gray-900 dark:text-white">Email Inbox</div><div className="text-sm text-gray-500 dark:text-gray-400">Review forwarded receipts</div></div>
+                </Link>
+              )}
             </div>
           </div>
         </>
