@@ -36,14 +36,26 @@ const [yearNum, monthNum] = reportMonth.split('-').map(Number);
     const startDate = new Date(yearNum, monthNum - 1, 1);
     const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
         
+    // Demo-data export rule: filter out is_demo=true rows once any real
+    // receipt exists in the firm. While the firm only has demo data, we
+    // include it so users can practice the report flow.
+    const { count: realCount } = await supabase
+      .from('receipts')
+      .select('id', { count: 'exact', head: true })
+      .eq('firm_id', firmId)
+      .eq('is_demo', false);
+    const excludeDemo = (realCount || 0) > 0;
+
     // Load all receipts for this client in this month
-const { data: receipts, error: receiptsError } = await supabase
-  .from('receipts')
-  .select('id, total_cents, approved_category, suggested_category, created_at, receipt_date')
-  .eq('firm_id', firmId)
-  .eq('client_id', clientId)
-  .gte('receipt_date', reportMonth)
-  .lte('receipt_date', endDate.toISOString().split('T')[0]);
+    let receiptsQuery = supabase
+      .from('receipts')
+      .select('id, total_cents, approved_category, suggested_category, created_at, receipt_date')
+      .eq('firm_id', firmId)
+      .eq('client_id', clientId)
+      .gte('receipt_date', reportMonth)
+      .lte('receipt_date', endDate.toISOString().split('T')[0]);
+    if (excludeDemo) receiptsQuery = receiptsQuery.eq('is_demo', false);
+    const { data: receipts, error: receiptsError } = await receiptsQuery;
   
 console.log('📋 Receipts query - month:', reportMonth, 'end:', endDate.toISOString().split('T')[0], 'found:', receipts?.length, 'error:', receiptsError?.message);
     if (receiptsError) throw receiptsError;

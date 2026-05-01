@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
 import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
+import { shouldExcludeDemoFromExport } from "@/lib/demoExport";
 
 type Receipt = {
   id: string;
@@ -20,6 +21,7 @@ type Receipt = {
   approved_category: string | null;
   suggested_category: string | null;
   folder_id: string | null;
+  is_demo?: boolean;
   has_flags?: boolean;
 };
 
@@ -150,7 +152,7 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
 
       let query = supabase
         .from("receipts")
-        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id, client_id, clients(name)")
+        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id, client_id, is_demo, clients(name)")
         .eq("firm_id", firmId)
         .order("created_at", { ascending: false })
         .range(0, 49999);
@@ -350,27 +352,34 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   }
 async function exportExcel() {
       if (receipts.length === 0) { alert("No receipts to export."); return; }
-    
+
     const wb = XLSX.utils.book_new();
-    
+
     // Fetch receipts with client info
 const exportFirmId = await getMyFirmId();
+    // Filter out demo receipts once any real receipt exists in the firm.
+    const excludeDemo = await shouldExcludeDemoFromExport(exportFirmId);
+    const sourceReceipts = excludeDemo ? receipts.filter(r => !r.is_demo) : receipts;
+    if (sourceReceipts.length === 0) {
+      alert("No real receipts to export. Demo data is excluded once you've added any real receipt.");
+      return;
+    }
     const { data: fullReceipts } = await supabase
       .from('receipts')
-      .select('id, vendor, receipt_date, total_cents, status, approved_category, suggested_category, client_id, clients(name)')
+      .select('id, vendor, receipt_date, total_cents, status, approved_category, suggested_category, client_id, is_demo, clients(name)')
 .eq('firm_id', exportFirmId)
-      .in('id', receipts.map(r => r.id));
+      .in('id', sourceReceipts.map(r => r.id));
       
     // Summary sheet
     const summaryData: any[][] = [
       ['Receipture Export', new Date().toLocaleDateString()],
-      ['Total Receipts', receipts.length],
-      ['Total Value', `$${(receipts.reduce((s, r) => s + (r.total_cents || 0), 0) / 100).toFixed(2)}`],
+      ['Total Receipts', sourceReceipts.length],
+      ['Total Value', `$${(sourceReceipts.reduce((s, r) => s + (r.total_cents || 0), 0) / 100).toFixed(2)}`],
       [],
       ['Category', 'Receipt Count', 'Total Amount'],
     ];
     const catGroups: Record<string, {count: number, total: number}> = {};
-    receipts.forEach(r => {
+    sourceReceipts.forEach(r => {
       const cat = r.approved_category || r.suggested_category || 'Uncategorized';
       if (!catGroups[cat]) catGroups[cat] = { count: 0, total: 0 };
       catGroups[cat].count++;
@@ -382,9 +391,12 @@ const exportFirmId = await getMyFirmId();
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
 
-    // Group by client
+    // Group by client. Re-apply demo filter to the hydrated rows in case
+    // is_demo is set there but somehow wasn't populated on the local list.
     const clientGroups: Record<string, {name: string, receipts: any[]}> = {};
-    (fullReceipts || receipts).forEach((r: any) => {
+    const hydrated = (fullReceipts || sourceReceipts) as any[];
+    const filteredHydrated = excludeDemo ? hydrated.filter(r => !r.is_demo) : hydrated;
+    filteredHydrated.forEach((r: any) => {
       const clientName = r.clients?.name || 'Unknown Client';
       const clientId = r.client_id || 'unknown';
       if (!clientGroups[clientId]) clientGroups[clientId] = { name: clientName, receipts: [] };
@@ -433,10 +445,17 @@ const exportFirmId = await getMyFirmId();
 XLSX.writeFile(wb, `Receipts-${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-  function exportQuickBooksCSV() {
+  async function exportQuickBooksCSV() {
         if (receipts.length === 0) { alert("No receipts to export."); return; }
+    const exportFirmId = await getMyFirmId();
+    const excludeDemo = await shouldExcludeDemoFromExport(exportFirmId);
+    const sourceReceipts = excludeDemo ? receipts.filter(r => !r.is_demo) : receipts;
+    if (sourceReceipts.length === 0) {
+      alert("No real receipts to export. Demo data is excluded once you've added any real receipt.");
+      return;
+    }
     const headers = ["Date", "Description", "Account", "Amount", "Tax Amount", "Memo", "Vendor"];
-    const rows = receipts.map(r => [
+    const rows = sourceReceipts.map(r => [
       r.receipt_date || "",
       r.approved_category || r.suggested_category || "Uncategorized",
       r.approved_category || r.suggested_category || "Uncategorized",

@@ -43,14 +43,24 @@ const [year, monthNum] = reportMonth.split('-').map(Number);
       .eq('id', clientId)
       .single();
 
-// Get receipts
-    const { data: receipts, error: receiptsError } = await supabase
-          .from('receipts')
-.select('id, vendor, total_cents, approved_category, suggested_category, receipt_date, payment_method')
+    // Demo-data export rule (see generate-monthly-report for rationale).
+    const { count: realCount } = await supabase
+      .from('receipts')
+      .select('id', { count: 'exact', head: true })
+      .eq('firm_id', firmId)
+      .eq('is_demo', false);
+    const excludeDemo = (realCount || 0) > 0;
+
+    // Get receipts
+    let receiptsQuery = supabase
+      .from('receipts')
+      .select('id, vendor, total_cents, approved_category, suggested_category, receipt_date, payment_method')
       .eq('firm_id', firmId)
       .eq('client_id', clientId)
       .gte('receipt_date', reportMonth)
       .lte('receipt_date', endDate.toISOString().split('T')[0]);
+    if (excludeDemo) receiptsQuery = receiptsQuery.eq('is_demo', false);
+    const { data: receipts, error: receiptsError } = await receiptsQuery;
 console.log('📋 Found receipts:', receipts?.length, 'total cents:', receipts?.reduce((s, r) => s + (r.total_cents || 0), 0));
     if (receiptsError) console.error('❌ Receipts query error:', receiptsError);
     console.log('📋 Found receipts:', receipts?.length, 'endDate:', endDate.toISOString().split('T')[0]);
