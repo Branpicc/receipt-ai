@@ -305,50 +305,39 @@ export default function CategoryDashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Pie Chart */}
+              {/* Pie Chart — slice size = actual spend per category, so a
+                  $300 spend takes 3x the visual area of a $100 spend
+                  regardless of either category's budget. Over-budget
+                  categories get a red ring; the bar chart on the right
+                  carries the budget-vs-spent context. */}
               <div className="flex items-center justify-center">
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={budgetComparisons.flatMap(bc => [
-                        {
+                      data={budgetComparisons
+                        .filter(bc => bc.spent_cents > 0)
+                        .map(bc => ({
                           name: bc.category,
-                          value: Math.min(bc.spent_cents, bc.budget_cents) / 100,
-                          color: bc.color,
-                          isSpent: true,
+                          value: bc.spent_cents / 100,
                           fullData: bc,
-                        },
-                        {
-                          name: `${bc.category} (remaining)`,
-                          value: Math.max(0, bc.budget_cents - bc.spent_cents) / 100,
-                          color: bc.color,
-                          isSpent: false,
-                          fullData: bc,
-                        },
-                      ])}
+                        }))}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
                       outerRadius={100}
-                      paddingAngle={0}
+                      paddingAngle={1}
                       dataKey="value"
                     >
-                      {budgetComparisons.flatMap((bc, index) => [
-                        <Cell
-                          key={`spent-${index}`}
-                          fill={bc.color}
-                          opacity={1}
-                          stroke={bc.isOverBudget ? "#ef4444" : "none"}
-                          strokeWidth={bc.isOverBudget ? 3 : 0}
-                        />,
-                        <Cell
-                          key={`remaining-${index}`}
-                          fill="#d1d5db"
-                          opacity={0.8}
-                          stroke={bc.color}
-                          strokeWidth={2}
-                        />,
-                      ])}
+                      {budgetComparisons
+                        .filter(bc => bc.spent_cents > 0)
+                        .map((bc, index) => (
+                          <Cell
+                            key={`slice-${index}`}
+                            fill={bc.color}
+                            stroke={bc.isOverBudget ? "#ef4444" : "#fff"}
+                            strokeWidth={bc.isOverBudget ? 3 : 1}
+                          />
+                        ))}
                     </Pie>
                     <Tooltip
                       content={({ active, payload }: { active?: boolean; payload?: readonly any[] }) => {
