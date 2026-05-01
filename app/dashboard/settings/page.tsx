@@ -24,7 +24,7 @@ type UserPreferences = {
   weeklyDigest: boolean;
 };
 
-type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "advanced" | "training";
+type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "walkthroughs" | "advanced" | "training";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -587,6 +587,7 @@ try {
     ...(user.role === "firm_admin" || user.role === "owner" ? [{ id: "billing" as Tab, label: "Billing & Plan", icon: "💳" }] : []),
     ...(isClient ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
     { id: "security" as Tab, label: "Security", icon: "🔒" },
+    { id: "walkthroughs" as Tab, label: "Walk-throughs", icon: "🧭" },
     { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
     { id: "training" as Tab, label: "Training", icon: "🎓" },
   ];
@@ -1263,70 +1264,73 @@ if (eligibility.eligible) {
         </div>
       )}
 
+      {/* Walk-throughs Tab */}
+      {activeTab === "walkthroughs" && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Replay either of Receipture&apos;s first-time guides any time. Firm admins can also clear the demo dataset that was seeded when they first signed in.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
+              <div className="text-2xl mb-2">🎯</div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                Onboarding walkthrough
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                The first-time onboarding modal that teaches the basics. Replaying reloads the page after restart.
+              </p>
+              <button
+                onClick={handleReplayTour}
+                disabled={replayingTour}
+                className="w-full px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50 text-sm font-medium"
+              >
+                {replayingTour ? "Restarting…" : "Replay onboarding"}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
+              <div className="text-2xl mb-2">🧭</div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                Sidebar tour
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
+              </p>
+              <button
+                onClick={handleReplaySidebarTour}
+                className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+              >
+                Replay sidebar tour
+              </button>
+            </div>
+          </div>
+
+          {(user?.role === "firm_admin" || user?.role === "owner") && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 p-4 bg-amber-50 dark:bg-amber-900/10">
+              <div className="text-2xl mb-2">🧹</div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                Clear demo data
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                Permanently deletes the [Demo] clients, receipts, folder, and placeholder accountant. Real data is unaffected. Demo data is automatically excluded from Excel/QuickBooks exports once you&apos;ve added any real receipt — clearing is optional.
+              </p>
+              <button
+                onClick={handleClearDemoData}
+                disabled={clearingDemo}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {clearingDemo ? "Clearing…" : "Clear demo data"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Advanced Tab */}
 {activeTab === "advanced" && (
         <div className="space-y-6">
-                    <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Walkthroughs
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
-                <div className="text-2xl mb-2">🎯</div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  Onboarding walkthrough
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                  The first-time onboarding modal that teaches the basics. Replaying reloads the page after restart.
-                </p>
-                <button
-                  onClick={handleReplayTour}
-                  disabled={replayingTour}
-                  className="w-full px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 disabled:opacity-50 text-sm font-medium"
-                >
-                  {replayingTour ? "Restarting…" : "Replay onboarding"}
-                </button>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
-                <div className="text-2xl mb-2">🧭</div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  Sidebar tour
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                  Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
-                </p>
-                <button
-                  onClick={handleReplaySidebarTour}
-                  className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
-                >
-                  Replay sidebar tour
-                </button>
-              </div>
-            </div>
-
-            {(user?.role === "firm_admin" || user?.role === "owner") && (
-              <div className="mt-4 rounded-xl border border-amber-200 dark:border-amber-800 p-4 bg-amber-50 dark:bg-amber-900/10">
-                <div className="text-2xl mb-2">🧹</div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  Clear demo data
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                  Permanently deletes the [Demo] clients, receipts, folder, and placeholder accountant. Real data is unaffected. Demo data is automatically excluded from Excel/QuickBooks exports once you&apos;ve added any real receipt — clearing is optional.
-                </p>
-                <button
-                  onClick={handleClearDemoData}
-                  disabled={clearingDemo}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
-                >
-                  {clearingDemo ? "Clearing…" : "Clear demo data"}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-gray-200 dark:border-dark-border pt-6">
+          <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Data Export
             </h2>

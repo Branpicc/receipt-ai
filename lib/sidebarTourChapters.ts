@@ -184,7 +184,7 @@ const FIRM_ADMIN_CHAPTERS: TourChapter[] = [
         selector: '[data-tour="sidebar-settings"]',
         title: "Settings",
         body:
-          "Theme, billing, password, data export, and replay buttons for both walkthroughs. You can re-run this tour any time from Settings → Walkthroughs.",
+          "Theme, billing, password, and the rest of your account preferences live here. There's a dedicated Walk-throughs tab where you can replay this tour, replay onboarding, or clear the demo data.",
         position: "right",
       },
       {
@@ -193,7 +193,7 @@ const FIRM_ADMIN_CHAPTERS: TourChapter[] = [
         selector: null,
         title: "You're set",
         body:
-          "When you're ready, clear the demo data from Settings (one button). Until then, every demo entity is labeled [Demo] and won't appear in your Excel or QuickBooks exports once you've added a real receipt. Welcome aboard.",
+          "When you're ready, clear the demo data from Settings → Walk-throughs (one button). Until then, every demo entity is labeled [Demo] and won't appear in your Excel or QuickBooks exports once you've added a real receipt. Welcome aboard.",
         position: "center",
       },
     ],
@@ -310,7 +310,7 @@ const ACCOUNTANT_CHAPTERS: TourChapter[] = [
         selector: '[data-tour="sidebar-settings"]',
         title: "Settings",
         body:
-          "Your preferences, password, and replay buttons for both walkthroughs. Replay any time from Settings → Walkthroughs.",
+          "Your preferences, password, and account settings live here. The dedicated Walk-throughs tab is where you can replay this tour or onboarding any time.",
         position: "right",
       },
       {
@@ -319,7 +319,7 @@ const ACCOUNTANT_CHAPTERS: TourChapter[] = [
         selector: null,
         title: "You're set",
         body:
-          "When you're ready, clear the demo dataset from Settings — one button — and start fresh with your real assigned clients. Welcome to Receipture.",
+          "Welcome to Receipture. The demo dataset is yours to explore — your firm admin can clear it from Settings → Walk-throughs whenever you're both ready to start fresh with real clients.",
         position: "center",
       },
     ],
