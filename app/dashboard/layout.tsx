@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
-import FirstLoginTour from "@/components/FirstLoginTour";
+import SidebarTour from "@/components/SidebarTour";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { ClientProvider } from "@/lib/ClientContext";
 import { EditModeProvider } from "@/lib/EditMode";
@@ -728,7 +728,7 @@ href="/dashboard/reports/clients"
 
           {children}
 
-          <FirstLoginTour />
+          <SidebarTour />
         </main>
       </div>
     </OnboardingWrapper>
