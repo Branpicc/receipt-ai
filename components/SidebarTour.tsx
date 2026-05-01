@@ -279,7 +279,10 @@ export default function SidebarTour() {
         className="fixed z-[60] pointer-events-auto"
         style={popoverStyle(step.position, targetRect)}
       >
-        <div className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl border border-gray-200 dark:border-dark-border w-full" style={{ maxWidth: POPOVER_MAX_WIDTH }}>
+        <div
+          className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl border border-gray-200 dark:border-dark-border w-full overflow-y-auto"
+          style={{ maxWidth: POPOVER_MAX_WIDTH, maxHeight: "calc(100vh - 32px)" }}
+        >
           <div className="p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex-1 min-w-0">
@@ -455,6 +458,14 @@ function popoverStyle(position: TourPosition | undefined, rect: ElementRect | nu
 
   let top = 0;
   let left = 0;
+  // For left/right anchored popovers we want them to have as much vertical
+  // space as possible. When the target is in the bottom half of the viewport
+  // (e.g. the sidebar Settings link, which sits near the bottom), anchor
+  // the popover near the top of the viewport so its internal scroll can
+  // use the full height. Otherwise center it on the target.
+  const targetCenterY = rect.top + rect.height / 2;
+  const anchorTop = targetCenterY > vh / 2 ? 16 : Math.max(16, targetCenterY - 100);
+
   if (position === "top") {
     top = Math.max(16, rect.top - POPOVER_GAP - 200);
     left = clamp(rect.left + rect.width / 2 - w / 2, 16, vw - w - 16);
@@ -462,10 +473,10 @@ function popoverStyle(position: TourPosition | undefined, rect: ElementRect | nu
     top = rect.top + rect.height + POPOVER_GAP;
     left = clamp(rect.left + rect.width / 2 - w / 2, 16, vw - w - 16);
   } else if (position === "left") {
-    top = clamp(rect.top + rect.height / 2 - 100, 16, vh - 220);
+    top = anchorTop;
     left = Math.max(16, rect.left - POPOVER_GAP - w);
   } else if (position === "right") {
-    top = clamp(rect.top + rect.height / 2 - 100, 16, vh - 220);
+    top = anchorTop;
     left = rect.left + rect.width + POPOVER_GAP;
   }
   return { top, left, width: w };
