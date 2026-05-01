@@ -43,6 +43,7 @@ const [hardDeleteUsers, setHardDeleteUsers] = useState<{id: string; auth_user_id
   const [hardDeleteSearch, setHardDeleteSearch] = useState("");
   const [hardDeleteRoleFilter, setHardDeleteRoleFilter] = useState("all");
   const [replayingTour, setReplayingTour] = useState(false);
+  const [clearingDemo, setClearingDemo] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [incomeType, setIncomeType] = useState("self_employed");
@@ -417,6 +418,39 @@ const { error } = await supabase
     } catch (error) {
       console.error("Failed to replay sidebar tour:", error);
       alert("Failed to start tour. Please try again.");
+    }
+  };
+
+  const handleClearDemoData = async () => {
+    if (!confirm(
+      "Clear all demo data?\n\nThis permanently deletes the 3 demo clients, 15 demo receipts, and the placeholder demo accountant. Real clients and receipts are not affected."
+    )) {
+      return;
+    }
+    try {
+      setClearingDemo(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        alert("Sign in again to continue.");
+        return;
+      }
+      const res = await fetch("/api/clear-demo-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to clear demo data.");
+        return;
+      }
+      alert("Demo data cleared.");
+      window.location.reload();
+    } catch (error) {
+      console.error("Failed to clear demo data:", error);
+      alert("Failed to clear demo data. Please try again.");
+    } finally {
+      setClearingDemo(false);
     }
   };
 
@@ -1261,7 +1295,7 @@ if (eligibility.eligible) {
                   Sidebar tour
                 </h3>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                  6-step centered guide pointing out where each section lives. Pops up immediately, no reload.
+                  Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
                 </p>
                 <button
                   onClick={handleReplaySidebarTour}
@@ -1271,6 +1305,25 @@ if (eligibility.eligible) {
                 </button>
               </div>
             </div>
+
+            {(user?.role === "firm_admin" || user?.role === "owner") && (
+              <div className="mt-4 rounded-xl border border-amber-200 dark:border-amber-800 p-4 bg-amber-50 dark:bg-amber-900/10">
+                <div className="text-2xl mb-2">🧹</div>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                  Clear demo data
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                  Permanently deletes the [Demo] clients, receipts, folder, and placeholder accountant. Real data is unaffected. Demo data is automatically excluded from Excel/QuickBooks exports once you&apos;ve added any real receipt — clearing is optional.
+                </p>
+                <button
+                  onClick={handleClearDemoData}
+                  disabled={clearingDemo}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
+                >
+                  {clearingDemo ? "Clearing…" : "Clear demo data"}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-gray-200 dark:border-dark-border pt-6">

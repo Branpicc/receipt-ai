@@ -182,18 +182,24 @@ export async function seedDemoData(
   }
 
   // 3. [Demo] folder, firm-wide (no client_id so all roles can see it).
-  const { error: folderErr } = await supabase
+  //    The receipts created below all get this folder_id so they're
+  //    grouped together — users can leave the demo data in this folder
+  //    if they don't want to delete it outright.
+  const { data: folderInsert, error: folderErr } = await supabase
     .from("receipt_folders")
     .insert([{
       firm_id: firmId,
       name: DEMO_FOLDER_NAME,
       description: DEMO_FOLDER_DESCRIPTION,
       is_demo: true,
-    }]);
+    }])
+    .select("id")
+    .single();
   if (folderErr) {
     // Non-blocking. The receipts will just live un-foldered.
     console.warn("[demoData] folder insert failed:", folderErr.message);
   }
+  const demoFolderId: string | null = folderInsert?.id ?? null;
 
   // 4. 15 receipts (5 per client). receipt_date is anchored to "today
   //    minus N days" so the dashboard always shows reasonably recent
@@ -202,6 +208,7 @@ export async function seedDemoData(
   type ReceiptInsert = {
     firm_id: string;
     client_id: string;
+    folder_id: string | null;
     uploaded_by: string;
     source: string;
     status: string;
@@ -230,6 +237,7 @@ export async function seedDemoData(
       receiptRows.push({
         firm_id: firmId,
         client_id: clientRow.id,
+        folder_id: demoFolderId,
         uploaded_by: assigneeFirmUserId,
         source: "demo",
         status: rec.status,
