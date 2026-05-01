@@ -2,6 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import {
+  Moon, Sun, Menu, Receipt,
+  Camera, Bot, CheckCircle2,
+  Smartphone, FolderTree, Flag,
+  BarChart3, Mail, MessageSquare, Download,
+  User as UserIcon, Briefcase, Building2,
+  type LucideIcon,
+} from "lucide-react";
 
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -16,6 +24,13 @@ export default function LandingPage() {
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
   const [scrolled, setScrolled] = useState(false);
   const [showcaseTab, setShowcaseTab] = useState("Client View");
+  // Initialize from localStorage synchronously so the icon doesn't flicker.
+  // The DOM class application still happens in an effect since
+  // localStorage isn't available during SSR.
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("theme") === "dark";
+  });
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -24,10 +39,15 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "dark") document.documentElement.classList.add("dark");
+    if (isDark) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
-  }, []);
+  }, [isDark]);
+
+  function toggleTheme() {
+    const dark = document.documentElement.classList.toggle("dark");
+    localStorage.setItem("theme", dark ? "dark" : "light");
+    setIsDark(dark);
+  }
 
   async function handleDemoRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +91,7 @@ export default function LandingPage() {
         "CSV export",
         "In-app AI support chat",
       ],
-      cta: "Get Started",
+      cta: "Start free trial",
       highlighted: false,
     },
     {
@@ -91,7 +111,7 @@ export default function LandingPage() {
         "Multi-user collaboration",
         "Receipt edit tracking",
       ],
-      cta: "Get Started",
+      cta: "Start free trial",
       highlighted: true,
       badge: "Most Popular",
     },
@@ -111,16 +131,16 @@ export default function LandingPage() {
         "SLA guarantee",
         "Dedicated support channel",
       ],
-      cta: "Contact Us",
+      cta: "Contact sales",
       highlighted: false,
     },
   ];
 
-  const steps = [
+  const steps: { number: string; role: string; icon: LucideIcon; title: string; description: string; color: string }[] = [
     {
       number: "01",
       role: "Client",
-      icon: "📸",
+      icon: Camera,
       title: "Snap & Submit",
       description: "Clients photograph receipts with their phone or forward email receipts. Takes seconds — no app download required.",
       color: "from-blue-500 to-blue-600",
@@ -128,7 +148,7 @@ export default function LandingPage() {
     {
       number: "02",
       role: "AI",
-      icon: "🤖",
+      icon: Bot,
       title: "AI Extracts Everything",
       description: "Our AI reads vendor, amount, date, line items, and HST automatically. A text message asks the client for the expense purpose.",
       color: "from-purple-500 to-purple-600",
@@ -136,22 +156,22 @@ export default function LandingPage() {
     {
       number: "03",
       role: "Accountant",
-      icon: "✅",
+      icon: CheckCircle2,
       title: "Review & Categorize",
       description: "Accountants see organized receipts with AI-suggested categories. Review flags, approve categories, and export for tax season.",
       color: "from-green-500 to-green-600",
     },
   ];
 
-  const features = [
-    { icon: "📱", title: "SMS Purpose Collection", desc: "Clients get a text asking for the expense purpose. They reply in seconds. No app needed." },
-    { icon: "🤖", title: "AI-Powered OCR", desc: "Extracts vendor, amount, date, line items, and tax from any receipt photo or forwarded email." },
-    { icon: "🗂️", title: "Tax Code Mapping", desc: "Every receipt is automatically mapped to the correct CRA line — T2125, T776, or T2200." },
-    { icon: "🚩", title: "Smart Flagging", desc: "Automatically flags personal cards, duplicate receipts, and category mismatches for review." },
-    { icon: "📊", title: "Monthly Reports", desc: "Auto-generated monthly expense reports per client, ready for tax prep or review meetings." },
-    { icon: "📧", title: "Email Forwarding", desc: "Clients forward Amazon, Meta, or any digital receipt to their unique inbox address." },
-    { icon: "💬", title: "In-App Messaging", desc: "Direct messaging between clients and accountants — no more email chains for receipt questions." },
-    { icon: "📥", title: "QuickBooks Export", desc: "One-click CSV export in QuickBooks-compatible format for seamless accounting workflow." },
+  const features: { icon: LucideIcon; title: string; desc: string }[] = [
+    { icon: Smartphone, title: "SMS Purpose Collection", desc: "Clients get a text asking for the expense purpose. They reply in seconds. No app needed." },
+    { icon: Bot, title: "AI-Powered OCR", desc: "Extracts vendor, amount, date, line items, and tax from any receipt photo or forwarded email." },
+    { icon: FolderTree, title: "Tax Code Mapping", desc: "Every receipt is automatically mapped to the correct CRA line — T2125, T776, or T2200." },
+    { icon: Flag, title: "Smart Flagging", desc: "Automatically flags personal cards, duplicate receipts, and category mismatches for review." },
+    { icon: BarChart3, title: "Monthly Reports", desc: "Auto-generated monthly expense reports per client, ready for tax prep or review meetings." },
+    { icon: Mail, title: "Email Forwarding", desc: "Clients forward Amazon, Meta, or any digital receipt to their unique inbox address." },
+    { icon: MessageSquare, title: "In-App Messaging", desc: "Direct messaging between clients and accountants — no more email chains for receipt questions." },
+    { icon: Download, title: "QuickBooks Export", desc: "One-click CSV export in QuickBooks-compatible format for seamless accounting workflow." },
   ];
 
   return (
@@ -221,7 +241,7 @@ export default function LandingPage() {
       <nav className={`fixed top-0 left-0 right-0 z-50 nav-blur transition-all duration-300 ${scrolled ? "bg-white/90 shadow-sm border-b border-gray-100" : "bg-transparent"}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">📄</span>
+            <Receipt className={`w-6 h-6 ${scrolled ? "text-blue-600" : "text-blue-400"}`} />
             <span className={`text-xl font-bold ${scrolled ? "text-gray-900" : "text-white"}`} style={{ fontFamily: "'Playfair Display', serif" }}>
               Receipture
             </span>
@@ -239,13 +259,11 @@ export default function LandingPage() {
           </div>
 <div className="hidden md:flex items-center gap-3">
             <button
-              onClick={() => {
-                const isDark = document.documentElement.classList.toggle("dark");
-                localStorage.setItem("theme", isDark ? "dark" : "light");
-              }}
+              onClick={toggleTheme}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
               className={`p-2 rounded-lg transition-colors ${scrolled ? "hover:bg-gray-100 text-gray-600" : "hover:bg-white/10 text-white/80"}`}
             >
-              🌙
+              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <Link
               href="/login"
@@ -260,8 +278,8 @@ export default function LandingPage() {
               Start free trial
             </Link>
           </div>
-          <button className="md:hidden" onClick={() => setMenuOpen(!menuOpen)}>
-            <span className={scrolled ? "text-gray-900" : "text-white"}>☰</span>
+          <button className="md:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+            <Menu className={`w-6 h-6 ${scrolled ? "text-gray-900" : "text-white"}`} />
           </button>
         </div>
         {menuOpen && (
@@ -372,8 +390,8 @@ export default function LandingPage() {
                   <div className="hidden md:block absolute top-16 left-full w-full h-px step-line z-10" style={{ width: "calc(100% - 2rem)" }} />
                 )}
                 <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 card-hover">
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${step.color} flex items-center justify-center text-2xl mb-6 shadow-lg`}>
-                    {step.icon}
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${step.color} flex items-center justify-center mb-6 shadow-lg`}>
+                    <step.icon className="w-7 h-7 text-white" />
                   </div>
                   <div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2">{step.role}</div>
                   <div className="text-4xl font-bold text-gray-100 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>{step.number}</div>
@@ -737,7 +755,9 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((f) => (
               <div key={f.title} className="p-6 rounded-2xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all card-hover">
-                <div className="text-3xl mb-4">{f.icon}</div>
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+                  <f.icon className="w-6 h-6" />
+                </div>
                 <h3 className="font-bold text-gray-900 mb-2">{f.title}</h3>
                 <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
               </div>
@@ -746,12 +766,13 @@ export default function LandingPage() {
 
           {/* Role breakdown */}
           <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
+            {([
               {
                 role: "For Clients",
-                icon: "👤",
+                icon: UserIcon,
                 color: "bg-blue-50 border-blue-100",
                 headerColor: "text-blue-700",
+                iconBg: "bg-blue-100 text-blue-600",
                 points: [
                   "Snap a photo — done in seconds",
                   "Reply to a text with the expense purpose",
@@ -762,9 +783,10 @@ export default function LandingPage() {
               },
               {
                 role: "For Accountants",
-                icon: "💼",
+                icon: Briefcase,
                 color: "bg-green-50 border-green-100",
                 headerColor: "text-green-700",
+                iconBg: "bg-green-100 text-green-600",
                 points: [
                   "AI pre-categorizes every receipt",
                   "Review flags and approve categories",
@@ -775,9 +797,10 @@ export default function LandingPage() {
               },
               {
                 role: "For Firm Admins",
-                icon: "🏢",
+                icon: Building2,
                 color: "bg-purple-50 border-purple-100",
                 headerColor: "text-purple-700",
+                iconBg: "bg-purple-100 text-purple-600",
                 points: [
                   "Manage multiple accountants and clients",
                   "Assign clients to accountants",
@@ -786,9 +809,11 @@ export default function LandingPage() {
                   "Subscription and billing management",
                 ],
               },
-            ].map((role) => (
+            ] as const).map((role) => (
               <div key={role.role} className={`rounded-3xl border p-8 ${role.color}`}>
-                <div className="text-4xl mb-4">{role.icon}</div>
+                <div className={`w-12 h-12 rounded-xl ${role.iconBg} flex items-center justify-center mb-4`}>
+                  <role.icon className="w-6 h-6" />
+                </div>
                 <h3 className={`text-xl font-bold mb-4 ${role.headerColor}`} style={{ fontFamily: "'Playfair Display', serif" }}>
                   {role.role}
                 </h3>
@@ -859,9 +884,14 @@ export default function LandingPage() {
                   <span className={`text-lg ${plan.highlighted ? "text-blue-200" : "text-gray-400"}`}>{plan.period}</span>
                 </div>
                 {billingInterval === "annual" && (
-                  <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-green-300" : "text-green-600"}`}>
-                    Save ${plan.name === "Starter" ? "96" : plan.name === "Professional" ? "396" : "696"}/year
-                  </div>
+                  <>
+                    <div className={`text-sm font-semibold mb-1 ${plan.highlighted ? "text-blue-100" : "text-gray-700"}`}>
+                      Billed as ${plan.name === "Starter" ? "492" : plan.name === "Professional" ? "1,992" : "3,492"}/year
+                    </div>
+                    <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-green-300" : "text-green-600"}`}>
+                      Save ${plan.name === "Starter" ? "96" : plan.name === "Professional" ? "396" : "696"}/year vs monthly
+                    </div>
+                  </>
                 )}
                                 <p className={`text-sm mb-2 ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>{plan.description}</p>
                 <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.clients}</div>
@@ -876,16 +906,29 @@ export default function LandingPage() {
                   ))}
                 </ul>
 
-                <a
-                  href={plan.cta === "Contact Us" ? "#contact" : "#demo"}
-                  className={`block text-center py-3 rounded-xl font-semibold transition-all ${
-                    plan.highlighted
-                      ? "bg-white text-blue-600 hover:bg-blue-50"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                >
-                  {plan.cta}
-                </a>
+                {plan.cta === "Contact sales" ? (
+                  <a
+                    href="#contact"
+                    className={`block text-center py-3 rounded-xl font-semibold transition-all ${
+                      plan.highlighted
+                        ? "bg-white text-blue-600 hover:bg-blue-50"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                    }`}
+                  >
+                    {plan.cta}
+                  </a>
+                ) : (
+                  <Link
+                    href="/signup"
+                    className={`block text-center py-3 rounded-xl font-semibold transition-all ${
+                      plan.highlighted
+                        ? "bg-white text-blue-600 hover:bg-blue-50"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                )}
               </div>
             ))}
           </div>
@@ -1034,7 +1077,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
             <div className="col-span-1 md:col-span-2">
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">📄</span>
+                <Receipt className="w-6 h-6 text-blue-400" />
                 <span className="text-xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>Receipture</span>
               </div>
               <p className="text-gray-400 text-sm leading-relaxed max-w-sm">
