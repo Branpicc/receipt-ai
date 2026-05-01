@@ -34,3 +34,29 @@ html.dark body {
   background-color: var(--color-dark-bg);
   color: white;
 }
+
+/* Print isolation. When the user invokes browser print (Cmd+P or our
+   "Download PDF" button on the report detail), hide everything except
+   the element marked `.print-area`. Force light background + dark text
+   regardless of dark mode so the PDF reads cleanly. The .print-area
+   anchors at the top-left of the page so it fills the printable area. */
+@media print {
+  body, html.dark body {
+    background-color: white !important;
+    color: black !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area, .print-area * {
+    visibility: visible;
+    color: black !important;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+  }
+}
