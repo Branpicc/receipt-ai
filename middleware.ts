@@ -67,15 +67,25 @@ const publicRoutes = [
     '/login',
     '/signup',
     '/accept-invite',
+    '/verify-email',
     '/forgot-password',
     '/reset-password',
     '/magic-link',
   ]
-  
-const isPublicRoute = publicRoutes.some((route) => 
+
+const isPublicRoute = publicRoutes.some((route) =>
     route === '/' ? path === '/' : path.startsWith(route)
   )
-  
+
+  // Routes that work for both anonymous and authenticated users — we never
+  // bounce people away based on session state. /accept-invite needs both
+  // (you're invited, you sign up); /verify-email needs both because a user
+  // might click an old verify link after they've already signed in (we
+  // still want to show the "Already verified" success card, not punt them
+  // to /dashboard with a missing-token error).
+  const dualAccessRoutes = ['/accept-invite', '/verify-email']
+  const isDualAccessRoute = dualAccessRoutes.some(r => path.startsWith(r))
+
   // If not authenticated and trying to access protected route
   if (!session && !isPublicRoute) {
     const redirectUrl = new URL('/login', request.url)
@@ -84,7 +94,7 @@ const isPublicRoute = publicRoutes.some((route) =>
   }
 
   // If authenticated and trying to access auth pages, redirect to dashboard
-  if (session && isPublicRoute && path !== '/accept-invite') {
+  if (session && isPublicRoute && !isDualAccessRoute) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
