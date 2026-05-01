@@ -10,6 +10,7 @@ import { useClientContext } from "@/lib/ClientContext";
 import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import { shouldExcludeDemoFromExport } from "@/lib/demoExport";
+import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
 
 type Receipt = {
   id: string;
@@ -76,6 +77,7 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   const [firmId, setFirmId] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [showUploadOnBehalf, setShowUploadOnBehalf] = useState(false);
 
   // Main view: receipt list vs folder list
   const [mainView, setMainView] = useState<MainView>("receipts");
@@ -758,6 +760,14 @@ const filtersBarJSX = (
             </p>
           </div>
 <div className="flex items-center gap-3">
+            {userRole === "accountant" && (
+              <button
+                onClick={() => setShowUploadOnBehalf(true)}
+                className="px-3 py-1.5 bg-accent-600 hover:bg-accent-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <span>⬆</span> Upload for client
+              </button>
+            )}
             <button
 onClick={exportQuickBooksCSV}
               disabled={receipts.length === 0}
@@ -1013,6 +1023,17 @@ onClick={exportQuickBooksCSV}
         )}
 
       </div>
+
+      {showUploadOnBehalf && (
+        <UploadOnBehalfModal
+          onClose={() => setShowUploadOnBehalf(false)}
+          onSuccess={() => {
+            setShowUploadOnBehalf(false);
+            // Reload the receipts list so the new upload appears.
+            if (firmId) loadReceipts();
+          }}
+        />
+      )}
     </main>
   );
 }
