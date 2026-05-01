@@ -38,9 +38,16 @@ html.dark body {
 /* Print isolation. When the user invokes browser print (Cmd+P or our
    "Download PDF" button on the report detail), hide everything except
    the element marked `.print-area`. Force light background + dark text
-   regardless of dark mode so the PDF reads cleanly. The .print-area
-   anchors at the top-left of the page so it fills the printable area. */
+   regardless of dark mode so the PDF reads cleanly.
+   The .print-area is NOT absolutely positioned — keeping it in normal
+   document flow lets the browser paginate the content across multiple
+   pages. Cards inside the print-area get break-inside:avoid hints so
+   they don't split mid-card. */
 @media print {
+  @page {
+    size: letter;
+    margin: 12mm 14mm;
+  }
   body, html.dark body {
     background-color: white !important;
     color: black !important;
@@ -51,12 +58,24 @@ html.dark body {
   .print-area, .print-area * {
     visibility: visible;
     color: black !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
   }
+  /* Critical for multi-page output: keep print-area in normal flow.
+     Absolute positioning makes the browser collapse multi-page content
+     into a single overflow rectangle. */
   .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 24px;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+  /* Don't split cards across pages mid-content. */
+  .print-area > div,
+  .print-area .bg-white,
+  .print-area .rounded-xl,
+  .print-area .rounded-lg {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
