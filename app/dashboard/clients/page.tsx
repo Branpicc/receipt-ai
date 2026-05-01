@@ -303,7 +303,7 @@ const { error } = await supabase.from("clients").insert([
         )}
 
         {/* Add Client Form */}
-        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border p-6 mb-6">
+        <div data-tour="clients-add" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Client</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">

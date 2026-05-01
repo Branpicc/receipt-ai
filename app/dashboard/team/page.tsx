@@ -251,7 +251,7 @@ const filteredInvitations = invitations.filter(inv => {
         </div>
 
         {/* Invite Section */}
-        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+        <div data-tour="team-invite" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Invite Team Member</h2>
           <button
             onClick={() => setShowImprovedInvite(true)}

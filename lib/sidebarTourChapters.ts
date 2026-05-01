@@ -1,14 +1,18 @@
 /**
  * Per-role chapter definitions for the immersive sidebar tour.
  *
- * Each chapter groups one or more steps. Each step either highlights a
- * specific element (selector) or shows a centered modal (selector=null).
- * If a step's `route` differs from the current path the tour engine will
- * router.push() before rendering it.
+ * Each step either:
+ *   - Highlights a specific element via a stable `data-tour=` attribute,
+ *     OR
+ *   - Renders a centered modal (selector: null) for content that's about
+ *     a *page* rather than an element.
  *
- * Real per-role content lands in §4 of Sprint 5b. For §3 the engine is
- * being shipped with a minimal placeholder set so the architecture can
- * be smoke-tested end-to-end against real demo data first.
+ * `position` controls where the popover lands relative to the highlighted
+ * element. Use "right" for sidebar items so the popover doesn't cover the
+ * sidebar itself, "bottom" for in-page elements high on the screen, etc.
+ *
+ * Demo data is already seeded by /api/seed-demo-data when the tour starts,
+ * so the user lands on every page with realistic content visible.
  */
 
 export type TourPosition = "top" | "bottom" | "left" | "right" | "center";
@@ -28,33 +32,33 @@ export type TourChapter = {
   steps: TourStep[];
 };
 
-const PLACEHOLDER_FIRM_ADMIN: TourChapter[] = [
+const FIRM_ADMIN_CHAPTERS: TourChapter[] = [
   {
     id: "welcome",
     title: "Welcome",
     steps: [
       {
-        id: "welcome-1",
+        id: "fa-welcome",
         route: "/dashboard",
         selector: null,
         title: "Welcome to Receipture",
         body:
-          "Your firm is set up and your dashboard is populated with sample data so you have something to look at. We'll walk through the main sections together — skip any chapter or step you don't want to see.",
+          "Your firm is set up and we've populated three sample clients, fifteen sample receipts, and a placeholder accountant so you have something real to look at. We'll walk through the main sections — skip any chapter you don't want to see.",
         position: "center",
       },
     ],
   },
   {
     id: "dashboard",
-    title: "Dashboard",
+    title: "Your dashboard",
     steps: [
       {
-        id: "dashboard-overview",
+        id: "fa-dashboard",
         route: "/dashboard",
         selector: null,
-        title: "Your dashboard",
+        title: "The dashboard",
         body:
-          "This is your at-a-glance view of every client and recent activity across the firm. As an admin you don't upload receipts — your accountants do, on behalf of clients. Here's where you'll see what's coming in.",
+          "This is your at-a-glance view of every client and recent activity across the firm. As an admin you don't upload receipts yourself — your accountants and clients do — but here's where you'll see what's coming in across the firm.",
         position: "center",
       },
     ],
@@ -64,45 +68,258 @@ const PLACEHOLDER_FIRM_ADMIN: TourChapter[] = [
     title: "Receipts",
     steps: [
       {
-        id: "receipts-page",
-        route: "/dashboard/receipts",
-        selector: null,
+        id: "fa-sidebar-receipts",
+        route: "/dashboard",
+        selector: '[data-tour="sidebar-receipts"]',
         title: "Receipts list",
         body:
-          "Every receipt across all your clients lives here. Filter by client, status, or date. Click any row to see the full detail and the audit trail.",
+          "Every receipt across all your clients lives under Operations → Receipts. Filter by client, status, or date. Click any row to see the full detail and audit trail.",
+        position: "right",
+      },
+      {
+        id: "fa-receipts-page",
+        route: "/dashboard/receipts",
+        selector: null,
+        title: "What you can do here",
+        body:
+          "As an admin, you review receipts but can't upload them — that's your accountants' and clients' workflow. From any receipt's detail page you can request changes from the assigned accountant if something looks off.",
+        position: "center",
+      },
+    ],
+  },
+  {
+    id: "clients",
+    title: "Clients",
+    steps: [
+      {
+        id: "fa-sidebar-clients",
+        route: "/dashboard/receipts",
+        selector: '[data-tour="sidebar-clients"]',
+        title: "Clients",
+        body:
+          "Manage every client your firm services here. Each gets a unique receipt-collection email address you can give them to forward receipts to.",
+        position: "right",
+      },
+      {
+        id: "fa-add-client",
+        route: "/dashboard/clients",
+        selector: '[data-tour="clients-add"]',
+        title: "Add a real client",
+        body:
+          "When you're ready to add a real (non-demo) client, fill in the name and province here. They'll be assignable to one of your accountants.",
+        position: "bottom",
+      },
+    ],
+  },
+  {
+    id: "team",
+    title: "Your team",
+    steps: [
+      {
+        id: "fa-sidebar-team",
+        route: "/dashboard/clients",
+        selector: '[data-tour="sidebar-team"]',
+        title: "Team",
+        body:
+          "Invite accountants here. The demo dataset includes one placeholder accountant ([Demo] Sarah Mitchell) so you can see what an active team looks like.",
+        position: "right",
+      },
+      {
+        id: "fa-team-invite",
+        route: "/dashboard/team",
+        selector: '[data-tour="team-invite"]',
+        title: "Send invitations",
+        body:
+          "Click here to invite an accountant or a client by email. They'll get a Receipture-branded email with a one-click link to join your firm.",
+        position: "bottom",
+      },
+    ],
+  },
+  {
+    id: "email-inbox",
+    title: "Email inbox",
+    steps: [
+      {
+        id: "fa-sidebar-email",
+        route: "/dashboard/team",
+        selector: '[data-tour="sidebar-email-inbox"]',
+        title: "Per-client receipt emails",
+        body:
+          "Each client gets a unique forwarding address. Anything they send there appears in this inbox, gets OCR'd, and lands in Receipts as a new entry.",
+        position: "right",
+      },
+    ],
+  },
+  {
+    id: "reports",
+    title: "Reports & history",
+    steps: [
+      {
+        id: "fa-sidebar-reports",
+        route: "/dashboard/email-inbox",
+        selector: '[data-tour="sidebar-reports-clients"]',
+        title: "Client Reports",
+        body:
+          "Per-client and firm-wide PDF reports — monthly summaries, comprehensive year-to-date, AI-generated narrative summaries. Generate and share with one click.",
+        position: "right",
+      },
+      {
+        id: "fa-sidebar-edits",
+        route: "/dashboard/email-inbox",
+        selector: '[data-tour="sidebar-reports-edits"]',
+        title: "Edit history & deletion requests",
+        body:
+          "Every receipt edit and every deletion request lives here. Full audit trail. Clients request deletions from their side; you (or your accountants) approve or deny here.",
+        position: "right",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    title: "Settings & wrap up",
+    steps: [
+      {
+        id: "fa-sidebar-settings",
+        route: "/dashboard/email-inbox",
+        selector: '[data-tour="sidebar-settings"]',
+        title: "Settings",
+        body:
+          "Theme, billing, password, data export, and replay buttons for both walkthroughs. You can re-run this tour any time from Settings → Walkthroughs.",
+        position: "right",
+      },
+      {
+        id: "fa-finish",
+        route: "/dashboard",
+        selector: null,
+        title: "You're set",
+        body:
+          "When you're ready, clear the demo data from Settings (one button). Until then, every demo entity is labeled [Demo] and won't appear in your Excel or QuickBooks exports once you've added a real receipt. Welcome aboard.",
         position: "center",
       },
     ],
   },
 ];
 
-const PLACEHOLDER_ACCOUNTANT: TourChapter[] = [
+const ACCOUNTANT_CHAPTERS: TourChapter[] = [
   {
     id: "welcome",
     title: "Welcome",
     steps: [
       {
-        id: "welcome-1",
+        id: "ac-welcome",
         route: "/dashboard",
         selector: null,
         title: "Welcome to Receipture",
         body:
-          "You've been invited to a firm. We've populated some sample clients and receipts so you can see what you'll be working with. Skip any chapter you don't need.",
+          "You've been invited to a firm. We've assigned you three sample clients with fifteen sample receipts so you can see what you'll be working with. Skip any chapter you don't need.",
         position: "center",
       },
     ],
   },
   {
     id: "receipts",
-    title: "Receipts",
+    title: "Your receipts",
     steps: [
       {
-        id: "receipts-page",
+        id: "ac-sidebar-receipts",
+        route: "/dashboard",
+        selector: '[data-tour="sidebar-receipts"]',
+        title: "Receipts",
+        body:
+          "Receipts from your assigned clients live here. Categorize them, edit details, resolve flags, or — when uploading on behalf of a client — drop in a photo from this page.",
+        position: "right",
+      },
+      {
+        id: "ac-receipt-detail",
         route: "/dashboard/receipts",
         selector: null,
-        title: "Your assigned receipts",
+        title: "Working a receipt",
         body:
-          "These are receipts from your assigned clients. You can categorize, edit, resolve flags, and request changes here.",
+          "Click any row to see the full detail. The category picker has every CRA-aligned tax category — start typing to filter. Save once and the receipt is queued for the client's monthly report.",
+        position: "center",
+      },
+    ],
+  },
+  {
+    id: "flags",
+    title: "Flags",
+    steps: [
+      {
+        id: "ac-sidebar-flags",
+        route: "/dashboard/receipts",
+        selector: '[data-tour="sidebar-flags"]',
+        title: "Flagged receipts",
+        body:
+          "Anything our system catches — personal-card-used, missing data, mismatch between line items and total — surfaces here for review. The demo dataset includes one flagged receipt so you can practice resolving.",
+        position: "right",
+      },
+    ],
+  },
+  {
+    id: "clients",
+    title: "Your clients",
+    steps: [
+      {
+        id: "ac-sidebar-clients",
+        route: "/dashboard/flags",
+        selector: '[data-tour="sidebar-clients"]',
+        title: "Clients you cover",
+        body:
+          "These are clients assigned to you specifically. The firm admin manages assignments. Click any client to see their receipts, monthly performance, and contact info.",
+        position: "right",
+      },
+    ],
+  },
+  {
+    id: "approvals",
+    title: "Change requests",
+    steps: [
+      {
+        id: "ac-sidebar-approvals",
+        route: "/dashboard/clients",
+        selector: '[data-tour="sidebar-approvals"]',
+        title: "Approval requests",
+        body:
+          "When the firm admin requests changes on a receipt, it lands here. Make the edit, mark it complete, and the admin gets notified.",
+        position: "right",
+      },
+    ],
+  },
+  {
+    id: "reports",
+    title: "Reports",
+    steps: [
+      {
+        id: "ac-sidebar-reports",
+        route: "/dashboard/approval-requests",
+        selector: '[data-tour="sidebar-reports-clients"]',
+        title: "Generate reports",
+        body:
+          "Generate per-client monthly or comprehensive reports. Download as PDF or Excel — Excel feeds straight into QuickBooks. Demo receipts are excluded automatically once any real receipt exists.",
+        position: "right",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    title: "Settings & wrap up",
+    steps: [
+      {
+        id: "ac-sidebar-settings",
+        route: "/dashboard/approval-requests",
+        selector: '[data-tour="sidebar-settings"]',
+        title: "Settings",
+        body:
+          "Your preferences, password, and replay buttons for both walkthroughs. Replay any time from Settings → Walkthroughs.",
+        position: "right",
+      },
+      {
+        id: "ac-finish",
+        route: "/dashboard",
+        selector: null,
+        title: "You're set",
+        body:
+          "When you're ready, clear the demo dataset from Settings — one button — and start fresh with your real assigned clients. Welcome to Receipture.",
         position: "center",
       },
     ],
@@ -110,7 +327,7 @@ const PLACEHOLDER_ACCOUNTANT: TourChapter[] = [
 ];
 
 export function getChaptersForRole(role: string): TourChapter[] {
-  if (role === "firm_admin") return PLACEHOLDER_FIRM_ADMIN;
-  if (role === "accountant") return PLACEHOLDER_ACCOUNTANT;
+  if (role === "firm_admin") return FIRM_ADMIN_CHAPTERS;
+  if (role === "accountant") return ACCOUNTANT_CHAPTERS;
   return [];
 }

@@ -260,6 +260,7 @@ return (
             <>
               <li className="ml-4">
                 <Link
+                  data-tour="sidebar-receipts"
                   href="/dashboard/receipts"
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                     pathname === '/dashboard/receipts' || pathname.startsWith('/dashboard/receipts/')
@@ -273,6 +274,7 @@ return (
               </li>
               <li className="ml-4">
                 <Link
+                  data-tour="sidebar-email-inbox"
                   href="/dashboard/email-inbox"
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                     pathname === '/dashboard/email-inbox'
@@ -299,6 +301,7 @@ return (
               </li>
               <li className="ml-4">
                 <Link
+                  data-tour="sidebar-flags"
                   href="/dashboard/flags"
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                     pathname === '/dashboard/flags'
@@ -343,6 +346,7 @@ return (
             <>
               <li className="ml-4">
                 <Link
+                  data-tour="sidebar-clients"
                   href="/dashboard/clients"
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                     pathname === '/dashboard/clients' || pathname.startsWith('/dashboard/clients/')
@@ -371,6 +375,7 @@ return (
 
               <li className="ml-4">
                 <Link
+                  data-tour="sidebar-approvals"
                   href="/dashboard/approval-requests"
                   className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                     pathname === '/dashboard/approval-requests'
@@ -385,6 +390,7 @@ return (
               {isFirmAdmin && (
                 <li className="ml-4">
                   <Link
+                    data-tour="sidebar-team"
                     href="/dashboard/team"
                     className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                       pathname === '/dashboard/team'
@@ -443,6 +449,7 @@ return (
               </li>
               <li className="ml-4">
   <Link
+    data-tour="sidebar-reports-clients"
 href="/dashboard/reports/clients"
     className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
       pathname.startsWith('/dashboard/reports/clients')
@@ -456,6 +463,7 @@ href="/dashboard/reports/clients"
 </li>
 <li className="ml-4">
   <Link
+    data-tour="sidebar-reports-edits"
     href="/dashboard/reports/edits"
     className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
       pathname.startsWith('/dashboard/reports/edits')
@@ -666,6 +674,7 @@ href="/dashboard/reports/clients"
               {sidebarOpen ? (
                 <div className="flex gap-2">
                   <Link
+                    data-tour="sidebar-settings"
                     href="/dashboard/settings"
                     className="flex-1 flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
                   >
