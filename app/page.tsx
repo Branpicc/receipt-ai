@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
-  Moon, Sun, Menu, Receipt,
+  Menu, Receipt,
   Camera, Bot, CheckCircle2,
   Smartphone, FolderTree, Flag,
   BarChart3, Mail, MessageSquare, Download,
@@ -24,30 +24,11 @@ export default function LandingPage() {
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
   const [scrolled, setScrolled] = useState(false);
   const [showcaseTab, setShowcaseTab] = useState("Client View");
-  // Initialize from localStorage synchronously so the icon doesn't flicker.
-  // The DOM class application still happens in an effect since
-  // localStorage isn't available during SSR.
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("theme") === "dark";
-  });
-
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    if (isDark) document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-  }, [isDark]);
-
-  function toggleTheme() {
-    const dark = document.documentElement.classList.toggle("dark");
-    localStorage.setItem("theme", dark ? "dark" : "light");
-    setIsDark(dark);
-  }
 
   async function handleDemoRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -258,13 +239,6 @@ export default function LandingPage() {
             ))}
           </div>
 <div className="hidden md:flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              className={`p-2 rounded-lg transition-colors ${scrolled ? "hover:bg-gray-100 text-gray-600" : "hover:bg-white/10 text-white/80"}`}
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
             <Link
               href="/login"
                             className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${scrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
