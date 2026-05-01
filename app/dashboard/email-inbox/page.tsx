@@ -7,6 +7,7 @@ import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
 import ClientFilterDropdown from "@/components/ClientFilterDropdown";
+import { getAssignedClientIds } from "@/lib/getAssignedClients";
 
 type EmailReceipt = {
   id: string;
@@ -21,10 +22,13 @@ type EmailReceipt = {
   email_text: string;
   email_html: string | null;
   converted_receipt_id: string | null;
+  client_id: string | null;
 purpose_text?: string | null;
   line_items_json?: any[] | null;
   suggested_category?: string | null;
   approved_category?: string | null;
+  // Joined from clients for the per-row "delivered to" badge.
+  clients?: { name: string | null; client_code: string | null; email_alias: string | null } | null;
 };
 
 type TabType = "pending" | "approved" | "rejected";
@@ -89,22 +93,33 @@ async function loadEmailAddress() {
       setLoading(true);
       const firmId = await getMyFirmId();
 
-let emailQuery = supabase
+      // Accountants only see emails for their assigned clients. The
+      // ClientFilterDropdown narrows further if they pick a specific one.
+      const assignedIds = await getAssignedClientIds(firmId);
+      if (assignedIds !== null && assignedIds.length === 0) {
+        setEmailReceipts([]);
+        setLoading(false);
+        return;
+      }
+
+      let emailQuery = supabase
         .from("email_receipts")
-        .select("*")
+        .select("*, clients(name, client_code, email_alias)")
         .eq("firm_id", firmId)
         .eq("status", activeTab)
         .order("received_at", { ascending: false });
 
       if (isFiltered && selectedClient) {
         emailQuery = emailQuery.eq("client_id", selectedClient.id);
+      } else if (assignedIds !== null) {
+        emailQuery = emailQuery.in("client_id", assignedIds);
       }
 
       const { data, error } = await emailQuery;
 
       if (error) throw error;
 
-      setEmailReceipts(data || []);
+      setEmailReceipts((data || []) as unknown as EmailReceipt[]);
     } catch (error) {
       console.error("Failed to load email receipts:", error);
     } finally {
@@ -692,6 +707,20 @@ const filteredEmails = emailReceipts.filter(email => {
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     From: {email.from_email}
                   </p>
+                  {email.clients && (() => {
+                    const alias = email.clients.email_alias || email.clients.client_code;
+                    if (!alias) return null;
+                    return (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        To: <span className="font-mono">{alias}@receipts.receipture.ca</span>
+                        {email.clients.name && (
+                          <span className="ml-2 inline-block px-2 py-0.5 rounded-full bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300 text-[10px] font-medium">
+                            {email.clients.name}
+                          </span>
+                        )}
+                      </p>
+                    );
+                  })()}
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {email.subject || "No subject"}
                   </p>
