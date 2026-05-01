@@ -54,6 +54,13 @@ export default function ClientReportsPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  // Month input value, format "YYYY-MM" (HTML <input type="month">).
+  // Defaults to the current month; lets staff generate a report for any
+  // historical month, not just "now".
+  const [targetMonth, setTargetMonth] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   useEffect(() => {
     loadReports();
@@ -113,15 +120,14 @@ async function generateComprehensiveReport() {
         alert('Your session expired. Please log in again.');
         return;
       }
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const monthStart = `${targetMonth}-01`;
       const response = await fetch('/api/generate-comprehensive-report', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ clientId, firmId, month: currentMonth }),
+        body: JSON.stringify({ clientId, firmId, month: monthStart }),
       });
             if (!response.ok) throw new Error('Failed to generate report');
       alert('✅ Comprehensive report with AI summary generated!');
@@ -142,15 +148,14 @@ async function generateCurrentMonthReport() {
         alert('Your session expired. Please log in again.');
         return;
       }
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const monthStart = `${targetMonth}-01`;
       const response = await fetch('/api/generate-monthly-report', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ clientId, firmId, month: currentMonth }),
+        body: JSON.stringify({ clientId, firmId, month: monthStart }),
       });
 
       if (!response.ok) throw new Error('Failed to generate report');
@@ -174,6 +179,9 @@ async function generateCurrentMonthReport() {
     }));
 
   const isFirmAdmin = userRole === 'firm_admin' || userRole === 'owner';
+  // Accountants generate + download alongside firm admins; only the
+  // bulk-across-all-clients action stays admin-only (lives elsewhere).
+  const canGenerate = isFirmAdmin || userRole === 'accountant';
 
   if (loading) {
     return <div className="p-8 text-gray-500 dark:text-gray-400">Loading reports...</div>;
@@ -191,22 +199,32 @@ async function generateCurrentMonthReport() {
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">{clientName}</p>
           </div>
-          <div className="flex items-center gap-3">
-{isFirmAdmin && (
+          <div className="flex items-center gap-3 flex-wrap">
+{canGenerate && (
               <>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span className="whitespace-nowrap">Month:</span>
+                  <input
+                    type="month"
+                    value={targetMonth}
+                    onChange={(e) => setTargetMonth(e.target.value)}
+                    max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+                    className="px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white text-sm"
+                  />
+                </label>
                 <button
                   onClick={generateComprehensiveReport}
                   disabled={generating}
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  {generating ? "Generating..." : "🤖 AI Comprehensive Report"}
+                  {generating ? "Generating..." : "🤖 AI Comprehensive"}
                 </button>
                 <button
                   onClick={generateCurrentMonthReport}
                   disabled={generating}
                   className="px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  {generating ? "Generating..." : "⚡ Generate This Month"}
+                  {generating ? "Generating..." : "⚡ Generate Monthly"}
                 </button>
               </>
             )}
@@ -226,7 +244,7 @@ async function generateCurrentMonthReport() {
             <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
               Reports are auto-generated at the end of each month
             </p>
-            {isFirmAdmin && (
+            {canGenerate && (
               <button
                 onClick={generateCurrentMonthReport}
                 disabled={generating}
