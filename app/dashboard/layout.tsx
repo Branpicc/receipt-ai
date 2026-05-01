@@ -239,6 +239,20 @@ return (
     <span className="font-medium">Messages</span>
   </Link>
 </li>
+
+<li>
+  <Link
+    href="/dashboard/client/reports"
+    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+      pathname.startsWith('/dashboard/client/reports') || pathname.startsWith('/dashboard/reports/clients')
+        ? 'bg-accent-500 text-white'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+    }`}
+  >
+    <BarChart3 className="w-5 h-5" />
+    <span className="font-medium">My Reports</span>
+  </Link>
+</li>
         </>
       )}
 
