@@ -10,6 +10,7 @@ import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import ClientSelector from "@/components/ClientSelector";
 import { useClientContext } from "@/lib/ClientContext";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
+import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
 
 type UploadProgress = {
   total: number;
@@ -45,6 +46,7 @@ export default function DashboardHomePage() {
     totalAccountants: 0,
   });
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [showUploadOnBehalf, setShowUploadOnBehalf] = useState(false);
 
 const { selectedClient, isFiltered } = useClientContext();
 const [selectedAccountantId, setSelectedAccountantId] = useState<string | null>(null);
@@ -498,6 +500,15 @@ if (userRole === 'client') {
                   <div><div className="font-medium text-gray-900 dark:text-white">Email Inbox</div><div className="text-sm text-gray-500 dark:text-gray-400">Review forwarded receipts</div></div>
                 </Link>
               )}
+              {isAccountant && (
+                <button
+                  onClick={() => setShowUploadOnBehalf(true)}
+                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors text-left"
+                >
+                  <span className="text-2xl">⬆</span>
+                  <div><div className="font-medium text-gray-900 dark:text-white">Upload for Client</div><div className="text-sm text-gray-500 dark:text-gray-400">Submit on their behalf</div></div>
+                </button>
+              )}
             </div>
           </div>
         </>
@@ -579,6 +590,16 @@ if (userRole === 'client') {
             </div>
           </div>
         </>
+      )}
+
+      {showUploadOnBehalf && (
+        <UploadOnBehalfModal
+          onClose={() => setShowUploadOnBehalf(false)}
+          onSuccess={() => {
+            setShowUploadOnBehalf(false);
+            if (userRole) loadStats(userRole);
+          }}
+        />
       )}
     </div>
   );

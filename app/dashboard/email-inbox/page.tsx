@@ -41,6 +41,9 @@ export default function EmailInboxPage() {
   const [emailReceipts, setEmailReceipts] = useState<EmailReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [emailAddress, setEmailAddress] = useState("");
+  const [bannerClient, setBannerClient] = useState<{ id: string; name: string | null; email_alias: string | null; client_code: string | null } | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [nudgingClient, setNudgingClient] = useState(false);
   const { selectedClient, isFiltered } = useClientContext();
   const [selectedEmail, setSelectedEmail] = useState<EmailReceipt | null>(null);
 
@@ -51,7 +54,6 @@ useEffect(() => {
 
 async function loadEmailAddress() {
     try {
-      const firmId = await getMyFirmId();
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return;
 
@@ -60,31 +62,107 @@ async function loadEmailAddress() {
         .select("role, client_id")
         .eq("auth_user_id", authUser.id)
         .single();
+      setUserRole(firmUser?.role || null);
 
+      // Pick which client's address the banner should show.
+      //   - client role: their own client
+      //   - accountant / firm_admin: whichever client is selected via the
+      //     ClientFilterDropdown (selectedClient from context). When none
+      //     is selected we hide the banner since the inbox spans many
+      //     clients and there's no single forwarding address to show.
+      let targetClientId: string | null = null;
       if (firmUser?.role === "client" && firmUser?.client_id) {
-        const { data: client } = await supabase
-          .from("clients")
-          .select("email_alias, client_code")
-          .eq("id", firmUser.client_id)
-          .single();
-        if (client) {
-          const alias = client.email_alias || client.client_code;
-          setEmailAddress(`${alias}@receipts.receipture.ca`);
-        }
+        targetClientId = firmUser.client_id;
+      } else if (isFiltered && selectedClient) {
+        targetClientId = selectedClient.id;
+      }
+
+      if (!targetClientId) {
+        setBannerClient(null);
+        setEmailAddress("");
+        return;
+      }
+
+      const { data: client } = await supabase
+        .from("clients")
+        .select("id, name, email_alias, client_code")
+        .eq("id", targetClientId)
+        .single();
+
+      if (client) {
+        setBannerClient(client);
+        const alias = client.email_alias || client.client_code;
+        setEmailAddress(alias ? `${alias}@receipts.receipture.ca` : "");
       } else {
-        const { data: firm } = await supabase
-          .from("firms")
-          .select("email_ingestion_address")
-          .eq("id", firmId)
-          .single();
-        if (firm?.email_ingestion_address) {
-          setEmailAddress(firm.email_ingestion_address);
-        } else {
-          setEmailAddress(`receipts@receipts.receipture.ca`);
-        }
+        setBannerClient(null);
+        setEmailAddress("");
       }
     } catch (error) {
       console.error("Failed to load email address:", error);
+    }
+  }
+
+  /**
+   * Accountant nudge: when the selected client doesn't have a friendly
+   * email_alias set, send them a message asking them to set one up.
+   * Creates a new conversation + first message so it lands in the
+   * client's Messages inbox immediately.
+   */
+  async function nudgeClientToSetUpEmail() {
+    if (!bannerClient || nudgingClient) return;
+    setNudgingClient(true);
+    try {
+      const firmId = await getMyFirmId();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const { data: senderFirmUser } = await supabase
+        .from("firm_users")
+        .select("display_name, role")
+        .eq("auth_user_id", authUser.id)
+        .single();
+      const senderName = senderFirmUser?.display_name || "Your accountant";
+
+      const subject = "Set up your receipt-forwarding email address";
+      const message =
+        `Hi ${bannerClient.name || "there"} — I'd like you to pick a friendly receipt-forwarding email address ` +
+        `so receipts you forward to Receipture come through under a name you'll recognize.\n\n` +
+        `It takes ten seconds:\n` +
+        `1. Open Settings → Email Forwarding\n` +
+        `2. Type the alias you want (e.g. your business name)\n` +
+        `3. Save\n\n` +
+        `Once it's set, your forwarding address will be <alias>@receipts.receipture.ca and it'll show up here.\n\n` +
+        `— ${senderName}`;
+
+      const { data: convo, error: convoErr } = await supabase
+        .from("conversations")
+        .insert({
+          firm_id: firmId,
+          client_id: bannerClient.id,
+          type: "client",
+          subject,
+          status: "open",
+        })
+        .select()
+        .single();
+      if (convoErr || !convo) throw convoErr || new Error("Conversation create failed");
+
+      const { error: msgErr } = await supabase.from("conversation_messages").insert({
+        conversation_id: convo.id,
+        sender_role: senderFirmUser?.role || "accountant",
+        sender_name: senderName,
+        message,
+        read: false,
+      });
+      if (msgErr) throw msgErr;
+
+      alert(`Nudge sent to ${bannerClient.name || "the client"}. They'll see it in Messages.`);
+    } catch (error) {
+      const msg = (error as { message?: string })?.message || "Failed to send.";
+      console.error("Nudge failed:", error);
+      alert("Couldn't send the nudge: " + msg);
+    } finally {
+      setNudgingClient(false);
     }
   }
   
@@ -522,26 +600,85 @@ const filteredEmails = emailReceipts.filter(email => {
       {/* Client filter — hidden for the `client` role */}
       <ClientFilterDropdown />
 
-      {/* Email Address Display */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-          📧 Your Receipt Email Address
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-          Forward receipts to this address and they'll appear here for review
-        </p>
-        <div className="flex items-center gap-3">
-          <code className="flex-1 bg-white dark:bg-dark-surface px-4 py-3 rounded border border-blue-300 dark:border-blue-700 font-mono text-sm text-gray-900 dark:text-white">
-            {emailAddress || "Loading..."}
-          </code>
-          <button
-            onClick={copyEmail}
-            className="px-4 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-          >
-            Copy
-          </button>
-        </div>
-      </div>
+      {/* Email Address Display — banner shape depends on role + selected client. */}
+      {(() => {
+        const isClientRole = userRole === "client";
+        // No targeted client: accountants/firm_admin haven't picked one,
+        // so there's no single forwarding address to surface. Show a hint.
+        if (!bannerClient) {
+          if (isClientRole) {
+            return (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Loading your forwarding address…</p>
+              </div>
+            );
+          }
+          return (
+            <div className="bg-gray-50 dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-lg p-6 mb-8">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                📧 Receipt forwarding addresses
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Pick a client from the filter above to see their unique forwarding address.
+              </p>
+            </div>
+          );
+        }
+
+        const aliasMissing = !bannerClient.email_alias;
+        const headerName = isClientRole ? "Your" : `${bannerClient.name || "Client"}'s`;
+        return (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              📧 {headerName} Receipt Email Address
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Forward receipts to this address and they&apos;ll appear here for review.
+            </p>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 bg-white dark:bg-dark-surface px-4 py-3 rounded border border-blue-300 dark:border-blue-700 font-mono text-sm text-gray-900 dark:text-white">
+                {emailAddress || "Loading..."}
+              </code>
+              <button
+                onClick={copyEmail}
+                className="px-4 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            {aliasMissing && !isClientRole && (
+              <div className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <span className="text-base flex-shrink-0">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-amber-900 dark:text-amber-200">
+                    {bannerClient.name || "This client"} hasn&apos;t set a friendly alias yet — the address above uses
+                    their auto-generated client code. Send them a quick nudge to set up something readable.
+                  </p>
+                </div>
+                <button
+                  onClick={nudgeClientToSetUpEmail}
+                  disabled={nudgingClient}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg whitespace-nowrap transition-colors"
+                >
+                  {nudgingClient ? "Sending…" : "Ask client to set up"}
+                </button>
+              </div>
+            )}
+            {aliasMissing && isClientRole && (
+              <div className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <span className="text-base flex-shrink-0">⚠️</span>
+                <p className="text-sm text-amber-900 dark:text-amber-200 flex-1">
+                  Your address is using an auto-generated code. Pick a friendly alias in{" "}
+                  <Link href="/dashboard/settings" className="underline font-medium">
+                    Settings → Email Forwarding
+                  </Link>
+                  .
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-dark-border mb-6">

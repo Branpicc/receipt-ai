@@ -64,6 +64,8 @@ export default function CategoryDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<"all" | "month" | "quarter" | "year">("month");
+  // Negative = past months. 0 = current. Only meaningful when dateRange === "month".
+  const [monthOffset, setMonthOffset] = useState<number>(0);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const { selectedClient, isFiltered } = useClientContext();
@@ -76,7 +78,7 @@ export default function CategoryDashboardPage() {
     if (userRole !== null) {
       loadDashboard();
     }
-  }, [dateRange, userRole, clientId, selectedClient]);
+  }, [dateRange, monthOffset, userRole, clientId, selectedClient]);
 
   async function loadUserContext() {
     const role = await getUserRole();
@@ -102,10 +104,17 @@ export default function CategoryDashboardPage() {
       const firmId = await getMyFirmId();
 
       let startDate: string | null = null;
+      let endDate: string | null = null;
       const now = new Date();
 
       if (dateRange === "month") {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        // Target month is now + monthOffset. monthOffset = 0 means the
+        // current month; -1 means last month, etc. Range is the first
+        // millisecond of the target month through the last millisecond.
+        const targetYear = now.getFullYear();
+        const targetMonth = now.getMonth() + monthOffset;
+        startDate = new Date(targetYear, targetMonth, 1).toISOString();
+        endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999).toISOString();
       } else if (dateRange === "quarter") {
         const quarter = Math.floor(now.getMonth() / 3);
         startDate = new Date(now.getFullYear(), quarter * 3, 1).toISOString();
@@ -152,6 +161,9 @@ export default function CategoryDashboardPage() {
       query = query.not("approved_category", "is", null);
       if (startDate) {
         query = query.gte("receipt_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("receipt_date", endDate);
       }
 
       const { data: receiptsData, error: receiptsError } = await query;
@@ -272,20 +284,58 @@ export default function CategoryDashboardPage() {
 
         {/* Date Range Filter */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-4 mb-6 border border-transparent dark:border-dark-border">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             {(["month", "quarter", "year", "all"] as const).map((range) => (
               <button
                 key={range}
-                onClick={() => setDateRange(range)}
+                onClick={() => { setDateRange(range); if (range !== "month") setMonthOffset(0); }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   dateRange === range
                     ? "bg-accent-500 text-white"
                     : "bg-gray-100 dark:bg-dark-hover text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-border"
                 }`}
               >
-                {range === "month" ? "This Month" : range === "quarter" ? "This Quarter" : range === "year" ? "This Year" : "All Time"}
+                {range === "month" ? "Month" : range === "quarter" ? "This Quarter" : range === "year" ? "This Year" : "All Time"}
               </button>
             ))}
+
+            {/* Month stepper — only when "Month" is the active range. */}
+            {dateRange === "month" && (() => {
+              const target = new Date();
+              target.setDate(1);
+              target.setMonth(target.getMonth() + monthOffset);
+              const label = target.toLocaleString("en-CA", { month: "long", year: "numeric" });
+              return (
+                <div className="flex items-center gap-1 ml-2 px-2 py-1 rounded-lg bg-gray-50 dark:bg-dark-hover border border-gray-200 dark:border-dark-border">
+                  <button
+                    onClick={() => setMonthOffset(o => o - 1)}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-dark-border text-gray-700 dark:text-gray-300"
+                    aria-label="Previous month"
+                  >
+                    ◄
+                  </button>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[120px] text-center">
+                    {label}
+                  </span>
+                  <button
+                    onClick={() => setMonthOffset(o => Math.min(0, o + 1))}
+                    disabled={monthOffset >= 0}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-dark-border disabled:opacity-30 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300"
+                    aria-label="Next month"
+                  >
+                    ►
+                  </button>
+                  {monthOffset !== 0 && (
+                    <button
+                      onClick={() => setMonthOffset(0)}
+                      className="ml-1 px-2 py-0.5 text-xs rounded bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 hover:bg-accent-200 dark:hover:bg-accent-900/50"
+                    >
+                      Today
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
