@@ -13,6 +13,7 @@ import {
 type ClientReport = {
   id: string;
   report_month: string;
+  report_type?: "monthly" | "fiscal_year";
   total_spend_cents: number;
   total_tax_cents: number;
   total_receipts: number;
@@ -51,6 +52,7 @@ export default function ClientReportsPage() {
   const [reports, setReports] = useState<ClientReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<ClientReport | null>(null);
   const [clientName, setClientName] = useState("");
+  const [fiscalYearEndMonth, setFiscalYearEndMonth] = useState<number>(12);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -82,13 +84,14 @@ export default function ClientReportsPage() {
         setUserRole(firmUser?.role || null);
       }
 
-      // Get client name
+      // Get client name + fiscal year end month
       const { data: client } = await supabase
         .from('clients')
-        .select('name')
+        .select('name, fiscal_year_end_month')
         .eq('id', clientId)
         .single();
       setClientName(client?.name || 'Client');
+      setFiscalYearEndMonth(client?.fiscal_year_end_month || 12);
 
       // Load all reports for this client
       const { data: reportsData, error } = await supabase
@@ -168,6 +171,58 @@ async function generateCurrentMonthReport() {
     }
   }
 
+  // Default fiscal-year-ending input value: the most recently completed
+  // fiscal year. If we're partway through the current FY (current month
+  // <= fiscal_year_end_month) the most recent COMPLETED one ended in the
+  // previous calendar year; otherwise it ends this calendar year.
+  function defaultFiscalYearEnding(): string {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const completedYear =
+      currentMonth > fiscalYearEndMonth ? now.getFullYear() : now.getFullYear() - 1;
+    return `${completedYear}-${String(fiscalYearEndMonth).padStart(2, "0")}`;
+  }
+  const [fiscalYearEnding, setFiscalYearEnding] = useState<string>(defaultFiscalYearEnding);
+  // Keep the default in sync when fiscalYearEndMonth loads from the DB.
+  useEffect(() => {
+    setFiscalYearEnding(defaultFiscalYearEnding());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fiscalYearEndMonth]);
+
+  async function generateFiscalYearReport() {
+    try {
+      setGenerating(true);
+      const firmId = await getMyFirmId();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Your session expired. Please log in again.');
+        return;
+      }
+      const response = await fetch('/api/generate-fiscal-year-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          clientId,
+          firmId,
+          fiscalYearEnding: `${fiscalYearEnding}-01`,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to generate fiscal year report');
+      }
+      await loadReports();
+      alert('✅ Fiscal year report generated.');
+    } catch (err: any) {
+      alert('Failed: ' + err.message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   // Month-over-month data for bar chart
   const momData = [...reports]
     .reverse()
@@ -226,6 +281,26 @@ async function generateCurrentMonthReport() {
                 >
                   {generating ? "Generating..." : "⚡ Generate Monthly"}
                 </button>
+
+                <span className="hidden md:inline-block w-px h-6 bg-gray-300 dark:bg-dark-border mx-1" />
+
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span className="whitespace-nowrap">FY ending:</span>
+                  <input
+                    type="month"
+                    value={fiscalYearEnding}
+                    onChange={(e) => setFiscalYearEnding(e.target.value)}
+                    className="px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white text-sm"
+                  />
+                </label>
+                <button
+                  onClick={generateFiscalYearReport}
+                  disabled={generating}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                  title={`Aggregates the 12 months ending in month ${fiscalYearEndMonth}. Configure on the client.`}
+                >
+                  {generating ? "Generating..." : "📅 Generate Fiscal Year"}
+                </button>
               </>
             )}
             <Link
@@ -274,11 +349,14 @@ async function generateCurrentMonthReport() {
                           : 'hover:bg-gray-50 dark:hover:bg-dark-hover'
                       }`}
                     >
-                      <div className={`text-sm font-medium ${
+                      <div className={`text-sm font-medium flex items-center gap-1.5 ${
                         selectedReport?.id === report.id
                           ? 'text-accent-700 dark:text-accent-300'
                           : 'text-gray-900 dark:text-white'
                       }`}>
+                        {report.report_type === "fiscal_year" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold">FY</span>
+                        )}
                         {formatMonth(report.report_month)}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
