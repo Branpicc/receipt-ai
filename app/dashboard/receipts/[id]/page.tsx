@@ -8,6 +8,7 @@ import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
 import RequestChangesModal from "@/components/RequestChangesModal";
 import RequestDeletionModal from "@/components/RequestDeletionModal";
+import ReceiptThread from "@/components/ReceiptThread";
 import ReceiptEditSection from "@/components/ReceiptEditSection";
 import CategoryPicker from "@/components/CategoryPicker";
 import { useEditMode } from "@/lib/EditMode";
@@ -328,7 +329,7 @@ async function resolveFlag(flagId: string, note: string) {
     setResolvingFlagId(flagId);
     const { error } = await supabase
       .from("receipt_flags")
-      .update({ 
+      .update({
         resolved_at: new Date().toISOString(),
         resolution_note: note || null,
       })
@@ -341,6 +342,28 @@ async function resolveFlag(flagId: string, note: string) {
     await loadFlags();
     setShowResolveModal(false);
     setResolvingFlag(null);
+
+    // Sprint 9 §4: when every flag on this receipt is resolved AND a
+    // per-receipt thread exists in the open state, auto-close it. The
+    // chat UI will reopen the thread automatically if a new flag fires
+    // later (looks up the most recent of any status).
+    try {
+      const { data: openFlags } = await supabase
+        .from("receipt_flags")
+        .select("id")
+        .eq("receipt_id", receiptId)
+        .is("resolved_at", null)
+        .limit(1);
+      if (!openFlags || openFlags.length === 0) {
+        await supabase
+          .from("conversations")
+          .update({ status: "closed" })
+          .eq("receipt_id", receiptId)
+          .eq("status", "open");
+      }
+    } catch (autoCloseErr) {
+      console.warn("Thread auto-close failed (non-blocking):", autoCloseErr);
+    }
   } finally {
     setResolvingFlagId(null);
   }
@@ -1080,6 +1103,20 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
           taxes={taxes}
           onSaved={() => window.location.reload()}
         />
+
+        {/* Per-receipt chat thread (Sprint 9). Component decides on its
+            own whether to render based on caller role and whether a
+            thread already exists for this receipt. */}
+        <div className="mt-4">
+          <ReceiptThread
+            receiptId={receiptId}
+            clientId={receipt.client_id}
+            vendor={receipt.vendor}
+            receiptDate={receipt.receipt_date}
+            hasUnresolvedFlags={flags.some(f => !f.resolved_at)}
+            hasPurpose={!!(receipt.purpose_text && receipt.purpose_text.trim())}
+          />
+        </div>
 
         {editHistory.length > 0 && (
           <div className="mt-4 rounded-2xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface overflow-hidden">

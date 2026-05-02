@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
@@ -12,9 +13,12 @@ type Conversation = {
   subject: string | null;
   status: "open" | "closed";
   client_id: string | null;
+  receipt_id: string | null;
   created_at: string;
   updated_at: string;
   clients?: { name: string } | null;
+  // Joined receipt info for the per-row "About vendor receipt" badge.
+  receipts?: { vendor: string | null; receipt_date: string | null } | null;
   lastMessage?: string;
   unreadCount?: number;
 };
@@ -128,7 +132,7 @@ if (role === "client" && firmUser?.client_id) {
     try {
       let query = supabase
         .from("conversations")
-        .select("*, clients(name)")
+        .select("*, clients(name), receipts(vendor, receipt_date)")
         .eq("firm_id", firmId)
         .eq("type", activeTab === "clients" ? "client" : "support")
         .eq("status", statusFilter)
@@ -472,6 +476,16 @@ if (activeTab === "support") {
                   {convo.clients?.name && (
                     <div className="text-xs text-accent-600 dark:text-accent-400 mb-1">{convo.clients.name}</div>
                   )}
+                  {convo.receipt_id && convo.receipts && (
+                    <div className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide font-semibold mb-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                      📎 Receipt
+                      {convo.receipts.vendor && (
+                        <span className="normal-case font-medium tracking-normal text-blue-800 dark:text-blue-200 ml-1">
+                          {convo.receipts.vendor}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{convo.lastMessage}</div>
                   <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                     {new Date(convo.updated_at).toLocaleDateString()}
@@ -492,6 +506,22 @@ if (activeTab === "support") {
                   <div className="font-semibold text-gray-900 dark:text-white">{selectedConversation.subject}</div>
                   {selectedConversation.clients?.name && (
                     <div className="text-sm text-accent-600 dark:text-accent-400">{selectedConversation.clients.name}</div>
+                  )}
+                  {selectedConversation.receipt_id && selectedConversation.receipts && (
+                    <Link
+                      href={`/dashboard/receipts/${selectedConversation.receipt_id}`}
+                      className="inline-flex items-center gap-1 text-xs mt-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                    >
+                      📎 Open receipt
+                      {selectedConversation.receipts.vendor && (
+                        <span className="font-medium ml-0.5">— {selectedConversation.receipts.vendor}</span>
+                      )}
+                      {selectedConversation.receipts.receipt_date && (
+                        <span className="text-blue-500 dark:text-blue-400 ml-1">
+                          ({new Date(selectedConversation.receipts.receipt_date).toLocaleDateString("en-CA", { month: "short", day: "numeric" })})
+                        </span>
+                      )}
+                    </Link>
                   )}
                 </div>
 <div className="flex items-center gap-2">

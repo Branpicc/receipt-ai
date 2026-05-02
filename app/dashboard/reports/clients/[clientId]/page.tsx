@@ -745,27 +745,6 @@ async function generateCurrentMonthReport() {
                       <div className="grid grid-cols-2 gap-6">
                         <div className="border border-gray-300 rounded-xl p-5">
                           <h2 className="text-lg font-semibold text-gray-900 mb-3">Spend by Category</h2>
-                          {/* Pie chart with explicit dimensions — recharts
-                              ResponsiveContainer doesn't reliably size in
-                              print, so we use fixed pixel sizing here. */}
-                          <div className="flex justify-center mb-4">
-                            <PieChart width={260} height={200}>
-                              <Pie
-                                data={selectedReport.category_breakdown.map(c => ({
-                                  name: c.category,
-                                  value: c.total_cents / 100,
-                                }))}
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={80}
-                                dataKey="value"
-                              >
-                                {selectedReport.category_breakdown.map((_, i) => (
-                                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                                ))}
-                              </Pie>
-                            </PieChart>
-                          </div>
                           <ul className="text-sm">
                             {selectedReport.category_breakdown.map((cat, i) => (
                               <li key={cat.category} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-b-0">
