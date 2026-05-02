@@ -283,8 +283,8 @@ async function generateCurrentMonthReport() {
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        {/* Header — hidden in print so the PDF starts at the client name. */}
+        <div className="flex items-center justify-between mb-8 print:hidden">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Monthly Reports
@@ -367,10 +367,13 @@ async function generateCurrentMonthReport() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          // Grid collapses to a single column in print so the print-only
+          // block uses the full page width instead of column 4 of 4.
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 print:block">
 
-            {/* Month selector sidebar */}
-            <div className="lg:col-span-1">
+            {/* Month selector sidebar — list of historical reports.
+                Hidden in print since the PDF is for the selected report. */}
+            <div className="lg:col-span-1 print:hidden">
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border overflow-hidden">
                 <div className="p-4 border-b border-gray-200 dark:border-dark-border">
                   <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Reports</h2>
@@ -661,12 +664,15 @@ async function generateCurrentMonthReport() {
                   the browser's print preview. Structured into 4 pages so
                   the output reads cleanly when saved as PDF. */}
               {(() => {
-                // Find the two reports immediately preceding the
-                // selected one (chronologically — `reports` is sorted
-                // descending by report_month). Used for the M-o-M chart.
+                // Build the month-over-month series: the selected report
+                // plus the two reports immediately preceding it. `reports`
+                // is sorted DESC by report_month, so prior ones are at
+                // higher indices than the selected one. Reverse for
+                // chart-friendly chronological order.
                 const idx = reports.findIndex(r => r.id === selectedReport.id);
                 const priorReports = idx >= 0 ? reports.slice(idx + 1, idx + 3) : [];
-                const momPrintData = [...priorReports]
+                const trio = [selectedReport, ...priorReports];
+                const momPrintData = [...trio]
                   .reverse()
                   .map(r => ({
                     label: new Date(r.report_month).toLocaleDateString("en-CA", { month: "short", year: "numeric" }),
@@ -739,6 +745,27 @@ async function generateCurrentMonthReport() {
                       <div className="grid grid-cols-2 gap-6">
                         <div className="border border-gray-300 rounded-xl p-5">
                           <h2 className="text-lg font-semibold text-gray-900 mb-3">Spend by Category</h2>
+                          {/* Pie chart with explicit dimensions — recharts
+                              ResponsiveContainer doesn't reliably size in
+                              print, so we use fixed pixel sizing here. */}
+                          <div className="flex justify-center mb-4">
+                            <PieChart width={260} height={200}>
+                              <Pie
+                                data={selectedReport.category_breakdown.map(c => ({
+                                  name: c.category,
+                                  value: c.total_cents / 100,
+                                }))}
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={80}
+                                dataKey="value"
+                              >
+                                {selectedReport.category_breakdown.map((_, i) => (
+                                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                                ))}
+                              </Pie>
+                            </PieChart>
+                          </div>
                           <ul className="text-sm">
                             {selectedReport.category_breakdown.map((cat, i) => (
                               <li key={cat.category} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-b-0">
@@ -789,47 +816,28 @@ async function generateCurrentMonthReport() {
                       </div>
                     </section>
 
-                    {/* PAGE 3 — Month-over-month spending (the two months
-                         immediately preceding the report's month). */}
-                    <section className={selectedReport.ai_summary ? "break-after-page" : ""}>
+                    {/* PAGE 3 — Month-over-month bar chart (selected
+                         month plus the two preceding months) and the
+                         AI Comprehensive Report stacked together since
+                         neither fills a page on its own. */}
+                    <section className="space-y-6">
                       <div className="border border-gray-300 rounded-xl p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-3">Spending in the Two Months Before This Report</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-3">Month-over-Month Spending</h2>
                         {momPrintData.length === 0 ? (
-                          <p className="text-sm text-gray-500">No prior reports on file for this client yet.</p>
+                          <p className="text-sm text-gray-500">No reports on file for this client yet.</p>
                         ) : (
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-                                <th className="py-2">Month</th>
-                                <th className="py-2 text-right">Total Spend</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {momPrintData.map(d => {
-                                const max = Math.max(...momPrintData.map(x => x.spend), 1);
-                                const widthPct = Math.round((d.spend / max) * 100);
-                                return (
-                                  <tr key={d.label} className="border-b border-gray-100 last:border-b-0">
-                                    <td className="py-3 text-gray-900">{d.label}</td>
-                                    <td className="py-3 text-right text-gray-900 font-semibold">${d.spend.toFixed(2)}</td>
-                                    <td className="py-3 pl-4 w-[40%]">
-                                      <div className="w-full bg-gray-200 rounded-full h-2">
-                                        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${widthPct}%` }} />
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                          <div className="flex justify-center">
+                            <BarChart width={520} height={240} data={momPrintData} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#374151" }} stroke="#9ca3af" />
+                              <YAxis tick={{ fontSize: 12, fill: "#374151" }} stroke="#9ca3af" tickFormatter={(v) => `$${v}`} />
+                              <Bar dataKey="spend" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </div>
                         )}
                       </div>
-                    </section>
 
-                    {/* PAGE 4 — AI summary (only when one was generated;
-                         monthly reports without it just stop at page 3). */}
-                    {selectedReport.ai_summary && (
-                      <section>
+                      {selectedReport.ai_summary && (
                         <div className="border border-gray-300 rounded-xl p-5">
                           <h2 className="text-lg font-semibold text-gray-900 mb-3">AI Comprehensive Report</h2>
                           <div
@@ -845,8 +853,8 @@ async function generateCurrentMonthReport() {
                             }}
                           />
                         </div>
-                      </section>
-                    )}
+                      )}
+                    </section>
                   </div>
                 );
               })()}
