@@ -123,9 +123,9 @@ return (
   <ClientProvider userRole={userRole}>
     <OnboardingWrapper>
             <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
-        {/* Sidebar */}
+        {/* Sidebar — print:hidden so PDF exports get the full page width */}
         <aside
-          className={`bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border transition-all duration-300 ${
+          className={`print:hidden bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border transition-all duration-300 ${
             sidebarOpen ? "w-64" : "w-20"
           }`}
         >
@@ -743,11 +743,13 @@ href="/dashboard/reports/clients"
         {/* Main Content */}
         <main className="flex-1 overflow-auto relative">
           {/* Notification Bell - Top Right */}
-          <div className="absolute top-4 right-8 z-40">
+          <div className="print:hidden absolute top-4 right-8 z-40">
             <NotificationBell />
           </div>
 
-          <EmailVerifyBanner />
+          <div className="print:hidden">
+            <EmailVerifyBanner />
+          </div>
 
           {children}
 
