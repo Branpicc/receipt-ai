@@ -286,9 +286,17 @@ export default function DailyCheckinRunner() {
       return;
     }
 
-    // No more in the queue. In continue mode try to extend it with
-    // the next batch of oldest-uncategorized; if there are none left
-    // we wrap up.
+    // No more in the queue. In normal mode we DON'T auto-jump to the
+    // email step — the user clicks the "Done with receipts" button in
+    // the widget to advance. We just bump index to queue.length so the
+    // widget renders the wrap-up prompt.
+    if (!state.continueMode) {
+      setState({ ...state, index: nextIndex });
+      return;
+    }
+
+    // Continue mode: try to extend the queue with the next batch of
+    // oldest-uncategorized; if there are none left we wrap up.
     if (state.continueMode && firmId) {
       try {
         const assignedIds = await getAssignedClientIds(firmId);
@@ -417,10 +425,13 @@ export default function DailyCheckinRunner() {
   }
 
   // running
-  const total = state.queue.length || 1;
   const stepNum =
     state.step === "receipts" ? 1 : state.step === "emails" ? 2 : 3;
   const inContinueMode = !!state.continueMode;
+  // Normal mode + receipts step + we've passed the end of the queue
+  // = waiting for the user to click "Done with receipts" to advance.
+  const receiptsPhaseComplete =
+    state.step === "receipts" && !inContinueMode && state.index >= state.queue.length;
 
   return (
     <FloatingCard>
@@ -430,17 +441,25 @@ export default function DailyCheckinRunner() {
           <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-0.5">
             {inContinueMode ? "Continue check-in" : `Daily check-in · Step ${stepNum} of 3`}
           </div>
-          {state.step === "receipts" && state.queue.length > 0 && (
+          {state.step === "receipts" && state.queue.length > 0 && !receiptsPhaseComplete && (
             <>
               <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                {inContinueMode
-                  ? `Receipt #${state.index + 1}`
-                  : `Categorize this receipt (${state.index + 1} of ${total})`}
+                Receipt #{state.index + 1}
               </div>
               <div className="text-xs text-gray-600 dark:text-gray-400">
                 {inContinueMode
                   ? "Set category + purpose. Click Save and we'll fetch the next."
                   : "Set the category and purpose, then click Save."}
+              </div>
+            </>
+          )}
+          {receiptsPhaseComplete && (
+            <>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                Receipts done — ready for next task?
+              </div>
+              <div className="text-xs text-gray-600 dark:text-gray-400">
+                Move on to the email inbox when you&apos;re ready.
               </div>
             </>
           )}
@@ -485,13 +504,24 @@ export default function DailyCheckinRunner() {
                 Finish check-in
               </button>
             )}
-            {state.step === "receipts" && state.queue.length > 0 && pathname !== `/dashboard/receipts/${state.queue[state.index]}` && (
+            {state.step === "receipts" && state.queue.length > 0 && !receiptsPhaseComplete && pathname !== `/dashboard/receipts/${state.queue[state.index]}` && (
               <Link
                 href={`/dashboard/receipts/${state.queue[state.index]}`}
                 className="text-xs px-3 py-1.5 bg-accent-600 hover:bg-accent-700 text-white rounded-lg font-medium"
               >
                 Open receipt
               </Link>
+            )}
+            {receiptsPhaseComplete && state.kind === "running" && (
+              <button
+                onClick={() => {
+                  setState({ ...state, step: "emails" });
+                  router.push("/dashboard/email-inbox");
+                }}
+                className="text-xs px-3 py-1.5 bg-accent-600 hover:bg-accent-700 text-white rounded-lg font-medium flex items-center gap-1"
+              >
+                Done with receipts <ChevronRight className="w-3 h-3" />
+              </button>
             )}
             {inContinueMode && state.step === "receipts" && (
               <button
