@@ -911,7 +911,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-center text-sm text-gray-400 mt-8">
-            All plans include a 14-day free trial. No credit card required.
+            All plans include a 7-day free trial. No credit card required.
           </p>
         </div>
       </section>

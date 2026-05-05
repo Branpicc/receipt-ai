@@ -22,8 +22,8 @@ const plans: Plan[] = [
   {
     name: "Starter",
     tier: "starter",
-    price: "$49",
-    priceMonthly: 49,
+    price: "$199",
+    priceMonthly: 199,
     description: "Perfect for small firms getting started",
     clients: "Up to 5 clients",
     users: "1 accountant seat",
@@ -41,8 +41,8 @@ const plans: Plan[] = [
   {
     name: "Professional",
     tier: "professional",
-    price: "$199",
-    priceMonthly: 199,
+    price: "$249",
+    priceMonthly: 249,
     description: "For growing firms with more clients",
     clients: "Up to 20 clients",
     users: "3 accountant seats",
@@ -230,7 +230,7 @@ export default function BillingPage() {
               <div>
                 <p className="font-semibold text-green-900 dark:text-green-100 text-lg">
                   Current Plan: <span className="capitalize">{currentPlan}</span>
-                  {isTrialing && <span className="ml-2 text-sm font-normal text-green-700 dark:text-green-300">— 14-day trial</span>}
+                  {isTrialing && <span className="ml-2 text-sm font-normal text-green-700 dark:text-green-300">— 7-day trial</span>}
                 </p>
                 <p className="text-sm text-green-700 dark:text-green-300 mt-1">
                   {isActive ? "Your subscription is active" : "Subscription inactive — please update payment method"}
@@ -269,7 +269,7 @@ export default function BillingPage() {
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <p className="font-semibold text-accent-900 dark:text-accent-100 text-lg">
-                  Start your 14-day free trial
+                  Start your 7-day free trial
                 </p>
                 <p className="text-sm text-accent-700 dark:text-accent-300 mt-1">
                   Full Professional access — no credit card required
