@@ -2,7 +2,7 @@
 
 import { JSX, useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
@@ -78,6 +78,9 @@ type ReceiptFlag = {
 
 export default function ReceiptDetailPage(): JSX.Element {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const cameFromFlags = searchParams?.get("from") === "flags";
   const receiptId = (params?.id as string) || "";
 
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -363,6 +366,13 @@ async function resolveFlag(flagId: string, note: string) {
       }
     } catch (autoCloseErr) {
       console.warn("Thread auto-close failed (non-blocking):", autoCloseErr);
+    }
+
+    // If the user arrived via /dashboard/flags ("?from=flags"), bounce
+    // them back to the flags page after a successful resolve so they
+    // don't have to navigate manually.
+    if (cameFromFlags) {
+      router.push("/dashboard/flags");
     }
   } finally {
     setResolvingFlagId(null);

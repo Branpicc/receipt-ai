@@ -153,11 +153,13 @@ export default function DailyCheckinRunner() {
   }, [firmId, accountantId]);
 
   // ── Start: load the queue, write started_at, navigate to receipt #1.
-  const start = useCallback(async () => {
+  // `clientFilter` (optional) narrows the queue to a single client when
+  // the accountant wants to focus on one specifically.
+  const start = useCallback(async (clientFilter?: string | null) => {
     if (!firmId || !accountantId) return;
     setState({ kind: "loading-queue" });
     try {
-      // Accountant scope — assigned clients only.
+      // Accountant scope — assigned clients only (or just one if filtered).
       const assignedIds = await getAssignedClientIds(firmId);
       if (assignedIds === null) {
         // Shouldn't happen for accountant role.
@@ -169,12 +171,15 @@ export default function DailyCheckinRunner() {
         setState({ kind: "idle" });
         return;
       }
+      const scopedIds = clientFilter && assignedIds.includes(clientFilter)
+        ? [clientFilter]
+        : assignedIds;
       // 3 oldest receipts where approved_category OR purpose_text is missing.
       const { data: receiptRows } = await supabase
         .from("receipts")
         .select("id, approved_category, purpose_text, receipt_date, created_at")
         .eq("firm_id", firmId)
-        .in("client_id", assignedIds)
+        .in("client_id", scopedIds)
         .or("approved_category.is.null,purpose_text.is.null")
         .order("receipt_date", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true })
@@ -217,6 +222,10 @@ export default function DailyCheckinRunner() {
   const finish = useCallback(async () => {
     await upsertCompletion({ step: "done", completed_at: new Date().toISOString() });
     setState({ kind: "done" });
+    if (typeof window !== "undefined") {
+      // Tell the dashboard card to refresh and flip into "done" state.
+      window.dispatchEvent(new Event("daily-checkin:state-changed"));
+    }
     router.push("/dashboard");
   }, [router, upsertCompletion]);
 
@@ -245,13 +254,16 @@ export default function DailyCheckinRunner() {
   }, [state, router, upsertCompletion]);
 
   // ── Listen for window events:
-  //   daily-checkin:start        → kick off the run (from dashboard button)
+  //   daily-checkin:start        → kick off the run (from dashboard button).
+  //                                Detail may carry { clientId } to narrow
+  //                                the queue to a single client.
   //   daily-checkin:receipt-done → advance to next item (from receipt page)
   useEffect(() => {
-    function onStart() {
+    function onStart(ev: Event) {
       // Don't restart if already running.
       if (state.kind === "running" || state.kind === "loading-queue") return;
-      start();
+      const detail = (ev as CustomEvent<{ clientId?: string | null }>).detail;
+      start(detail?.clientId ?? null);
     }
     function onReceiptDone(ev: Event) {
       // Only advance when the saved receipt is the runner's current
