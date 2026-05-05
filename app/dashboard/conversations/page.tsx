@@ -604,26 +604,47 @@ if (activeTab === "support") {
                 </div>
               )}
 
-              {/* Message input */}
-              <div className="p-4 border-t border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface">
-                <div className="flex gap-3">
-                  <textarea
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder="Type a message... (Enter to send)"
-                    rows={2}
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-xl text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-accent-500"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    disabled={sending || !newMessage.trim() || aiThinking}
-                    className="px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
-                  >
-                    {sending ? "..." : "Send"}
-                  </button>
-                </div>
-              </div>
+              {/* Message input. Receipt-anchored threads are read-only
+                  for firm_admin / owner per the visibility rule — they
+                  see the discussion between the assigned accountant and
+                  the client but can't post directly; they nudge the
+                  accountant via a separate thread instead. */}
+              {(() => {
+                const isReceiptAnchored = !!selectedConversation.receipt_id;
+                const lockedForAdmin =
+                  isReceiptAnchored && (userRole === "firm_admin" || userRole === "owner");
+                if (lockedForAdmin) {
+                  return (
+                    <div className="p-4 border-t border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-bg">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                        This thread is between the client and their assigned accountant. You can read
+                        but not post directly — message the accountant if you need to weigh in.
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="p-4 border-t border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface">
+                    <div className="flex gap-3">
+                      <textarea
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                        placeholder="Type a message... (Enter to send)"
+                        rows={2}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-xl text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-accent-500"
+                      />
+                      <button
+                        onClick={sendMessage}
+                        disabled={sending || !newMessage.trim() || aiThinking}
+                        className="px-4 py-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
+                      >
+                        {sending ? "..." : "Send"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">

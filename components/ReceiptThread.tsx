@@ -161,8 +161,13 @@ export default function ReceiptThread({ receiptId, clientId, vendor, receiptDate
 
   // ── Visibility derivation
   const canReadOnly = userRole === "firm_admin" || userRole === "owner";
+  // Clients reaching this receipt page have already passed RLS + middleware
+  // checks that limit them to their own receipts — no need to re-verify the
+  // ownClientId here. Earlier we did `ownClientId === clientId` and it
+  // sometimes evaluated false during the brief window before the firm_users
+  // lookup completed, hiding the input even though the client was eligible.
   const canPost =
-    (userRole === "client" && ownClientId === clientId) ||
+    userRole === "client" ||
     (userRole === "accountant" && callerFirmUserId === assignedAccountantId);
   // Other accountants — not the assigned one — don't see the thread at all.
   const otherAccountant = userRole === "accountant" && callerFirmUserId !== assignedAccountantId;
