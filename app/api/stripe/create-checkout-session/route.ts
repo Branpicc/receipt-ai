@@ -69,11 +69,21 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/billing?canceled=true`,
       metadata: { firmId: firm.id },
       client_reference_id: firm.id,
-      // 7-day trial on first subscription
+      // 7-day trial on first subscription.
       subscription_data: {
         trial_period_days: 7,
         metadata: { firmId: firm.id },
       },
+      // Stripe Tax — calculates GST/HST/PST automatically based on the
+      // customer's province at checkout. Requires Stripe Tax to be
+      // enabled in Dashboard → Settings → Tax, and each Price's Product
+      // to carry the SaaS tax code (txcd_10000000).
+      automatic_tax: { enabled: true },
+      // Required for automatic_tax: collect the customer's billing address.
+      billing_address_collection: 'required',
+      // Allow the customer to provide a tax-exempt ID number (some
+      // corporate clients have one).
+      tax_id_collection: { enabled: true },
     };
 
     if (firm.stripe_customer_id) {

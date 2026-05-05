@@ -57,7 +57,7 @@ export default function LandingPage() {
   const plans = [
     {
       name: "Starter",
-      price: billingInterval === "annual" ? "$41" : "$49",
+      price: billingInterval === "annual" ? "$165" : "$199",
       period: "/mo",
       description: "Perfect for small firms getting started",
       clients: "Up to 5 clients",
@@ -77,7 +77,7 @@ export default function LandingPage() {
     },
     {
       name: "Professional",
-      price: billingInterval === "annual" ? "$166" : "$199",
+      price: billingInterval === "annual" ? "$207" : "$249",
       period: "/mo",
       description: "For growing firms with more clients",
       clients: "Up to 20 clients",
@@ -98,7 +98,7 @@ export default function LandingPage() {
     },
     {
       name: "Enterprise",
-      price: billingInterval === "annual" ? "$291" : "$349",
+      price: billingInterval === "annual" ? "$290" : "$349",
       period: "/mo",
       description: "For large firms with complex needs",
       clients: "Unlimited clients",
@@ -849,7 +849,7 @@ export default function LandingPage() {
 <div className="flex items-baseline gap-2 mb-1 flex-wrap">
                   {billingInterval === "annual" && (
                     <span className={`text-2xl font-medium line-through ${plan.highlighted ? "text-blue-300" : "text-gray-400"}`}>
-                      {plan.name === "Starter" ? "$49" : plan.name === "Professional" ? "$199" : "$349"}
+                      {plan.name === "Starter" ? "$199" : plan.name === "Professional" ? "$249" : "$349"}
                     </span>
                   )}
                   <span className={`text-5xl font-bold ${plan.highlighted ? "text-white" : "text-gray-900"}`} style={{ fontFamily: "'Playfair Display', serif" }}>
@@ -860,13 +860,16 @@ export default function LandingPage() {
                 {billingInterval === "annual" && (
                   <>
                     <div className={`text-sm font-semibold mb-1 ${plan.highlighted ? "text-blue-100" : "text-gray-700"}`}>
-                      Billed as ${plan.name === "Starter" ? "492" : plan.name === "Professional" ? "1,992" : "3,492"}/year
+                      Billed as ${plan.name === "Starter" ? "1,982" : plan.name === "Professional" ? "2,480" : "3,476"}/year
                     </div>
                     <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-green-300" : "text-green-600"}`}>
-                      Save ${plan.name === "Starter" ? "96" : plan.name === "Professional" ? "396" : "696"}/year vs monthly
+                      Save ${plan.name === "Starter" ? "406" : plan.name === "Professional" ? "508" : "712"}/year vs monthly
                     </div>
                   </>
                 )}
+                <div className={`text-xs mb-2 ${plan.highlighted ? "text-blue-200" : "text-gray-500"}`}>
+                  + applicable tax (GST/HST/PST)
+                </div>
                                 <p className={`text-sm mb-2 ${plan.highlighted ? "text-blue-100" : "text-gray-500"}`}>{plan.description}</p>
                 <div className={`text-xs font-medium mb-1 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.clients}</div>
                 <div className={`text-xs font-medium mb-6 ${plan.highlighted ? "text-blue-200" : "text-blue-600"}`}>{plan.users}</div>
