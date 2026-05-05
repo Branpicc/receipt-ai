@@ -43,6 +43,15 @@ type RunnerState =
       // navigation doesn't double-fire.
       emailsDone: boolean;
       flagsDone: boolean;
+      // Continue mode — fired by "Still want to do more?" after a
+      // completed daily check-in. In this mode the receipts step is
+      // unbounded: each completed receipt fetches the next-oldest, and
+      // the user wraps up on their own with the Finish button. The
+      // emails / flags steps are skipped entirely.
+      continueMode?: boolean;
+      // For continue mode — the optional client filter to keep applying
+      // when the queue auto-extends.
+      clientFilter?: string | null;
     }
   | { kind: "done" };
 
@@ -83,12 +92,26 @@ function loadPersistedState(): RunnerState {
 function persistState(state: RunnerState) {
   if (typeof window === "undefined") return;
   try {
+    // Idle state = no run in progress. Skip writing so we don't trample
+    // the localStorage entry on mount before the runner has had a
+    // chance to read the persisted in-progress state. Terminal states
+    // (cancel, finish) clear the entry explicitly.
+    if (state.kind === "idle") return;
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({ ...state, savedDate: todayISO() })
     );
   } catch {
     // Quota / privacy mode — silently ignore.
+  }
+}
+
+function clearPersistedState() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -155,7 +178,9 @@ export default function DailyCheckinRunner() {
   // ── Start: load the queue, write started_at, navigate to receipt #1.
   // `clientFilter` (optional) narrows the queue to a single client when
   // the accountant wants to focus on one specifically.
-  const start = useCallback(async (clientFilter?: string | null) => {
+  // `continueMode` (optional) — fired by "Still want to do more?" — the
+  // receipts step becomes unbounded and email / flags steps are skipped.
+  const start = useCallback(async (clientFilter?: string | null, continueMode?: boolean) => {
     if (!firmId || !accountantId) return;
     setState({ kind: "loading-queue" });
     try {
@@ -174,7 +199,9 @@ export default function DailyCheckinRunner() {
       const scopedIds = clientFilter && assignedIds.includes(clientFilter)
         ? [clientFilter]
         : assignedIds;
-      // 3 oldest receipts where approved_category OR purpose_text is missing.
+      // Receipts where approved_category OR purpose_text is missing.
+      // Fixed first 3 in normal mode; in continue mode we still seed
+      // with one batch and grow the queue as the user works through it.
       const { data: receiptRows } = await supabase
         .from("receipts")
         .select("id, approved_category, purpose_text, receipt_date, created_at")
@@ -183,13 +210,19 @@ export default function DailyCheckinRunner() {
         .or("approved_category.is.null,purpose_text.is.null")
         .order("receipt_date", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true })
-        .limit(3);
+        .limit(continueMode ? 25 : 3);
       const queue = (receiptRows || []).map(r => r.id);
 
       await upsertCompletion({ step: "running", started_at: new Date().toISOString() });
 
       if (queue.length === 0) {
-        // Skip straight to the email step — no receipts need work.
+        if (continueMode) {
+          alert("All caught up — no more receipts need attention right now.");
+          setState({ kind: "done" });
+          router.push("/dashboard");
+          return;
+        }
+        // Normal mode: skip to the email step — no receipts need work.
         setState({
           kind: "running",
           step: "emails",
@@ -209,6 +242,8 @@ export default function DailyCheckinRunner() {
         index: 0,
         emailsDone: false,
         flagsDone: false,
+        continueMode: !!continueMode,
+        clientFilter: clientFilter ?? null,
       });
       router.push(`/dashboard/receipts/${queue[0]}`);
     } catch (err) {
@@ -221,6 +256,7 @@ export default function DailyCheckinRunner() {
   // ── End: write completed_at and clear local state.
   const finish = useCallback(async () => {
     await upsertCompletion({ step: "done", completed_at: new Date().toISOString() });
+    clearPersistedState();
     setState({ kind: "done" });
     if (typeof window !== "undefined") {
       // Tell the dashboard card to refresh and flip into "done" state.
@@ -231,6 +267,7 @@ export default function DailyCheckinRunner() {
 
   const cancel = useCallback(async () => {
     await upsertCompletion({ step: "idle" });
+    clearPersistedState();
     setState({ kind: "idle" });
   }, [upsertCompletion]);
 
@@ -246,12 +283,56 @@ export default function DailyCheckinRunner() {
     if (nextIndex < state.queue.length) {
       setState({ ...state, index: nextIndex });
       router.push(`/dashboard/receipts/${state.queue[nextIndex]}`);
-    } else {
-      // Done with receipts → emails step.
-      setState({ ...state, step: "emails" });
-      router.push("/dashboard/email-inbox");
+      return;
     }
-  }, [state, router, upsertCompletion]);
+
+    // No more in the queue. In continue mode try to extend it with
+    // the next batch of oldest-uncategorized; if there are none left
+    // we wrap up.
+    if (state.continueMode && firmId) {
+      try {
+        const assignedIds = await getAssignedClientIds(firmId);
+        if (assignedIds && assignedIds.length > 0) {
+          const scopedIds = state.clientFilter && assignedIds.includes(state.clientFilter)
+            ? [state.clientFilter]
+            : assignedIds;
+          const { data: more } = await supabase
+            .from("receipts")
+            .select("id")
+            .eq("firm_id", firmId)
+            .in("client_id", scopedIds)
+            .or("approved_category.is.null,purpose_text.is.null")
+            .not("id", "in", `(${state.queue.join(",")})`)
+            .order("receipt_date", { ascending: true, nullsFirst: false })
+            .order("created_at", { ascending: true })
+            .limit(25);
+          const moreIds = (more || []).map(r => r.id);
+          if (moreIds.length > 0) {
+            const newQueue = [...state.queue, ...moreIds];
+            setState({ ...state, queue: newQueue, index: nextIndex });
+            router.push(`/dashboard/receipts/${moreIds[0]}`);
+            return;
+          }
+        }
+        // No more — finish up.
+        alert("All caught up — nice work.");
+        await upsertCompletion({ step: "done", completed_at: new Date().toISOString() });
+        clearPersistedState();
+        setState({ kind: "done" });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("daily-checkin:state-changed"));
+        }
+        router.push("/dashboard");
+      } catch (err) {
+        console.warn("[DailyCheckinRunner] continue-extend failed:", err);
+      }
+      return;
+    }
+
+    // Normal mode: done with receipts → emails step.
+    setState({ ...state, step: "emails" });
+    router.push("/dashboard/email-inbox");
+  }, [state, router, upsertCompletion, firmId]);
 
   // ── Listen for window events:
   //   daily-checkin:start        → kick off the run (from dashboard button).
@@ -262,8 +343,8 @@ export default function DailyCheckinRunner() {
     function onStart(ev: Event) {
       // Don't restart if already running.
       if (state.kind === "running" || state.kind === "loading-queue") return;
-      const detail = (ev as CustomEvent<{ clientId?: string | null }>).detail;
-      start(detail?.clientId ?? null);
+      const detail = (ev as CustomEvent<{ clientId?: string | null; continueMode?: boolean }>).detail;
+      start(detail?.clientId ?? null, !!detail?.continueMode);
     }
     function onReceiptDone(ev: Event) {
       // Only advance when the saved receipt is the runner's current
@@ -339,6 +420,7 @@ export default function DailyCheckinRunner() {
   const total = state.queue.length || 1;
   const stepNum =
     state.step === "receipts" ? 1 : state.step === "emails" ? 2 : 3;
+  const inContinueMode = !!state.continueMode;
 
   return (
     <FloatingCard>
@@ -346,15 +428,19 @@ export default function DailyCheckinRunner() {
         <Sparkles className="w-4 h-4 text-accent-600 mt-1 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-0.5">
-            Daily check-in · Step {stepNum} of 3
+            {inContinueMode ? "Continue check-in" : `Daily check-in · Step ${stepNum} of 3`}
           </div>
           {state.step === "receipts" && state.queue.length > 0 && (
             <>
               <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                Categorize this receipt ({state.index + 1} of {total})
+                {inContinueMode
+                  ? `Receipt #${state.index + 1}`
+                  : `Categorize this receipt (${state.index + 1} of ${total})`}
               </div>
               <div className="text-xs text-gray-600 dark:text-gray-400">
-                Set the category and purpose, then click Save.
+                {inContinueMode
+                  ? "Set category + purpose. Click Save and we'll fetch the next."
+                  : "Set the category and purpose, then click Save."}
               </div>
             </>
           )}
@@ -407,11 +493,19 @@ export default function DailyCheckinRunner() {
                 Open receipt
               </Link>
             )}
+            {inContinueMode && state.step === "receipts" && (
+              <button
+                onClick={finish}
+                className="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
+              >
+                Finish for now
+              </button>
+            )}
             <button
               onClick={cancel}
               className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
             >
-              Skip for today
+              {inContinueMode ? "Stop" : "Skip for today"}
             </button>
           </div>
         </div>

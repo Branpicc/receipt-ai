@@ -2,7 +2,7 @@
 
 import { JSX, useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { categorizeReceipt } from "@/lib/categorizeReceipt";
 import { detectLineItemMismatches } from "@/lib/detectLineItemMismatches";
 import { getUserRole } from "@/lib/getUserRole";
@@ -79,8 +79,10 @@ type ReceiptFlag = {
 export default function ReceiptDetailPage(): JSX.Element {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const cameFromFlags = searchParams?.get("from") === "flags";
+  // Note: we intentionally read the URL inside resolveFlag at call time
+  // (not via a useSearchParams closure) so the bounce-back works
+  // reliably regardless of how the hook resolves on first render. See
+  // resolveFlag below.
   const receiptId = (params?.id as string) || "";
 
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -370,9 +372,13 @@ async function resolveFlag(flagId: string, note: string) {
 
     // If the user arrived via /dashboard/flags ("?from=flags"), bounce
     // them back to the flags page after a successful resolve so they
-    // don't have to navigate manually.
-    if (cameFromFlags) {
-      router.push("/dashboard/flags");
+    // don't have to navigate manually. Read the URL fresh here so we
+    // don't depend on any potentially-stale hook closure.
+    if (typeof window !== "undefined") {
+      const fromParam = new URLSearchParams(window.location.search).get("from");
+      if (fromParam === "flags") {
+        router.push("/dashboard/flags");
+      }
     }
   } finally {
     setResolvingFlagId(null);

@@ -122,10 +122,10 @@ export default function DailyCheckinDashboardCard() {
   if (loading) return null;
   if (isWeekend()) return null;
 
-  function startRun() {
+  function startRun(continueMode = false) {
     window.dispatchEvent(
       new CustomEvent("daily-checkin:start", {
-        detail: { clientId: selectedClientId || null },
+        detail: { clientId: selectedClientId || null, continueMode },
       })
     );
   }
@@ -157,7 +157,7 @@ export default function DailyCheckinDashboardCard() {
                 </select>
               )}
               <button
-                onClick={startRun}
+                onClick={() => startRun(true)}
                 className="px-4 py-2 bg-white text-green-700 hover:bg-green-50 text-sm font-semibold rounded-lg transition-colors"
               >
                 Still want to do more? →
@@ -192,7 +192,7 @@ export default function DailyCheckinDashboardCard() {
               </select>
             )}
             <button
-              onClick={startRun}
+              onClick={() => startRun(false)}
               className="px-4 py-2 bg-white text-accent-700 hover:bg-accent-50 text-sm font-semibold rounded-lg transition-colors"
             >
               Start check-in →
