@@ -8,6 +8,7 @@ import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
 import SidebarTour from "@/components/SidebarTour";
+import DailyCheckinRunner from "@/components/DailyCheckinRunner";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { ClientProvider } from "@/lib/ClientContext";
 import { EditModeProvider } from "@/lib/EditMode";
@@ -754,6 +755,7 @@ href="/dashboard/reports/clients"
           {children}
 
           <SidebarTour />
+          <DailyCheckinRunner />
         </main>
       </div>
     </OnboardingWrapper>

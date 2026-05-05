@@ -11,6 +11,7 @@ import ClientSelector from "@/components/ClientSelector";
 import { useClientContext } from "@/lib/ClientContext";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
+import DailyCheckinAdminPanel from "@/components/DailyCheckinAdminPanel";
 
 type UploadProgress = {
   total: number;
@@ -469,6 +470,38 @@ if (userRole === 'client') {
               </div>
             </div>
           </div>
+
+          {/* Daily check-in admin panel — firm_admin / owner only. Lists
+              every accountant's status today and a rolling-window
+              leaderboard of receipts categorized. */}
+          {isFirmAdmin && (
+            <div className="mb-6">
+              <DailyCheckinAdminPanel />
+            </div>
+          )}
+
+          {/* Daily check-in launcher — accountants only. The
+              DailyCheckinRunner overlay (mounted in the layout) handles
+              the actual flow once they click Start. */}
+          {isAccountant && (
+            <div className="mb-6 bg-gradient-to-br from-accent-500 to-accent-700 dark:from-accent-600 dark:to-accent-800 rounded-lg shadow-sm p-6 text-white">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">⏱️</div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold">5-minute daily check-in</h3>
+                  <p className="text-sm text-accent-50 mb-4">
+                    Knock out 3 receipts, glance at the email inbox, review any flags. We&apos;ll guide you through it.
+                  </p>
+                  <button
+                    onClick={() => window.dispatchEvent(new Event("daily-checkin:start"))}
+                    className="px-4 py-2 bg-white text-accent-700 hover:bg-accent-50 text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    Start check-in →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">

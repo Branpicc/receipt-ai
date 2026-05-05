@@ -493,6 +493,24 @@ const isFirmAdmin = userRole === "firm_admin";
     }
   }, [receipt?.purpose_text]);
 
+  // Daily check-in: broadcast a "receipt done" ping whenever this
+  // receipt has both approved_category and purpose_text set. The
+  // DailyCheckinRunner overlay (mounted in dashboard layout) only
+  // advances if this receipt is its current target. Safe to fire on
+  // every state change because the runner dedupes by receipt id.
+  useEffect(() => {
+    if (!receipt) return;
+    const hasCategory = !!(receipt.approved_category && receipt.approved_category.trim());
+    const hasPurpose = !!(receipt.purpose_text && receipt.purpose_text.trim());
+    if (hasCategory && hasPurpose && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("daily-checkin:receipt-done", {
+          detail: { receiptId: receipt.id },
+        })
+      );
+    }
+  }, [receipt?.id, receipt?.approved_category, receipt?.purpose_text]);
+
   if (!receiptId) return <div className="p-8 text-red-600">Missing receipt id in URL.</div>;
   if (loading) return <div className="p-8">Loading receipt…</div>;
   if (err && !receipt) return <div className="p-8 text-red-600">{err}</div>;
