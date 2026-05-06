@@ -146,6 +146,14 @@ export default function BillingPage() {
       return;
     }
 
+    if (currentPlan && currentPlan.toLowerCase() !== "trial") {
+      const targetName = plans.find(p => p.tier === tier)?.name || tier;
+      const ok = window.confirm(
+        `You're currently on the ${currentPlan} plan. Switching to ${targetName} will cancel your existing subscription and start a new one. Continue?`
+      );
+      if (!ok) return;
+    }
+
     try {
       setLoading(tier);
       const firmId = await getMyFirmId();
