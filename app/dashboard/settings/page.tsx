@@ -184,7 +184,7 @@ const loadClientPhone = async (clientId: string) => {
         .eq("id", firmId)
         .single();
 
-      const plan = firm?.subscription_tier || firm?.subscription_plan || 'free';
+      const plan = firm?.subscription_plan || firm?.subscription_tier || 'free';
 
       // Get usage stats
 const { getUsageStats } = await import('@/lib/checkUsageLimits');

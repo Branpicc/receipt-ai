@@ -61,7 +61,7 @@ export async function checkReceiptUploadLimit(firmId: string): Promise<UsageChec
       return { canUpload: false, currentCount: 0, limit: 0, plan: "none", message: "Firm not found." };
     }
 
-    const plan = firm.subscription_tier || firm.subscription_plan || "free";
+    const plan = firm.subscription_plan || firm.subscription_tier || "free";
 
     // All paid firm plans have unlimited receipts
     if (plan !== "free") {
@@ -115,7 +115,7 @@ export async function checkClientLimit(firmId: string): Promise<ClientLimitResul
       return { canAdd: false, currentCount: 0, limit: 0, plan: "none", message: "Firm not found." };
     }
 
-    const plan = firm.subscription_tier || firm.subscription_plan || "free";
+    const plan = firm.subscription_plan || firm.subscription_tier || "free";
     const planLimits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.free;
 
     // Unlimited clients
@@ -159,7 +159,7 @@ export async function checkUserLimit(firmId: string): Promise<ClientLimitResult>
       return { canAdd: false, currentCount: 0, limit: 0, plan: "none", message: "Firm not found." };
     }
 
-    const plan = firm.subscription_tier || firm.subscription_plan || "free";
+    const plan = firm.subscription_plan || firm.subscription_tier || "free";
     const planLimits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.free;
 
     // Unlimited users
@@ -200,7 +200,7 @@ export async function getUsageStats(firmId: string) {
       .eq("id", firmId)
       .single();
 
-    const plan = firm?.subscription_tier || firm?.subscription_plan || "free";
+    const plan = firm?.subscription_plan || firm?.subscription_tier || "free";
     const planLimits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.free;
 
     // Client usage

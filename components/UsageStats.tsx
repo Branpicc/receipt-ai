@@ -33,7 +33,7 @@ export default function UsageStats({ onRefresh }: { onRefresh?: () => void }) {
         .eq("id", firmId)
         .single();
 
-      const plan = firm?.subscription_tier || firm?.subscription_plan || "starter";
+      const plan = firm?.subscription_plan || firm?.subscription_tier || "starter";
 
       const limits: Record<string, { clients: number; users: number }> = {
         trial: { clients: 20, users: 3 },

@@ -103,7 +103,7 @@ export default function BillingPage() {
         .eq("id", firmId)
         .single();
 
-      const plan = firm?.subscription_tier || firm?.subscription_plan || null;
+      const plan = firm?.subscription_plan || firm?.subscription_tier || null;
       setCurrentPlan(plan);
       setSubscriptionStatus(firm?.subscription_status || null);
 
@@ -213,7 +213,7 @@ export default function BillingPage() {
     }
   }
 
-  const isTrialing = currentPlan === "trial";
+  const isTrialing = subscriptionStatus === "trialing";
   const isActive = subscriptionStatus === "active" || isTrialing;
   const annualDiscount = 0.833; // 2 months free = ~16.7% off
 
@@ -253,7 +253,7 @@ export default function BillingPage() {
                   </div>
                 )}
               </div>
-              {currentPlan !== "trial" && isActive && (
+              {!isTrialing && isActive && (
                 <button
                   onClick={handleManageSubscription}
                   disabled={loading === "portal"}
