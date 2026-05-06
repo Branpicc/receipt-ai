@@ -141,11 +141,6 @@ export default function BillingPage() {
   }
 
   async function handleSubscribe(tier: string) {
-    if (tier === "enterprise") {
-      window.location.href = "mailto:sales@receipture.ca?subject=Enterprise Plan Inquiry";
-      return;
-    }
-
     if (currentPlan?.toLowerCase() === tier.toLowerCase()) {
       alert("You already have this plan.");
       return;
@@ -400,8 +395,6 @@ export default function BillingPage() {
                     ? "Loading..."
                     : isCurrentPlan
                     ? "Current Plan"
-                    : plan.isEnterprise
-                    ? "Contact Sales"
                     : `Get ${plan.name}`}
                 </button>
               </div>

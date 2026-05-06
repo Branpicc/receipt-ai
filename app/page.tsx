@@ -112,7 +112,7 @@ export default function LandingPage() {
         "SLA guarantee",
         "Dedicated support channel",
       ],
-      cta: "Contact sales",
+      cta: "Start free trial",
       highlighted: false,
     },
   ];
@@ -883,29 +883,16 @@ export default function LandingPage() {
                   ))}
                 </ul>
 
-                {plan.cta === "Contact sales" ? (
-                  <a
-                    href="#contact"
-                    className={`block text-center py-3 rounded-xl font-semibold transition-all ${
-                      plan.highlighted
-                        ? "bg-white text-blue-600 hover:bg-blue-50"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
-                  >
-                    {plan.cta}
-                  </a>
-                ) : (
-                  <Link
-                    href="/signup"
-                    className={`block text-center py-3 rounded-xl font-semibold transition-all ${
-                      plan.highlighted
-                        ? "bg-white text-blue-600 hover:bg-blue-50"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
-                  >
-                    {plan.cta}
-                  </Link>
-                )}
+                <Link
+                  href="/signup"
+                  className={`block text-center py-3 rounded-xl font-semibold transition-all ${
+                    plan.highlighted
+                      ? "bg-white text-blue-600 hover:bg-blue-50"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
               </div>
             ))}
           </div>
