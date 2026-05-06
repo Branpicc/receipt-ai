@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { extractReceiptData } from "@/lib/extractReceiptData";
+import { extractReceiptImageWithEngine } from "@/lib/extractReceiptClaude";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
     let totalCents = 0;
 
     try {
-      const extracted = await extractReceiptData(signedData.signedUrl);
+      const extracted = await extractReceiptImageWithEngine(signedData.signedUrl);
       console.log("✅ OCR extracted:", extracted);
 
       vendorName = extracted.vendor || "Unknown vendor";

@@ -1,7 +1,7 @@
 // app/api/inbound-email/route.ts - Receive emails from SendGrid
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { extractReceiptData } from '@/lib/extractReceiptData';
+import { extractReceiptImageWithEngine, extractReceiptFromTextClaude } from '@/lib/extractReceiptClaude';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -214,7 +214,7 @@ email_text: text || extractTextFromMime(rawEmail || ''),
           .createSignedUrl(attachments[0].url, 3600);
 
         if (signedData?.signedUrl) {
-          extractedData = await extractReceiptData(signedData.signedUrl);
+          extractedData = await extractReceiptImageWithEngine(signedData.signedUrl);
           vendorName = extractedData.vendor || vendorName;
           console.log('✅ OCR extracted:', extractedData);
         }
@@ -235,7 +235,7 @@ email_text: text || extractTextFromMime(rawEmail || ''),
           const urlMatch = imgTag.match(/src=["'](https?:\/\/[^"']+\.(jpg|jpeg|png|gif|webp)[^"']*)/i);
           if (urlMatch) {
             try {
-              const imgResult = await extractReceiptData(urlMatch[1]);
+              const imgResult = await extractReceiptImageWithEngine(urlMatch[1]);
               if (imgResult.total_cents || imgResult.vendor) {
                 extractedData = imgResult;
                 vendorName = extractedData.vendor || vendorName;
@@ -309,7 +309,19 @@ email_text: text || extractTextFromMime(rawEmail || ''),
             .trim();
         }
         console.log('📧 Cleaned email content preview:', emailContent.substring(0, 200));
-        extractedData = parseEmailText(emailContent);
+
+        const engine = (process.env.RECEIPT_EXTRACTION_ENGINE || 'vision').toLowerCase();
+        if (engine === 'claude') {
+          try {
+            extractedData = await extractReceiptFromTextClaude(emailContent, from || undefined);
+            console.log('✅ Claude email extraction succeeded');
+          } catch (claudeErr: any) {
+            console.error('[Claude email extraction failed, falling back to regex]', claudeErr.message);
+            extractedData = parseEmailText(emailContent);
+          }
+        } else {
+          extractedData = parseEmailText(emailContent);
+        }
 
                 // Use from_email as vendor hint if no vendor detected
         if (!extractedData.vendor && from) {
