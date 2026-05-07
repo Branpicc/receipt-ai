@@ -98,6 +98,12 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   const [customEnd, setCustomEnd] = useState("");
   const [showCustomRange, setShowCustomRange] = useState(false);
 
+  // Tracks which month-groups the user has explicitly toggled. The default
+  // (most recent month expanded, rest collapsed) is computed at render time
+  // from the receipts list — we only store user overrides here so the
+  // default keeps working as new months arrive without resetting state.
+  const [monthOverrides, setMonthOverrides] = useState<Record<string, boolean>>({});
+
   // Folder management
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -668,21 +674,38 @@ const filtersBarJSX = (
             });
             const sortedKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
             const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-            return sortedKeys.map(key => {
+            return sortedKeys.map((key, idx) => {
               const [year, month] = key.split('-');
               const monthName = monthNames[parseInt(month) - 1];
               const groupReceipts = groups[key];
               const groupTotal = groupReceipts.reduce((sum, r) => sum + (r.total_cents || 0), 0);
+              // Default: only the most recent month is expanded. User
+              // overrides (stored in monthOverrides) win.
+              const isExpanded = monthOverrides[key] ?? (idx === 0);
               return (
                 <div key={key}>
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 dark:border-dark-border">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMonthOverrides(prev => ({ ...prev, [key]: !isExpanded }))
+                    }
+                    aria-expanded={isExpanded}
+                    className="w-full flex items-center justify-between mb-3 pb-2 border-b border-gray-200 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover/40 -mx-2 px-2 py-1 rounded-t transition-colors"
+                  >
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <span
+                        className={`inline-block transition-transform text-xs ${isExpanded ? 'rotate-90' : ''}`}
+                        aria-hidden="true"
+                      >
+                        ▶
+                      </span>
                       {monthName} {year}
                     </h3>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {groupReceipts.length} receipt{groupReceipts.length !== 1 ? 's' : ''} · ${(groupTotal / 100).toFixed(2)}
                     </span>
-                  </div>
+                  </button>
+                  {isExpanded && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {groupReceipts.map((receipt) => (
                                   <Link
@@ -734,6 +757,7 @@ const filtersBarJSX = (
 </Link>
                     ))}
                   </div>
+                  )}
                 </div>
               );
             });
