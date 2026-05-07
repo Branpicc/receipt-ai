@@ -127,24 +127,12 @@ export async function triggerSms(
       return { success: true, sent: true, queueId: queueEntry.id };
     }
 
-// For batches — wait for all receipts to be queued then send combined SMS
-    if (batchTotal > 1 && client.sms_timing === 'instant') {
-      // Wait a moment for other uploads to finish
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Check how many batch entries are now queued
-      const { data: batchEntries } = await supabase
-        .from('sms_queue')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('batch_id', batchId!)
-        .eq('status', 'pending_batch');
-
-      // Only send if we have all entries OR this is the last expected one
-      if (batchEntries && (batchEntries.length >= batchTotal || batchIndex === batchTotal)) {
-        await sendBatchSms(clientId, batchId!, firmId);
-      }
-    }
+    // For batch+instant we DON'T fire sendBatchSms here. The combined message
+    // pulls vendor/total from the receipts table, and at this point only
+    // Stage 1 (Vision OCR + regex) has run — Stage 2 (Claude) is still
+    // updating values in the background. Firing now would freeze inaccurate
+    // amounts into the SMS. Instead, processUploadedReceipt triggers
+    // sendBatchSms after Stage 2 completes for the last batch member.
 
     return { success: true, sent: false, scheduledFor, queueId: queueEntry.id };
   } catch (error: any) {

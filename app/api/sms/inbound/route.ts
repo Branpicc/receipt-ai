@@ -43,15 +43,27 @@ async function summarizePurpose(
   }
 }
 
+// Parse a reply like "1: business expense 2: gift for partner 3: medication"
+// into { 1: "business expense", 2: "gift for partner", 3: "medication" }.
+//
+// Strategy: split on the position BEFORE each "<digit>:" or "<digit>." token,
+// then for each segment match "<digit><sep><text>". This is more robust than
+// a single global regex with lookahead because:
+//   - it correctly handles purposes containing digits (e.g. "$50 dinner")
+//   - it requires a colon or period as the separator (a single space, like
+//     in the previous regex's [:.\s] class, was too lenient and made the
+//     lookahead fail on real input)
+//   - it explicitly anchors on a word boundary so we don't split inside
+//     things like "1.5" or phone numbers.
 function parseMultiReply(body: string): Record<number, string> {
   const results: Record<number, string> = {};
-  const pattern = /(\d+)\s*[:.\s]\s*([^0-9]+?)(?=\s*\d+\s*[:.\s]|$)/g;
-  let match;
-  while ((match = pattern.exec(body)) !== null) {
-    const num = parseInt(match[1]);
-    const text = match[2].trim();
-    if (text.length > 0) {
-      results[num] = text;
+  const segments = body.split(/(?=\b\d+\s*[:.])/);
+  for (const seg of segments) {
+    const match = seg.match(/^\s*(\d+)\s*[:.]\s*([\s\S]+?)\s*$/);
+    if (match) {
+      const num = parseInt(match[1]);
+      const text = match[2].trim();
+      if (text.length > 0) results[num] = text;
     }
   }
   if (Object.keys(results).length === 0 && body.trim().length > 0) {

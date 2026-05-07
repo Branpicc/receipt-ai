@@ -23,7 +23,7 @@ import {
   extractStage1Claude,
 } from "./extractReceiptClaude";
 import { parseReceiptText, extractReceiptData, type ExtractedReceiptData } from "./extractReceiptData";
-import { triggerSms } from "./triggerSms";
+import { triggerSms, sendBatchSms } from "./triggerSms";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -265,6 +265,47 @@ export async function processUploadedReceipt(
       }
     } catch (notifErr: any) {
       console.error("[stage2] notification fanout failed:", notifErr.message);
+    }
+
+    // ── BATCH SMS TRIGGER (post-Stage-2) ─────────────────────────────────
+    // For batch+instant uploads, sendBatchSms reads vendor/total from the
+    // receipts table. We only fire it once every batch member has reached
+    // extraction_status='completed', so the combined SMS reflects accurate
+    // Stage-2 values rather than transient Stage-1 ones. sendBatchSms is
+    // idempotent (it skips if a 'sent' row already exists), so the natural
+    // race when multiple stage-2's finish simultaneously is harmless.
+    if (batchId && batchTotal > 1) {
+      try {
+        const { data: client } = await supabase
+          .from("clients")
+          .select("sms_timing")
+          .eq("id", clientId)
+          .single();
+
+        if (client?.sms_timing === "instant") {
+          const { data: queueEntries } = await supabase
+            .from("sms_queue")
+            .select("receipt_id")
+            .eq("batch_id", batchId)
+            .eq("status", "pending_batch");
+
+          if (queueEntries && queueEntries.length > 0) {
+            const receiptIds = queueEntries.map((e: any) => e.receipt_id).filter(Boolean);
+            const { count: completedCount } = await supabase
+              .from("receipts")
+              .select("id", { count: "exact", head: true })
+              .in("id", receiptIds)
+              .in("extraction_status", ["completed", "failed"]);
+
+            if (completedCount !== null && completedCount >= queueEntries.length) {
+              console.log(`[stage2] all ${queueEntries.length} batch members done — firing sendBatchSms`);
+              await sendBatchSms(clientId, batchId, firmId);
+            }
+          }
+        }
+      } catch (batchErr: any) {
+        console.error("[stage2] batch SMS check failed:", batchErr.message);
+      }
     }
   } catch (err: any) {
     console.error("[processUploadedReceipt] fatal:", err);
