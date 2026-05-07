@@ -213,7 +213,7 @@ async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; m
   return { base64, mediaType };
 }
 
-async function fetchVisionOcrText(imageUrl: string): Promise<string> {
+export async function fetchVisionOcrText(imageUrl: string): Promise<string> {
   const apiKey =
     process.env.GOOGLE_VISION_API_KEY ||
     process.env.NEXT_PUBLIC_GOOGLE_VISION_API_KEY;
@@ -249,11 +249,15 @@ async function fetchVisionOcrText(imageUrl: string): Promise<string> {
 }
 
 export async function extractReceiptFromImageClaude(
-  imageUrl: string
+  imageUrl: string,
+  opts: { prefetchedOcrText?: string } = {}
 ): Promise<ExtractedReceiptData> {
-  // Run Vision OCR and image fetch in parallel — both feed Claude.
+  // If the caller already ran Vision OCR (e.g. for a stage-1 fast extract),
+  // reuse that text instead of paying for a second Vision call.
   const [ocrText, imageData] = await Promise.all([
-    fetchVisionOcrText(imageUrl),
+    opts.prefetchedOcrText !== undefined
+      ? Promise.resolve(opts.prefetchedOcrText)
+      : fetchVisionOcrText(imageUrl),
     fetchImageAsBase64(imageUrl),
   ]);
 
@@ -285,6 +289,85 @@ export async function extractReceiptFromImageClaude(
 }
 
 // ── EMAIL TEXT EXTRACTION ──────────────────────────────────────────────────
+
+// ── STAGE 1 FAST EXTRACTION (HAIKU FALLBACK) ───────────────────────────────
+//
+// Used when Vision OCR + regex didn't produce a usable vendor/total. Asks
+// Haiku for ONLY those three fields so the call returns quickly (~700ms) and
+// SMS can fire without waiting for the full extraction. The full structured
+// extraction still runs in stage 2.
+
+const STAGE1_TOOL = {
+  name: "record_receipt_summary",
+  description:
+    "Record only the receipt's vendor, date and final total. Used for an early SMS notification — full extraction happens separately.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      vendor: { type: ["string", "null"] },
+      date: { type: ["string", "null"], description: "YYYY-MM-DD" },
+      total_cents: {
+        type: ["integer", "null"],
+        description: "Final total amount paid, in cents.",
+      },
+    },
+    required: ["vendor", "date", "total_cents"],
+  },
+};
+
+export async function extractStage1Claude(
+  imageUrl: string
+): Promise<{ vendor: string | null; date: string | null; total_cents: number | null }> {
+  const imageData = await fetchImageAsBase64(imageUrl);
+
+  const res = await fetch(ANTHROPIC_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": getApiKey(),
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 256,
+      system:
+        "Extract ONLY vendor, date (YYYY-MM-DD) and total_cents (final amount paid in cents) from a receipt. Use null when unsure.",
+      tools: [STAGE1_TOOL],
+      tool_choice: { type: "tool", name: STAGE1_TOOL.name },
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: imageData.mediaType,
+                data: imageData.base64,
+              },
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Stage 1 Claude error ${res.status}: ${await res.text()}`);
+  }
+
+  const data = await res.json();
+  const block = data?.content?.find(
+    (b: any) => b.type === "tool_use" && b.name === STAGE1_TOOL.name
+  );
+  if (!block) throw new Error("Stage 1 Claude returned no tool_use block");
+
+  return {
+    vendor: block.input?.vendor ?? null,
+    date: block.input?.date ?? null,
+    total_cents: block.input?.total_cents ?? null,
+  };
+}
 
 // ── ENGINE DISPATCH ────────────────────────────────────────────────────────
 //

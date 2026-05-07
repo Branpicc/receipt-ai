@@ -759,7 +759,7 @@ function parseMultiLineItem(line1: string, line2: string, line3?: string): LineI
 
 // ── MAIN PARSER ───────────────────────────────────────────────────────────────
 
-function parseReceiptText(text: string): {
+export function parseReceiptText(text: string): {
   vendor: string | null;
   date: string | null;
   total_cents: number | null;
