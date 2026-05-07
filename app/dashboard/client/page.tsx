@@ -6,14 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import Link from "next/link";
 import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import UsageStats from "@/components/UsageStats";
-
-type UploadProgress = {
-  total: number;
-  current: number;
-  currentFile: string;
-  succeeded: number;
-  failed: number;
-};
+import { useToast } from "@/components/Toast";
 
 type RecentReceipt = {
   id: string;
@@ -49,9 +42,8 @@ type RecentEdit = {
 };
 
 export default function ClientDashboardPage() {
+  const { showToast, updateToast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -242,23 +234,23 @@ async function loadRecentEdits(clientId: string, firmId: string) {
     if (!clientId) return;
 
     const fileArray = Array.from(files);
+    const total = fileArray.length;
 
-    try {
-      setUploading(true);
-      setUploadProgress({ total: fileArray.length, current: 0, currentFile: fileArray[0]?.name || "", succeeded: 0, failed: 0 });
+    const firmId = await getMyFirmId();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+    const batchId = total > 1 ? crypto.randomUUID() : undefined;
 
-      const firmId = await getMyFirmId();
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
+    const toastId = showToast({
+      kind: "info",
+      message: total === 1 ? `⏳ Submitting receipt…` : `⏳ Submitting 0 of ${total}…`,
+    });
 
-      let succeeded = 0;
-      let failed = 0;
-const batchId = fileArray.length > 1 ? crypto.randomUUID() : undefined;
+    let succeeded = 0;
+    let failed = 0;
 
-      for (let i = 0; i < fileArray.length; i++) {
-        const file = fileArray[i];
-        setUploadProgress({ total: fileArray.length, current: i + 1, currentFile: file.name, succeeded, failed });
-
+    await Promise.all(
+      fileArray.map(async (file, i) => {
         try {
           let uploadFile = file;
           try { uploadFile = await convertHeicToJpg(file); } catch { uploadFile = file; }
@@ -270,7 +262,7 @@ const batchId = fileArray.length > 1 ? crypto.randomUUID() : undefined;
           if (userId) formData.append("userId", userId);
           if (batchId) formData.append("batchId", batchId);
           formData.append("batchIndex", String(i + 1));
-          formData.append("batchTotal", String(fileArray.length));
+          formData.append("batchTotal", String(total));
 
           const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
           if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
@@ -279,23 +271,40 @@ const batchId = fileArray.length > 1 ? crypto.randomUUID() : undefined;
           console.error(`Failed to upload ${file.name}:`, err);
           failed++;
         }
-      }
 
-      if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded!`);
-      else if (succeeded === 0) alert(`❌ All ${failed} uploads failed. Please try again.`);
-      else alert(`⚠️ ${succeeded} uploaded, ${failed} failed.`);
+        if (total > 1) {
+          updateToast(toastId, {
+            kind: "info",
+            message: `⏳ Submitting ${succeeded + failed} of ${total}…`,
+          });
+        }
+      })
+    );
 
-      const fid = await getMyFirmId();
-      await loadStats(clientId, fid);
-      await loadRecentReceipts(clientId);
-      await loadBudgetStatus(clientId, fid);
-      setUsageRefreshKey(prev => prev + 1);
-    } catch (err: any) {
-      alert("Upload failed: " + err.message);
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
+    if (failed === 0) {
+      updateToast(toastId, {
+        kind: "success",
+        message: total === 1 ? `✅ Receipt submitted` : `✅ ${succeeded} receipts submitted`,
+        autoDismissMs: 3500,
+      });
+    } else if (succeeded === 0) {
+      updateToast(toastId, {
+        kind: "error",
+        message: `❌ Failed to submit ${failed} receipt${failed === 1 ? "" : "s"}`,
+        autoDismissMs: 5000,
+      });
+    } else {
+      updateToast(toastId, {
+        kind: "info",
+        message: `⚠️ ${succeeded} submitted • ${failed} failed`,
+        autoDismissMs: 5000,
+      });
     }
+
+    await loadStats(clientId, firmId);
+    await loadRecentReceipts(clientId);
+    await loadBudgetStatus(clientId, firmId);
+    setUsageRefreshKey(prev => prev + 1);
   }
 
 function getCategoryColor(category: string) {
@@ -349,7 +358,7 @@ function getCategoryColor(category: string) {
       {/* Upload Hero */}
       <label
         htmlFor="hero-upload"
-        className={`block w-full rounded-2xl overflow-hidden mb-6 ${uploading ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+        className="block w-full rounded-2xl overflow-hidden mb-6 cursor-pointer"
       >
         <input
           type="file"
@@ -357,30 +366,18 @@ function getCategoryColor(category: string) {
           accept="image/*,application/pdf,.heic,.heif"
           multiple
           className="hidden"
-          disabled={uploading}
-          onChange={(e) => handleMultipleFiles(e.target.files)}
+          onChange={(e) => {
+            handleMultipleFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
         <div className="bg-gradient-to-br from-accent-500 to-accent-700 p-6 text-white text-center">
-          {uploading && uploadProgress ? (
-            <div className="space-y-3">
-              <div className="text-4xl">⏳</div>
-              <div className="text-lg font-bold">Uploading {uploadProgress.current} of {uploadProgress.total}</div>
-              <div className="text-sm text-accent-100 truncate">{uploadProgress.currentFile}</div>
-              <div className="w-full bg-accent-700 rounded-full h-2">
-                <div className="bg-white h-2 rounded-full transition-all duration-300" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }} />
-              </div>
-              <div className="text-xs text-accent-100">✅ {uploadProgress.succeeded} done • ❌ {uploadProgress.failed} failed</div>
-            </div>
-          ) : (
-            <>
-              <div className="text-5xl mb-3">📸</div>
-              <div className="text-xl font-bold mb-1">Upload Receipt</div>
-              <div className="text-sm text-accent-100 mb-4">Tap to take a photo or choose from your library</div>
-              <div className="inline-block bg-white text-accent-700 font-semibold px-6 py-2.5 rounded-xl text-sm">
-                Choose Files
-              </div>
-            </>
-          )}
+          <div className="text-5xl mb-3">📸</div>
+          <div className="text-xl font-bold mb-1">Upload Receipt</div>
+          <div className="text-sm text-accent-100 mb-4">Tap to take a photo or choose from your library</div>
+          <div className="inline-block bg-white text-accent-700 font-semibold px-6 py-2.5 rounded-xl text-sm">
+            Choose Files
+          </div>
         </div>
       </label>
 

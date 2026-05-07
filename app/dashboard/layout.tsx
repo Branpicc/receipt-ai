@@ -13,6 +13,7 @@ import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { ClientProvider } from "@/lib/ClientContext";
 import { EditModeProvider } from "@/lib/EditMode";
 import EditModeToggle from "@/components/EditModeToggle";
+import { ToastProvider } from "@/components/Toast";
 import {
   Settings as SettingsIcon,
   LogOut,
@@ -122,6 +123,7 @@ const isClient = userRole === "client";
 return (
   <EditModeProvider userRole={userRole}>
   <ClientProvider userRole={userRole}>
+  <ToastProvider>
     <OnboardingWrapper>
             <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
         {/* Sidebar — print:hidden so PDF exports get the full page width */}
@@ -759,6 +761,7 @@ href="/dashboard/reports/clients"
         </main>
       </div>
     </OnboardingWrapper>
+  </ToastProvider>
   </ClientProvider>
   </EditModeProvider>
   );

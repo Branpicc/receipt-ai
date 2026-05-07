@@ -13,14 +13,7 @@ import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
 import DailyCheckinAdminPanel from "@/components/DailyCheckinAdminPanel";
 import DailyCheckinDashboardCard from "@/components/DailyCheckinDashboardCard";
-
-type UploadProgress = {
-  total: number;
-  current: number;
-  currentFile: string;
-  succeeded: number;
-  failed: number;
-};
+import { useToast } from "@/components/Toast";
 
 type RecentActivity = {
   id: string;
@@ -30,8 +23,7 @@ type RecentActivity = {
 };
 
 export default function DashboardHomePage() {
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const { showToast, updateToast } = useToast();
   const [refreshKey, setRefreshKey] = useState(0);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -239,32 +231,33 @@ async function handleMultipleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files);
 
-    try {
-      setUploading(true);
-      setUploadProgress({ total: fileArray.length, current: 0, currentFile: fileArray[0]?.name || "", succeeded: 0, failed: 0 });
+    const firmId = await getMyFirmId();
+    const { data: clients } = await supabase.from("clients").select("id, name").eq("firm_id", firmId).limit(1);
+    if (!clients || clients.length === 0) {
+      showToast({ kind: "error", message: "Please add a client first", autoDismissMs: 4000 });
+      return;
+    }
 
-      const firmId = await getMyFirmId();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+    const client = selectedClient ? { id: selectedClient.id, name: selectedClient.name } : clients[0];
+    const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
+    const total = fileArray.length;
 
-      const { data: clients } = await supabase.from("clients").select("id, name").eq("firm_id", firmId).limit(1);
-      if (!clients || clients.length === 0) {
-        alert("Please add a client first");
-        setUploading(false);
-        setUploadProgress(null);
-        return;
-      }
+    // Show "submitted" toast immediately — user can navigate away while uploads
+    // continue in the background. Counter updates as each request resolves.
+    const toastId = showToast({
+      kind: "info",
+      message: total === 1
+        ? `⏳ Submitting receipt…`
+        : `⏳ Submitting 0 of ${total}…`,
+    });
 
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
-      const client = selectedClient ? { id: selectedClient.id, name: selectedClient.name } : clients[0];
-      let succeeded = 0;
-      let failed = 0;
+    let succeeded = 0;
+    let failed = 0;
 
-      const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
-
-      for (let i = 0; i < fileArray.length; i++) {
-        const file = fileArray[i];
-                setUploadProgress({ total: fileArray.length, current: i + 1, currentFile: file.name, succeeded, failed });
-
+    await Promise.all(
+      fileArray.map(async (file, i) => {
         try {
           let uploadFile = file;
           try { uploadFile = await convertHeicToJpg(file); } catch { uploadFile = file; }
@@ -276,28 +269,49 @@ async function handleMultipleFiles(files: FileList | null) {
           if (userId) formData.append("userId", userId);
           if (batchId) formData.append("batchId", batchId);
           formData.append("batchIndex", String(i + 1));
-          formData.append("batchTotal", String(fileArray.length));
-                    const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
+          formData.append("batchTotal", String(total));
+
+          const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
           if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
           succeeded++;
         } catch (err: any) {
           console.error(`Failed to upload ${file.name}:`, err);
           failed++;
         }
-      }
 
-      if (failed === 0) alert(`✅ All ${succeeded} receipts uploaded successfully!`);
-      else if (succeeded === 0) alert(`❌ Failed to upload all ${failed} receipts. Please try again.`);
-      else alert(`⚠️ Uploaded ${succeeded} receipts successfully. ${failed} failed.`);
+        if (total > 1) {
+          updateToast(toastId, {
+            kind: "info",
+            message: `⏳ Submitting ${succeeded + failed} of ${total}…`,
+          });
+        }
+      })
+    );
 
-      loadStats(userRole);
-      setRefreshKey(prev => prev + 1);
-    } catch (err: any) {
-      alert("Upload process failed: " + err.message);
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
+    if (failed === 0) {
+      updateToast(toastId, {
+        kind: "success",
+        message: total === 1
+          ? `✅ Receipt submitted`
+          : `✅ ${succeeded} receipts submitted`,
+        autoDismissMs: 3500,
+      });
+    } else if (succeeded === 0) {
+      updateToast(toastId, {
+        kind: "error",
+        message: `❌ Failed to submit ${failed} receipt${failed === 1 ? "" : "s"}`,
+        autoDismissMs: 5000,
+      });
+    } else {
+      updateToast(toastId, {
+        kind: "info",
+        message: `⚠️ ${succeeded} submitted • ${failed} failed`,
+        autoDismissMs: 5000,
+      });
     }
+
+    loadStats(userRole);
+    setRefreshKey(prev => prev + 1);
   }
 
 
@@ -539,25 +553,22 @@ if (userRole === 'client') {
             <div className="max-w-xl">
               <h2 className="text-xl font-bold mb-2">Upload Receipts</h2>
               <p className="text-accent-50 mb-6">Select one or multiple receipts to upload. Our AI will extract all the details automatically.</p>
-              <label htmlFor="hero-upload" className={`block border-2 border-dashed border-accent-200 dark:border-accent-300 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}>
-                <input type="file" id="hero-upload" accept="image/*,application/pdf,.heic,.heif" multiple className="hidden" disabled={uploading} onChange={(e) => handleMultipleFiles(e.target.files)} />
-                {uploading && uploadProgress ? (
-                  <div className="space-y-3">
-                    <div className="text-4xl mb-3">⏳</div>
-                    <div className="text-lg font-semibold">Uploading {uploadProgress.current} of {uploadProgress.total}</div>
-                    <div className="text-sm text-accent-100">{uploadProgress.currentFile}</div>
-                    <div className="w-full bg-accent-700 rounded-full h-2 mt-3">
-                      <div className="bg-white h-2 rounded-full transition-all duration-300" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }} />
-                    </div>
-                    <div className="text-xs text-accent-100 mt-2">✅ {uploadProgress.succeeded} succeeded • ❌ {uploadProgress.failed} failed</div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-4xl mb-3">📸</div>
-                    <div className="text-lg font-semibold mb-2">Click to upload or drag here</div>
-                    <div className="text-sm text-accent-100">Supports JPG, PNG, PDF, HEIC • Select multiple files</div>
-                  </>
-                )}
+              <label htmlFor="hero-upload" className="block border-2 border-dashed border-accent-200 dark:border-accent-300 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all">
+                <input
+                  type="file"
+                  id="hero-upload"
+                  accept="image/*,application/pdf,.heic,.heif"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    handleMultipleFiles(e.target.files);
+                    // Reset so picking the same file again still triggers onChange.
+                    e.target.value = "";
+                  }}
+                />
+                <div className="text-4xl mb-3">📸</div>
+                <div className="text-lg font-semibold mb-2">Click to upload or drag here</div>
+                <div className="text-sm text-accent-100">Supports JPG, PNG, PDF, HEIC • Select multiple files</div>
               </label>
             </div>
           </div>
