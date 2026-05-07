@@ -6,6 +6,44 @@ import LogoutButton from "@/components/LogoutButton";
 import { restartOnboarding } from "@/lib/useOnboarding";
 import ClientCardManager from "@/components/ClientCardManager";
 import TrainingModules from "@/components/TrainingModules";
+import { useToast } from "@/components/Toast";
+
+const SMS_TIMING_OPTIONS = [
+  { value: "instant", label: "Instantly" },
+  { value: "5min", label: "5 minutes later" },
+  { value: "30min", label: "30 minutes later" },
+  { value: "1hour", label: "1 hour later" },
+  { value: "4hours", label: "4 hours later" },
+  { value: "end_of_day", label: "End of day summary" },
+] as const;
+
+// 5pm–10pm in 30-min steps. Matches the onboarding picker exactly so
+// existing values round-trip cleanly when re-opened in settings.
+const SMS_END_OF_DAY_OPTIONS: { value: string; label: string }[] = (() => {
+  const out: { value: string; label: string }[] = [];
+  for (let h = 17; h <= 22; h++) {
+    for (const m of [0, 30] as const) {
+      if (h === 22 && m === 30) break;
+      const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      const hour12 = h > 12 ? h - 12 : h;
+      const ampm = h >= 12 ? "pm" : "am";
+      out.push({ value, label: `${hour12}:${String(m).padStart(2, "0")} ${ampm}` });
+    }
+  }
+  return out;
+})();
+
+function formatPhoneDisplay(e164: string | null | undefined): string {
+  if (!e164) return "";
+  const digits = e164.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return e164;
+}
 
 type UserInfo = {
   email: string;
@@ -27,6 +65,7 @@ type UserPreferences = {
 type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "walkthroughs" | "advanced" | "training";
 
 export default function SettingsPage() {
+  const { showToast } = useToast();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: "system",
@@ -51,6 +90,15 @@ const [hardDeleteUsers, setHardDeleteUsers] = useState<{id: string; auth_user_id
   // Email forwarding
   const [emailForwarding, setEmailForwarding] = useState("");
   const [editingEmail, setEditingEmail] = useState(false);
+
+  // SMS receipt prompts (clients only)
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [smsPhoneInput, setSmsPhoneInput] = useState("");
+  const [smsTiming, setSmsTiming] = useState<string>("instant");
+  const [smsEndOfDayTime, setSmsEndOfDayTime] = useState("20:00");
+  const [smsClientId, setSmsClientId] = useState<string | null>(null);
+  const [savingSms, setSavingSms] = useState(false);
+  const [smsError, setSmsError] = useState<string>("");
   
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -161,16 +209,75 @@ const loadClientPhone = async (clientId: string) => {
     try {
       const { data } = await supabase
         .from("clients")
-        .select("phone_number")
+        .select("phone_number, sms_enabled, sms_timing, sms_end_of_day_time")
         .eq("id", clientId)
         .single();
       if (data) {
         setUser(prev => prev ? { ...prev, phoneNumber: data.phone_number || "" } : null);
+        setSmsClientId(clientId);
+        setSmsEnabled(!!data.sms_enabled);
+        setSmsPhoneInput(formatPhoneDisplay(data.phone_number));
+        setSmsTiming(data.sms_timing || "instant");
+        setSmsEndOfDayTime(data.sms_end_of_day_time || "20:00");
       }
     } catch (error) {
       console.error("Failed to load phone:", error);
     }
   };
+
+  async function saveSmsSettings() {
+    if (!smsClientId) return;
+    setSmsError("");
+
+    // If SMS is being disabled, skip phone validation — just flip the flag.
+    if (!smsEnabled) {
+      try {
+        setSavingSms(true);
+        const { error } = await supabase
+          .from("clients")
+          .update({ sms_enabled: false })
+          .eq("id", smsClientId);
+        if (error) throw error;
+        showToast({ kind: "success", message: "✅ SMS disabled", autoDismissMs: 3000 });
+      } catch (err: any) {
+        setSmsError(err.message || "Failed to save");
+        showToast({ kind: "error", message: "Couldn't save SMS settings", autoDismissMs: 4000 });
+      } finally {
+        setSavingSms(false);
+      }
+      return;
+    }
+
+    const digits = smsPhoneInput.replace(/\D/g, "");
+    if (digits.length < 10) {
+      setSmsError("Please enter a valid 10-digit phone number");
+      return;
+    }
+    const formatted = digits.length === 10 ? `+1${digits}` : `+${digits}`;
+
+    try {
+      setSavingSms(true);
+      const { error } = await supabase
+        .from("clients")
+        .update({
+          phone_number: formatted,
+          sms_enabled: true,
+          sms_timing: smsTiming,
+          sms_end_of_day_time: smsTiming === "end_of_day" ? smsEndOfDayTime : null,
+        })
+        .eq("id", smsClientId);
+      if (error) throw error;
+      // Reflect the canonical formatted value back to the user object.
+      setUser(prev => prev ? { ...prev, phoneNumber: formatted } : null);
+      setSmsPhoneInput(formatPhoneDisplay(formatted));
+      showToast({ kind: "success", message: "✅ SMS settings saved", autoDismissMs: 3000 });
+    } catch (err: any) {
+      setSmsError(err.message || "Failed to save");
+      showToast({ kind: "error", message: "Couldn't save SMS settings", autoDismissMs: 4000 });
+    } finally {
+      setSavingSms(false);
+    }
+  }
 
   const loadBillingInfo = async () => {
     try {
@@ -643,19 +750,89 @@ onClick={() => {
                 <div className="space-y-4">
 
                   {isClient && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Phone Number on File
-                      </label>
-                      <input
-                        type="text"
-                        value={user.phoneNumber || "Not set"}
-                        disabled
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-gray-100 dark:bg-dark-bg text-gray-900 dark:text-white"
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Contact your accountant to update your phone number
-                      </p>
+                    <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4 bg-gray-50 dark:bg-dark-bg/40">
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                            📱 Receipt Text Messages
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Get a text asking the purpose when you submit a receipt. Reply once and we save it automatically.
+                          </p>
+                        </div>
+                        <label className="inline-flex items-center cursor-pointer flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={smsEnabled}
+                            onChange={(e) => setSmsEnabled(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-accent-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all relative" />
+                        </label>
+                      </div>
+
+                      {smsEnabled && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Phone Number
+                            </label>
+                            <input
+                              type="tel"
+                              value={smsPhoneInput}
+                              onChange={(e) => setSmsPhoneInput(e.target.value)}
+                              placeholder="(123) 456-7890"
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              When to send the text
+                            </label>
+                            <select
+                              value={smsTiming}
+                              onChange={(e) => setSmsTiming(e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-500"
+                            >
+                              {SMS_TIMING_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {smsTiming === "end_of_day" && (
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                End-of-day delivery time
+                              </label>
+                              <select
+                                value={smsEndOfDayTime}
+                                onChange={(e) => setSmsEndOfDayTime(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-500"
+                              >
+                                {SMS_END_OF_DAY_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {smsError && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-2">{smsError}</p>
+                      )}
+
+                      <div className="mt-3">
+                        <button
+                          onClick={saveSmsSettings}
+                          disabled={savingSms}
+                          className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {savingSms ? "Saving…" : "Save SMS Settings"}
+                        </button>
+                      </div>
                     </div>
                   )}
 

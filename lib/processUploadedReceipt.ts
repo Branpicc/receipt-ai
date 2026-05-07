@@ -269,11 +269,17 @@ export async function processUploadedReceipt(
 
     // ── BATCH SMS TRIGGER (post-Stage-2) ─────────────────────────────────
     // For batch+instant uploads, sendBatchSms reads vendor/total from the
-    // receipts table. We only fire it once every batch member has reached
-    // extraction_status='completed', so the combined SMS reflects accurate
-    // Stage-2 values rather than transient Stage-1 ones. sendBatchSms is
-    // idempotent (it skips if a 'sent' row already exists), so the natural
-    // race when multiple stage-2's finish simultaneously is harmless.
+    // receipts table. We only fire once:
+    //   (a) every batchTotal upload has queued an sms_queue entry
+    //       — using `queueEntries.length >= batchTotal` instead of just
+    //       `queueEntries.length > 0` prevents a race where the first 4
+    //       receipts to finish Stage 2 see "4 of 4 queued + done" while
+    //       the slow 5th is still in OCR
+    //   (b) every queued receipt has reached completed/failed extraction
+    //       state, so the combined SMS reflects Claude's Stage-2 values
+    // sendBatchSms is idempotent (dedup guard on status='sent'), so the
+    // natural race when multiple Stage-2 completions land simultaneously
+    // is harmless — only the first to acquire the row wins.
     if (batchId && batchTotal > 1) {
       try {
         const { data: client } = await supabase
@@ -289,7 +295,7 @@ export async function processUploadedReceipt(
             .eq("batch_id", batchId)
             .eq("status", "pending_batch");
 
-          if (queueEntries && queueEntries.length > 0) {
+          if (queueEntries && queueEntries.length >= batchTotal) {
             const receiptIds = queueEntries.map((e: any) => e.receipt_id).filter(Boolean);
             const { count: completedCount } = await supabase
               .from("receipts")
@@ -297,8 +303,8 @@ export async function processUploadedReceipt(
               .in("id", receiptIds)
               .in("extraction_status", ["completed", "failed"]);
 
-            if (completedCount !== null && completedCount >= queueEntries.length) {
-              console.log(`[stage2] all ${queueEntries.length} batch members done — firing sendBatchSms`);
+            if (completedCount !== null && completedCount >= batchTotal) {
+              console.log(`[stage2] all ${batchTotal} batch members queued + done — firing sendBatchSms`);
               await sendBatchSms(clientId, batchId, firmId);
             }
           }
