@@ -47,6 +47,10 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Mobile drawer state — separate from desktop sidebarOpen (which controls
+  // wide vs. narrow on ≥md). On <md the sidebar is hidden by default; the
+  // hamburger toggles it as an overlay drawer that closes after navigation.
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [operationsOpen, setOperationsOpen] = useState(true);
   const [teamOpen, setTeamOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(true);
@@ -60,6 +64,11 @@ export default function DashboardLayout({
     loadFirmPlan();
     loadAndApplyTheme();
   }, []);
+
+  // Auto-close the mobile drawer whenever the user navigates to a new page.
+  useEffect(() => {
+    setMobileDrawerOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!userRole || userRole === "client") return;
@@ -142,12 +151,35 @@ return (
   <ClientProvider userRole={userRole}>
   <ToastProvider>
     <OnboardingWrapper>
-            <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors">
-        {/* Sidebar — print:hidden so PDF exports get the full page width */}
+            <div className="min-h-screen bg-gray-50 dark:bg-dark-bg md:flex transition-colors">
+        {/* Mobile-only hamburger — fixed top-left, sits above safe area */}
+        <button
+          type="button"
+          onClick={() => setMobileDrawerOpen(true)}
+          aria-label="Open navigation"
+          className="md:hidden print:hidden fixed top-3 left-3 z-50 w-11 h-11 flex items-center justify-center rounded-lg bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border shadow-sm text-gray-700 dark:text-gray-300"
+          style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+        </button>
+
+        {/* Mobile drawer backdrop */}
+        {mobileDrawerOpen && (
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setMobileDrawerOpen(false)}
+            className="md:hidden print:hidden fixed inset-0 z-40 bg-black/40"
+          />
+        )}
+
+        {/* Sidebar — print:hidden so PDF exports get the full page width.
+            On <md it acts as an overlay drawer (fixed + transform).
+            On ≥md it's a flex sibling with the existing wide/narrow toggle. */}
         <aside
-          className={`print:hidden bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border transition-all duration-300 ${
-            sidebarOpen ? "w-64" : "w-20"
-          }`}
+          className={`print:hidden bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border transition-all duration-300 fixed md:static inset-y-0 left-0 z-50 w-64 ${
+            mobileDrawerOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 ${sidebarOpen ? "md:w-64" : "md:w-20"}`}
         >
           <div className="h-full flex flex-col">
             {/* Logo/Brand */}
@@ -768,10 +800,19 @@ href="/dashboard/reports/clients"
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto relative">
-          {/* Notification Bell - Top Right */}
-          <div className="print:hidden absolute top-4 right-8 z-40">
+        {/* Main Content. Inline padding-top accounts for both the iOS
+            safe-area inset (~47px on notched devices in standalone PWA)
+            and the fixed hamburger button height (44px + 12px gap). On
+            ≥md we override back to 0 since the hamburger is hidden. */}
+        <main
+          className="flex-1 overflow-auto relative md:!pt-0"
+          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 3.5rem)" }}
+        >
+          {/* Notification Bell - Top Right (offset for safe area on mobile) */}
+          <div
+            className="print:hidden absolute right-4 md:right-8 z-40"
+            style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
+          >
             <NotificationBell />
           </div>
 

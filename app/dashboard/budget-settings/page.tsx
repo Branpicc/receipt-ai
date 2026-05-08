@@ -21,7 +21,7 @@ type CategoryBudget = {
 export default function BudgetSettingsPage() {
   const gate = useFeatureGate("budget_tracking");
   if (gate.loading) return null;
-  if (!gate.allowed) return <UpgradeRequired feature="budget_tracking" />;
+  if (!gate.allowed) return <UpgradeRequired feature="budget_tracking" asClient={gate.role === "client"} />;
   return <BudgetSettingsContent />;
 }
 

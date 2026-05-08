@@ -187,7 +187,7 @@ return (
         <h1 className="text-gray-900 dark:text-white text-lg font-semibold">📸 Capture Receipt</h1>
         <button
           onClick={() => router.push("/dashboard")}
-          className="text-gray-600 dark:text-white text-sm"
+          className="text-gray-600 dark:text-white text-base font-medium px-3 py-2 min-h-[44px]"
         >
           Cancel
         </button>

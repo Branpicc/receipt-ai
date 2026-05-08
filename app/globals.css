@@ -35,6 +35,18 @@ html.dark body {
   color: white;
 }
 
+/* iOS auto-zooms form fields when their font-size is < 16px on focus,
+   which is jarring on mobile. Force 16px on phones so the viewport stays
+   stable. Desktop sizes are unaffected (we still use Tailwind text-sm /
+   text-base classes to control desktop appearance). */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Print setup. The dashboard layout chrome (sidebar, notification bell,
    verify banner, etc.) and the in-app report rendering all carry the
    tailwind `print:hidden` class so they collapse to display:none in

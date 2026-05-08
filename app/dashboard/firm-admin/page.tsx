@@ -32,7 +32,7 @@ type FirmOverview = {
 export default function FirmAdminDashboard() {
   const gate = useFeatureGate("advanced_reports");
   if (gate.loading) return null;
-  if (!gate.allowed) return <UpgradeRequired feature="advanced_reports" />;
+  if (!gate.allowed) return <UpgradeRequired feature="advanced_reports" asClient={gate.role === "client"} />;
   return <FirmAdminDashboardContent />;
 }
 

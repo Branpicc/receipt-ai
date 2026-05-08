@@ -21,7 +21,7 @@ type ClientWithReport = {
 export default function ReportsIndexPage() {
   const gate = useFeatureGate("client_reports");
   if (gate.loading) return null;
-  if (!gate.allowed) return <UpgradeRequired feature="client_reports" />;
+  if (!gate.allowed) return <UpgradeRequired feature="client_reports" asClient={gate.role === "client"} />;
   return <ReportsIndexContent />;
 }
 

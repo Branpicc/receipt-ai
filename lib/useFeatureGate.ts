@@ -18,21 +18,25 @@
 
 import { useEffect, useState } from "react";
 import { getMyFirmPlan } from "./getMyFirmPlan";
+import { getUserRole, type UserRole } from "./getUserRole";
 import { hasFeature, type Feature, type Plan } from "./featureGates";
 
 export function useFeatureGate(feature: Feature): {
   loading: boolean;
   allowed: boolean;
   plan: Plan;
+  role: UserRole | null;
 } {
   const [plan, setPlan] = useState<Plan>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    getMyFirmPlan().then((p) => {
+    Promise.all([getMyFirmPlan(), getUserRole()]).then(([p, r]) => {
       if (!cancelled) {
         setPlan(p);
+        setRole(r);
         setLoading(false);
       }
     });
@@ -45,5 +49,6 @@ export function useFeatureGate(feature: Feature): {
     loading,
     allowed: hasFeature(plan, feature),
     plan,
+    role,
   };
 }

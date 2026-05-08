@@ -22,10 +22,36 @@ import { FEATURE_META, type Feature } from "@/lib/featureGates";
 type Props = {
   feature: Feature;
   inline?: boolean;
+  // When true, renders a quieter "not included in your firm's plan" view
+  // without the upgrade CTA. Use for clients (who can't change the firm's
+  // subscription themselves and shouldn't be marketed to).
+  asClient?: boolean;
 };
 
-export default function UpgradeRequired({ feature, inline = false }: Props) {
+export default function UpgradeRequired({ feature, inline = false, asClient = false }: Props) {
   const meta = FEATURE_META[feature];
+
+  if (asClient) {
+    if (inline) return null; // Quietly hide inline gated sections from clients.
+    return (
+      <div className="p-8 min-h-[60vh] flex items-center justify-center">
+        <div className="max-w-md w-full bg-white dark:bg-dark-surface rounded-2xl border border-gray-200 dark:border-dark-border p-8 text-center shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Not available
+          </h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            This feature isn&apos;t included in your accounting firm&apos;s plan. If you&apos;d like to use it, mention it to your accountant.
+          </p>
+          <Link
+            href="/dashboard/client"
+            className="inline-block px-5 py-2.5 bg-accent-600 hover:bg-accent-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (inline) {
     return (

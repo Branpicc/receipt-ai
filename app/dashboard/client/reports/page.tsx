@@ -23,7 +23,7 @@ import UpgradeRequired from "@/components/UpgradeRequired";
 export default function ClientReportsPage() {
   const gate = useFeatureGate("client_reports");
   if (gate.loading) return null;
-  if (!gate.allowed) return <UpgradeRequired feature="client_reports" />;
+  if (!gate.allowed) return <UpgradeRequired feature="client_reports" asClient={gate.role === "client"} />;
   return <ClientReportsRedirect />;
 }
 

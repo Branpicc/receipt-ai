@@ -375,7 +375,7 @@ function getCategoryColor(category: string) {
           <div className="text-5xl mb-3">📸</div>
           <div className="text-xl font-bold mb-1">Upload Receipt</div>
           <div className="text-sm text-accent-100 mb-4">Tap to take a photo or choose from your library</div>
-          <div className="inline-block bg-white text-accent-700 font-semibold px-6 py-2.5 rounded-xl text-sm">
+          <div className="inline-block bg-white text-accent-700 font-semibold px-6 py-3 rounded-xl text-base min-h-[44px] flex items-center justify-center">
             Choose Files
           </div>
         </div>

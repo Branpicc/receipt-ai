@@ -53,7 +53,7 @@ type DeletionSubTab = "pending" | "decided";
 export default function EditHistoryPage() {
   const gate = useFeatureGate("edit_history");
   if (gate.loading) return null;
-  if (!gate.allowed) return <UpgradeRequired feature="edit_history" />;
+  if (!gate.allowed) return <UpgradeRequired feature="edit_history" asClient={gate.role === "client"} />;
   return <EditHistoryContent />;
 }
 
