@@ -190,11 +190,22 @@ return (
                 ) : (
                   <span className="text-xl font-bold text-accent-600 dark:text-accent-400">R</span>
                 )}
+                {/* Desktop: wide/narrow toggle. Mobile: close-drawer button.
+                    The chevron behaves differently on mobile (drawer pattern),
+                    so we render it as a different button per breakpoint. */}
                 <button
                   onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  className="hidden md:inline-flex text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                 >
                   {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => setMobileDrawerOpen(false)}
+                  className="md:hidden inline-flex items-center justify-center w-10 h-10 -mr-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  aria-label="Close navigation"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M6 18L18 6" /></svg>
                 </button>
               </div>
             </div>
