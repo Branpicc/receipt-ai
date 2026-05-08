@@ -9,6 +9,8 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
 } from "recharts";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
 type ClientReport = {
   id: string;
@@ -65,6 +67,13 @@ function formatCents(cents: number) {
 }
 
 export default function ClientReportsPage() {
+  const gate = useFeatureGate("client_reports");
+  if (gate.loading) return null;
+  if (!gate.allowed) return <UpgradeRequired feature="client_reports" />;
+  return <ClientReportsContent />;
+}
+
+function ClientReportsContent() {
   const params = useParams();
   const clientId = params?.clientId as string;
 

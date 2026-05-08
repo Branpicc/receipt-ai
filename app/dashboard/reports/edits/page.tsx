@@ -8,6 +8,8 @@ import { useEditMode } from "@/lib/EditMode";
 import { permanentlyDeleteReceipt } from "@/lib/deleteReceipt";
 import Link from "next/link";
 import { Edit3, Trash2, AlertTriangle } from "lucide-react";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
 type EditRecord = {
   id: string;
@@ -49,6 +51,13 @@ type Tab = "edits" | "deletions";
 type DeletionSubTab = "pending" | "decided";
 
 export default function EditHistoryPage() {
+  const gate = useFeatureGate("edit_history");
+  if (gate.loading) return null;
+  if (!gate.allowed) return <UpgradeRequired feature="edit_history" />;
+  return <EditHistoryContent />;
+}
+
+function EditHistoryContent() {
   const [tab, setTab] = useState<Tab>("edits");
 
   const [edits, setEdits] = useState<EditRecord[]>([]);

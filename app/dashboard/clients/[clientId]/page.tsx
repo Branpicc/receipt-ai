@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
 type Client = {
   id: string;
@@ -67,6 +69,10 @@ type Stats = {
 export default function ClientDetailPage() {
   const params = useParams();
   const clientId = params?.clientId as string;
+  // Pro+ gate for the rich profile sections (flags, cards, edits). Starter
+  // users still see the Overview tab so they can manage basic client info.
+  const profileGate = useFeatureGate("client_detail_profile");
+  const richProfile = profileGate.allowed;
 
   const [client, setClient] = useState<Client | null>(null);
   const [cards, setCards] = useState<ClientCard[]>([]);
@@ -290,9 +296,11 @@ async function requestIncomeTypeUpdate() {
           <div className="flex overflow-x-auto">
             {([
               { id: "overview", label: "Overview", icon: "📊" },
-              { id: "flags", label: `Flags (${stats.totalFlags})`, icon: "🚩" },
-              { id: "cards", label: `Cards (${cards.length})`, icon: "💳" },
-              { id: "edits", label: `Edit History (${stats.totalEdits})`, icon: "✏️" },
+              ...(richProfile ? [
+                { id: "flags" as const, label: `Flags (${stats.totalFlags})`, icon: "🚩" },
+                { id: "cards" as const, label: `Cards (${cards.length})`, icon: "💳" },
+                { id: "edits" as const, label: `Edit History (${stats.totalEdits})`, icon: "✏️" },
+              ] : []),
             ] as const).map((tab) => (
               <button
                 key={tab.id}
@@ -379,7 +387,7 @@ async function requestIncomeTypeUpdate() {
           )}
 
           {/* Flags Tab */}
-          {activeTab === "flags" && (
+          {activeTab === "flags" && richProfile && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 {(["all", "unresolved", "resolved"] as const).map(f => (
@@ -437,7 +445,7 @@ async function requestIncomeTypeUpdate() {
           )}
 
           {/* Cards Tab */}
-          {activeTab === "cards" && (
+          {activeTab === "cards" && richProfile && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Cards registered by this client for business expense tracking.
@@ -477,7 +485,7 @@ async function requestIncomeTypeUpdate() {
           )}
 
           {/* Edit History Tab */}
-          {activeTab === "edits" && (
+          {activeTab === "edits" && richProfile && (
             <div className="space-y-4">
               {edits.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">

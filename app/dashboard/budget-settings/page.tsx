@@ -8,6 +8,8 @@ import { useClientContext } from "@/lib/ClientContext";
 import { useEditMode } from "@/lib/EditMode";
 import { Lightbulb } from "lucide-react";
 import { TAX_CATEGORIES as AVAILABLE_CATEGORIES } from "@/lib/taxCategories";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
 type CategoryBudget = {
   id: string;
@@ -17,6 +19,13 @@ type CategoryBudget = {
 };
 
 export default function BudgetSettingsPage() {
+  const gate = useFeatureGate("budget_tracking");
+  if (gate.loading) return null;
+  if (!gate.allowed) return <UpgradeRequired feature="budget_tracking" />;
+  return <BudgetSettingsContent />;
+}
+
+function BudgetSettingsContent() {
   const [, setBudgets] = useState<CategoryBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

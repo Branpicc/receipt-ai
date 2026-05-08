@@ -17,8 +17,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
-export default function ClientReportsRedirect() {
+export default function ClientReportsPage() {
+  const gate = useFeatureGate("client_reports");
+  if (gate.loading) return null;
+  if (!gate.allowed) return <UpgradeRequired feature="client_reports" />;
+  return <ClientReportsRedirect />;
+}
+
+function ClientReportsRedirect() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 

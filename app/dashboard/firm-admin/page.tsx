@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
 type AccountantStats = {
   accountant_id: string;
@@ -28,6 +30,13 @@ type FirmOverview = {
 };
 
 export default function FirmAdminDashboard() {
+  const gate = useFeatureGate("advanced_reports");
+  if (gate.loading) return null;
+  if (!gate.allowed) return <UpgradeRequired feature="advanced_reports" />;
+  return <FirmAdminDashboardContent />;
+}
+
+function FirmAdminDashboardContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);

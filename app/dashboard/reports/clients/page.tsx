@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import Link from "next/link";
+import { useFeatureGate } from "@/lib/useFeatureGate";
+import UpgradeRequired from "@/components/UpgradeRequired";
 
 type ClientWithReport = {
   id: string;
@@ -17,6 +19,13 @@ type ClientWithReport = {
 };
 
 export default function ReportsIndexPage() {
+  const gate = useFeatureGate("client_reports");
+  if (gate.loading) return null;
+  if (!gate.allowed) return <UpgradeRequired feature="client_reports" />;
+  return <ReportsIndexContent />;
+}
+
+function ReportsIndexContent() {
   const [clients, setClients] = useState<ClientWithReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingAll, setGeneratingAll] = useState(false);

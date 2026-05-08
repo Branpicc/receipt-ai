@@ -10,6 +10,8 @@ import EmailVerifyBanner from "@/components/EmailVerifyBanner";
 import SidebarTour from "@/components/SidebarTour";
 import DailyCheckinRunner from "@/components/DailyCheckinRunner";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
+import { getMyFirmPlan } from "@/lib/getMyFirmPlan";
+import { hasFeature, type Plan } from "@/lib/featureGates";
 import { ClientProvider } from "@/lib/ClientContext";
 import { EditModeProvider } from "@/lib/EditMode";
 import EditModeToggle from "@/components/EditModeToggle";
@@ -49,11 +51,13 @@ export default function DashboardLayout({
   const [teamOpen, setTeamOpen] = useState(true);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [firmPlan, setFirmPlan] = useState<Plan>(null);
   const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
     loadUserRole();
+    loadFirmPlan();
     loadAndApplyTheme();
   }, []);
 
@@ -116,9 +120,22 @@ function applyTheme(theme: "light" | "dark" | "system") {
     setUserRole(role);
   }
 
+  async function loadFirmPlan() {
+    const plan = await getMyFirmPlan();
+    setFirmPlan(plan);
+  }
+
 const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
 const isAccountant = userRole === "accountant" || userRole === "owner" || userRole === "firm_admin";
 const isClient = userRole === "client";
+
+// Tier-gated features (Pro+ only). The plan loads asynchronously, so until
+// it's known we render conservatively — gated nav items hide while loading
+// and reappear if the user is on Pro/Enterprise.
+const canBudget = hasFeature(firmPlan, "budget_tracking");
+const canEditHistory = hasFeature(firmPlan, "edit_history");
+const canClientReports = hasFeature(firmPlan, "client_reports");
+const canAdvancedReports = hasFeature(firmPlan, "advanced_reports");
 
 return (
   <EditModeProvider userRole={userRole}>
@@ -201,6 +218,7 @@ return (
             </Link>
           </li>
           )}
+          {canBudget && (
           <li>
             <Link
               href="/dashboard/budget-settings"
@@ -214,6 +232,7 @@ return (
               <span className="font-medium">Budget</span>
             </Link>
           </li>
+          )}
 
           <li>
             <Link
@@ -243,6 +262,7 @@ return (
   </Link>
 </li>
 
+{canClientReports && (
 <li>
   <Link
     href="/dashboard/client/reports"
@@ -256,6 +276,7 @@ return (
     <span className="font-medium">My Reports</span>
   </Link>
 </li>
+)}
         </>
       )}
 
@@ -330,7 +351,7 @@ return (
                   <span className="text-sm">Flags</span>
                 </Link>
               </li>
-              {(userRole === "accountant" || userRole === "owner") && (
+              {(userRole === "accountant" || userRole === "owner") && canBudget && (
                 <li className="ml-4">
                   <Link
                     href="/dashboard/budget-settings"
@@ -436,7 +457,7 @@ return (
           </li>
           {reportsOpen && (
             <>
-              {isFirmAdmin && (
+              {isFirmAdmin && canAdvancedReports && (
                 <li className="ml-4">
                   <Link
                     href="/dashboard/firm-admin"
@@ -464,6 +485,7 @@ return (
                   <span className="text-sm">Tax Codes</span>
                 </Link>
               </li>
+              {canClientReports && (
               <li className="ml-4">
   <Link
     data-tour="sidebar-reports-clients"
@@ -478,6 +500,8 @@ href="/dashboard/reports/clients"
     <span className="text-sm">Client Reports</span>
   </Link>
 </li>
+              )}
+              {canEditHistory && (
 <li className="ml-4">
   <Link
     data-tour="sidebar-reports-edits"
@@ -501,6 +525,7 @@ href="/dashboard/reports/clients"
     )}
   </Link>
 </li>
+              )}
 
             </>
           )}
