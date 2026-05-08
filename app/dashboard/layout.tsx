@@ -96,6 +96,23 @@ export default function DashboardLayout({
   }
 
 async function loadAndApplyTheme() {
+  // Apply the cached theme from localStorage IMMEDIATELY so the layout
+  // can render without waiting for Supabase. The inline <script> in
+  // app/layout.tsx already toggles `dark` on <html> on first paint, so
+  // this just keeps state in sync.
+  try {
+    const cached = localStorage.getItem("receipture-theme") as
+      | "light"
+      | "dark"
+      | "system"
+      | null;
+    if (cached) applyTheme(cached);
+  } catch {
+    // localStorage may be unavailable (Safari private mode) — ignore.
+  }
+
+  // Then refresh from Supabase in the background and update if it differs.
+  // This no longer blocks layout render.
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -110,7 +127,6 @@ async function loadAndApplyTheme() {
     applyTheme(theme);
   } catch (error) {
     console.error("Failed to load theme:", error);
-    applyTheme("system");
   }
 }
 

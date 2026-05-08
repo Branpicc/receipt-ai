@@ -21,6 +21,11 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request: NextRequest) {
+  // Defence in depth: only callable when explicitly opted in via env var.
+  if (process.env.DEMO_SEEDS_ENABLED !== "true") {
+    return NextResponse.json({ error: "Demo seeds are disabled" }, { status: 404 });
+  }
+
   try {
     const authHeader = request.headers.get("authorization") || "";
     const accessToken = authHeader.replace(/^Bearer\s+/i, "");

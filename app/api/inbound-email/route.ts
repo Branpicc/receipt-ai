@@ -38,10 +38,34 @@ function extractHtmlFromMime(raw: string): string {
   return '';
 }
 
+// SendGrid Inbound Parse does not sign requests. The standard defense is
+// to include a shared secret token in the webhook URL itself, which only
+// the SendGrid configuration knows. Without it, anyone could POST a fake
+// email payload and inject receipts under any firm.
+//
+// Configure SendGrid Inbound Parse to POST to:
+//   https://receipture.ca/api/inbound-email?token=<SENDGRID_INBOUND_TOKEN>
+// and set SENDGRID_INBOUND_TOKEN in Vercel.
+//
+// In development the check is skipped so local testing without the token
+// works.
+function isAuthorizedSendGridRequest(request: NextRequest): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  const expected = process.env.SENDGRID_INBOUND_TOKEN;
+  if (!expected) return false;
+  const provided = request.nextUrl.searchParams.get("token");
+  return provided === expected;
+}
+
 export async function POST(request: NextRequest) {
+  if (!isAuthorizedSendGridRequest(request)) {
+    console.warn("[inbound-email] rejected request — invalid or missing token");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const formData = await request.formData();
-    
+
 const to = formData.get('to') as string;
     const from = formData.get('from') as string;
     const subject = formData.get('subject') as string;

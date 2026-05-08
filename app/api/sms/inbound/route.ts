@@ -1,6 +1,43 @@
 // app/api/sms/inbound/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { escapeXml } from '@/lib/xmlEscape';
+
+// Verifies the request actually came from Twilio by recomputing the
+// HMAC-SHA1 signature Twilio sends in X-Twilio-Signature. Without this,
+// anyone who learns the webhook URL could POST a fake reply attributed to
+// any client phone number.
+async function isValidTwilioRequest(
+  request: NextRequest,
+  params: Record<string, string>
+): Promise<boolean> {
+  // Skip in development — ngrok / local testing can't easily produce a
+  // valid Twilio signature, and we don't want to block local debugging.
+  if (process.env.NODE_ENV !== "production") return true;
+
+  const signature = request.headers.get("x-twilio-signature");
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!signature || !authToken) return false;
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    `https://${request.headers.get("host") || "receipture.ca"}`;
+  const url = `${baseUrl.replace(/\/$/, "")}/api/sms/inbound`;
+
+  try {
+    const twilio = await import("twilio");
+    return twilio.default.validateRequest(authToken, signature, url, params);
+  } catch (err) {
+    console.error("[sms/inbound] signature verification threw:", err);
+    return false;
+  }
+}
+
+// Wraps user-controlled text in TwiML safely. Without escapeXml, a reply
+// containing & or < would break the response parser.
+function twimlMessage(message: string): string {
+  return `<?xml version="1.0"?><Response><Message>${escapeXml(message)}</Message></Response>`;
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -125,6 +162,21 @@ if (topCategory && topCategory[1] >= 2) {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
+
+    // Build a plain-string param map for signature verification.
+    const params: Record<string, string> = {};
+    for (const [key, value] of formData.entries()) {
+      if (typeof value === "string") params[key] = value;
+    }
+
+    if (!(await isValidTwilioRequest(request, params))) {
+      console.warn("[sms/inbound] rejected request — invalid Twilio signature");
+      return new NextResponse('<?xml version="1.0"?><Response></Response>', {
+        status: 403,
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string;
 
@@ -249,7 +301,7 @@ const { data: clients } = await supabase
         : `Hmm, we couldn't match your reply to a receipt. Try "1: purpose" format.`;
 
       return new NextResponse(
-        `<?xml version="1.0"?><Response><Message>${confirmMessage}</Message></Response>`,
+        twimlMessage(confirmMessage),
         { headers: { 'Content-Type': 'text/xml' } }
       );
 
@@ -330,7 +382,7 @@ let updateError = null;
       }
 
       return new NextResponse(
-        `<?xml version="1.0"?><Response><Message>${confirmMessage}</Message></Response>`,
+        twimlMessage(confirmMessage),
         { headers: { 'Content-Type': 'text/xml' } }
       );
     }

@@ -74,6 +74,9 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
+  // Surface load errors as a real UI instead of stranding the user on
+  // "Loading receipts…" forever when the fetch fails.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [firmId, setFirmId] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -155,6 +158,7 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
 
   async function loadReceipts() {
     setLoading(true);
+    setLoadError(null);
     try {
       if (!firmId) return;
 
@@ -238,8 +242,9 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
       if (end) countQuery = countQuery.lte(dateSearchType, end);
       const { count } = await countQuery;
       setTotalCount(count ?? null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Load receipts error:", err);
+      setLoadError(err?.message || "Could not load receipts.");
     } finally {
       setLoading(false);
     }
@@ -648,6 +653,17 @@ const filtersBarJSX = (
     <>
           {loading ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading receipts...</div>
+      ) : loadError ? (
+        <div className="text-center py-12 bg-red-50 dark:bg-red-900/20 rounded-xl border-2 border-dashed border-red-300 dark:border-red-800">
+          <p className="font-semibold text-red-800 dark:text-red-200 mb-1">Couldn&apos;t load your receipts</p>
+          <p className="text-sm text-red-700 dark:text-red-300 mb-4">{loadError}</p>
+          <button
+            onClick={() => loadReceipts()}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Try again
+          </button>
+        </div>
       ) : receipts.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
           <p className="text-gray-500 dark:text-gray-400">

@@ -23,6 +23,13 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request: NextRequest) {
+  // Defence in depth: this endpoint creates demo data and is only ever
+  // intended for staging / dev environments. Disable in prod unless the
+  // operator explicitly opts in by setting DEMO_SEEDS_ENABLED=true.
+  if (process.env.DEMO_SEEDS_ENABLED !== "true") {
+    return NextResponse.json({ error: "Demo seeds are disabled" }, { status: 404 });
+  }
+
   try {
     const authHeader = request.headers.get("authorization") || "";
     const accessToken = authHeader.replace(/^Bearer\s+/i, "");

@@ -239,9 +239,6 @@ export async function getUsageStats(firmId: string) {
   }
 }
 
-export function hasFeature(plan: string, feature: string): boolean {
-  const planLimits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
-  if (!planLimits) return false;
-  if ((planLimits as any).features?.includes("all")) return true;
-  return (planLimits as any).features?.includes(feature) ?? false;
-}
+// hasFeature lives in lib/featureGates.ts — the single source of truth
+// for tier-based feature gating. The duplicate previously here disagreed
+// with featureGates.ts on trial-tier behaviour and was unused.

@@ -59,6 +59,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate file content type. The browser provides file.type, but it's
+    // client-controlled — confirm against an allow-list AND check the
+    // first few bytes (magic numbers) so an attacker can't slip a non-image
+    // through by lying about the MIME.
+    const ALLOWED_MIMES = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+      "application/pdf",
+    ]);
+    if (!ALLOWED_MIMES.has(file.type)) {
+      return NextResponse.json(
+        { error: "Unsupported file type. Use JPG, PNG, WEBP, HEIC or PDF." },
+        { status: 400 }
+      );
+    }
+
+    const headBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    const looksLikeAllowed =
+      // JPEG
+      (headBytes[0] === 0xff && headBytes[1] === 0xd8 && headBytes[2] === 0xff) ||
+      // PNG
+      (headBytes[0] === 0x89 && headBytes[1] === 0x50 && headBytes[2] === 0x4e && headBytes[3] === 0x47) ||
+      // WEBP (RIFF....WEBP)
+      (headBytes[0] === 0x52 && headBytes[1] === 0x49 && headBytes[2] === 0x46 && headBytes[3] === 0x46 &&
+        headBytes[8] === 0x57 && headBytes[9] === 0x45 && headBytes[10] === 0x42 && headBytes[11] === 0x50) ||
+      // PDF (%PDF-)
+      (headBytes[0] === 0x25 && headBytes[1] === 0x50 && headBytes[2] === 0x44 && headBytes[3] === 0x46) ||
+      // HEIC/HEIF: bytes 4-7 are "ftyp"
+      (headBytes[4] === 0x66 && headBytes[5] === 0x74 && headBytes[6] === 0x79 && headBytes[7] === 0x70);
+    if (!looksLikeAllowed) {
+      return NextResponse.json(
+        { error: "File content doesn't match a supported image or PDF format." },
+        { status: 400 }
+      );
+    }
+
     // 1. Create receipt record
     const { data: receiptData, error: receiptError } = await supabase
       .from("receipts")

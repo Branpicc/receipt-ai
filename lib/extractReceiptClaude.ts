@@ -19,6 +19,23 @@ import type { ExtractedReceiptData, LineItem } from "./extractReceiptData";
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
 
+// Hard upper bound on any single Claude / Vision call. Without this, a
+// stuck upstream request would block the entire receipt processing and
+// eventually time out at the Vercel function level (slower + worse error).
+const EXTERNAL_API_TIMEOUT_MS = 30_000;
+
+function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = EXTERNAL_API_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
 // Tool schema enforces structured output — Claude must return values matching
 // these types or the API rejects the response.
 const RECEIPT_TOOL = {
@@ -126,7 +143,7 @@ function getApiKey(): string {
 }
 
 async function callClaude(messages: any[]): Promise<any> {
-  const res = await fetch(ANTHROPIC_API_URL, {
+  const res = await fetchWithTimeout(ANTHROPIC_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -193,7 +210,7 @@ function parseToolResponse(claudeResponse: any, rawText: string): ExtractedRecei
 // ── HYBRID IMAGE EXTRACTION ────────────────────────────────────────────────
 
 async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; mediaType: string }> {
-  const res = await fetch(imageUrl);
+  const res = await fetchWithTimeout(imageUrl, {});
   if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
   const buf = await res.arrayBuffer();
   const base64 = Buffer.from(buf).toString("base64");
@@ -214,17 +231,17 @@ async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; m
 }
 
 export async function fetchVisionOcrText(imageUrl: string): Promise<string> {
-  const apiKey =
-    process.env.GOOGLE_VISION_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_VISION_API_KEY;
+  // Server-only key. The NEXT_PUBLIC_* fallback was removed to keep the
+  // key out of the client bundle.
+  const apiKey = process.env.GOOGLE_VISION_API_KEY;
   if (!apiKey) return "";
 
   try {
-    const imgRes = await fetch(imageUrl);
+    const imgRes = await fetchWithTimeout(imageUrl, {});
     const buf = await imgRes.arrayBuffer();
     const base64 = Buffer.from(buf).toString("base64");
 
-    const visionRes = await fetch(
+    const visionRes = await fetchWithTimeout(
       `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
       {
         method: "POST",
@@ -320,7 +337,7 @@ export async function extractStage1Claude(
 ): Promise<{ vendor: string | null; date: string | null; total_cents: number | null }> {
   const imageData = await fetchImageAsBase64(imageUrl);
 
-  const res = await fetch(ANTHROPIC_API_URL, {
+  const res = await fetchWithTimeout(ANTHROPIC_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

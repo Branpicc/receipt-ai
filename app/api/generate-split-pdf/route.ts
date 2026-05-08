@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
+import { requireFirmMember } from '@/lib/apiAuth';
 
 const execAsync = promisify(exec);
 
@@ -24,18 +25,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('📄 Generating PDF for receipts:', { originalReceiptId, newReceiptId });
-
-    // Fetch both receipts
+    // Resolve the firm_id of both receipts so we can verify the caller
+    // belongs to it, and that both receipts are in the SAME firm (no
+    // cross-firm splits).
     const { data: originalReceipt } = await supabase
       .from('receipts')
-      .select('*')
+      .select('*, firm_id')
       .eq('id', originalReceiptId)
       .single();
 
     const { data: newReceipt } = await supabase
       .from('receipts')
-      .select('*')
+      .select('*, firm_id')
       .eq('id', newReceiptId)
       .single();
 
@@ -45,6 +46,18 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    if (originalReceipt.firm_id !== newReceipt.firm_id) {
+      return NextResponse.json(
+        { error: 'Receipts belong to different firms' },
+        { status: 400 }
+      );
+    }
+
+    const auth = await requireFirmMember(request, originalReceipt.firm_id);
+    if (auth instanceof NextResponse) return auth;
+
+    console.log('📄 Generating PDF for receipts:', { originalReceiptId, newReceiptId });
 
     // Fetch line items
     const { data: originalItems } = await supabase

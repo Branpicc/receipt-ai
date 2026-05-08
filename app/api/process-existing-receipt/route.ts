@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { extractReceiptImageWithEngine } from "@/lib/extractReceiptClaude";
+import { requireFirmMember } from "@/lib/apiAuth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,16 +15,40 @@ const supabase = createClient(
 );
 
 export async function POST(request: NextRequest) {
+  // Parse the body once, up-front. We can't read it twice (the previous
+  // version did, which threw on every error path).
+  let body: { receiptId?: string; filePath?: string } = {};
   try {
-    const { receiptId, filePath } = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const { receiptId, filePath } = body;
 
-    if (!receiptId || !filePath) {
-      return NextResponse.json(
-        { error: "Missing receiptId or filePath" },
-        { status: 400 }
-      );
-    }
+  if (!receiptId || !filePath) {
+    return NextResponse.json(
+      { error: "Missing receiptId or filePath" },
+      { status: 400 }
+    );
+  }
 
+  // Resolve the firm_id from the receipt and verify the caller is a member
+  // of that firm before doing any work. This route reprocesses an existing
+  // receipt, so the firm context comes from the receipt row itself.
+  const { data: receipt } = await supabase
+    .from("receipts")
+    .select("firm_id")
+    .eq("id", receiptId)
+    .single();
+
+  if (!receipt) {
+    return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
+  }
+
+  const auth = await requireFirmMember(request, receipt.firm_id);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
     console.log("📸 Processing receipt:", receiptId, filePath);
 
     // Get signed URL for the file
@@ -89,15 +114,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("❌ OCR processing error:", error);
-    
-    // Update receipt status to failed
-    if (request.json) {
-      const { receiptId } = await request.json();
-      await supabase
-        .from("receipts")
-        .update({ extraction_status: "failed" })
-        .eq("id", receiptId);
-    }
+
+    // Mark the receipt as failed so the UI shows the right state.
+    await supabase
+      .from("receipts")
+      .update({ extraction_status: "failed" })
+      .eq("id", receiptId);
 
     return NextResponse.json(
       { error: error.message || "Processing failed" },

@@ -23,22 +23,29 @@ export type ExtractedReceiptData = {
 export async function extractReceiptData(
   imageUrl: string
 ): Promise<ExtractedReceiptData> {
-  // Accept either name during the rename transition. Once Vercel has only the
-  // un-prefixed name, drop the fallback.
-  const apiKey =
-    process.env.GOOGLE_VISION_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_VISION_API_KEY;
+  // Server-only key. The NEXT_PUBLIC_* fallback was removed to keep the key
+  // out of the client bundle.
+  const apiKey = process.env.GOOGLE_VISION_API_KEY;
 
   if (!apiKey) {
     throw new Error("Google Vision API key not configured");
   }
 
+  // Hard timeout on each external call so a stuck upstream doesn't hang
+  // the receipt processing pipeline indefinitely.
+  const TIMEOUT_MS = 30_000;
+  const fetchT = (url: string, init: RequestInit = {}) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    return fetch(url, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  };
+
   try {
-    const imageResponse = await fetch(imageUrl);
+    const imageResponse = await fetchT(imageUrl);
     const arrayBuffer = await imageResponse.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString("base64");
 
-    const visionResponse = await fetch(
+    const visionResponse = await fetchT(
       `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
       {
         method: "POST",

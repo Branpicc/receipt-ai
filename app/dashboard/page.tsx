@@ -136,77 +136,160 @@ async function loadStats(role: string | null) {
 
       const effectiveClientId = ownClientId || clientFilter;
 
-      // Total receipts
-let totalQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId);
-      if (effectiveClientId) totalQ = totalQ.eq("client_id", effectiveClientId);
-      else if (accountantClientIds) totalQ = totalQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
-            const { count: total } = await totalQ;
+      // Apply the standard scope (firm + optional client / accountant scope)
+      // to a base count query. Centralising this avoids drift across the 4
+      // identical branches we used to have.
+      const scopeReceipts = (q: any) => {
+        q = q.eq("firm_id", firmId);
+        if (effectiveClientId) q = q.eq("client_id", effectiveClientId);
+        else if (accountantClientIds)
+          q = q.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
+        return q;
+      };
 
-      // This month
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
-      let monthQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).gte("created_at", startOfMonth.toISOString());
-      if (effectiveClientId) monthQ = monthQ.eq("client_id", effectiveClientId);
-      else if (accountantClientIds) monthQ = monthQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
-      const { count: thisMonth } = await monthQ;
 
-      // Pending review
-let pendingQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).eq("status", "needs_review");
-      if (effectiveClientId) pendingQ = pendingQ.eq("client_id", effectiveClientId);
-      else if (accountantClientIds) pendingQ = pendingQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
-      const { count: pending } = await pendingQ;
+      const isFirm = role === "firm_admin" || role === "owner";
+      const isAccountantOrFirm = isFirm || role === "accountant";
 
-      // Categorized
-let catQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).not("approved_category", "is", null);
-      if (effectiveClientId) catQ = catQ.eq("client_id", effectiveClientId);
-      else if (accountantClientIds) catQ = catQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
-      const { count: categorized } = await catQ;
+      // ── PARALLEL BATCH 1: receipt + flag counts ─────────────────────────
+      // These are all independent of each other and the firm-level counts
+      // below. Running them sequentially used to add ~2-4 seconds; doing
+      // them in parallel cuts dashboard load to a single round trip.
+      const [
+        totalRes,
+        monthRes,
+        pendingRes,
+        catRes,
+        flagsRes,
+        clientReceiptsRes,
+        emailReceivedRes,
+        emailPendingRes,
+        emailApprovedRes,
+        totalClientsRes,
+        assignedClientsRes,
+        accountantsRes,
+        recentRes,
+      ] = await Promise.all([
+        scopeReceipts(supabase.from("receipts").select("*", { count: "exact", head: true })),
+        scopeReceipts(
+          supabase
+            .from("receipts")
+            .select("*", { count: "exact", head: true })
+            .gte("created_at", startOfMonth.toISOString())
+        ),
+        scopeReceipts(
+          supabase
+            .from("receipts")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "needs_review")
+        ),
+        scopeReceipts(
+          supabase
+            .from("receipts")
+            .select("*", { count: "exact", head: true })
+            .not("approved_category", "is", null)
+        ),
+        supabase
+          .from("receipt_flags")
+          .select("receipt_id")
+          .eq("firm_id", firmId)
+          .is("resolved_at", null),
+        // Only used when filtering flags by a specific client.
+        effectiveClientId
+          ? supabase.from("receipts").select("id").eq("firm_id", firmId).eq("client_id", effectiveClientId)
+          : Promise.resolve({ data: null }),
+        // Email counts use head:true so we don't pull every row to count.
+        isAccountantOrFirm
+          ? supabase.from("email_receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId)
+          : Promise.resolve({ count: 0 }),
+        isAccountantOrFirm
+          ? supabase
+              .from("email_receipts")
+              .select("*", { count: "exact", head: true })
+              .eq("firm_id", firmId)
+              .eq("status", "pending")
+          : Promise.resolve({ count: 0 }),
+        isAccountantOrFirm
+          ? supabase
+              .from("email_receipts")
+              .select("*", { count: "exact", head: true })
+              .eq("firm_id", firmId)
+              .eq("status", "approved")
+          : Promise.resolve({ count: 0 }),
+        isFirm && !clientFilter
+          ? supabase.from("clients").select("*", { count: "exact", head: true }).eq("firm_id", firmId)
+          : Promise.resolve({ count: 0 }),
+        isFirm && !clientFilter
+          ? supabase
+              .from("clients")
+              .select("*", { count: "exact", head: true })
+              .eq("firm_id", firmId)
+              .not("assigned_accountant_id", "is", null)
+          : Promise.resolve({ count: 0 }),
+        isFirm && !clientFilter
+          ? supabase
+              .from("firm_users")
+              .select("*", { count: "exact", head: true })
+              .eq("firm_id", firmId)
+              .eq("role", "accountant")
+          : Promise.resolve({ count: 0 }),
+        isAccountantOrFirm
+          ? scopeReceipts(
+              supabase
+                .from("receipts")
+                .select("id, vendor, total_cents, created_at")
+                .order("created_at", { ascending: false })
+                .limit(5)
+            )
+          : Promise.resolve({ data: null }),
+      ]);
 
-      // Flagged
-      const { data: flags } = await supabase.from("receipt_flags").select("receipt_id").eq("firm_id", firmId).is("resolved_at", null);
+      const total = totalRes.count;
+      const thisMonth = monthRes.count;
+      const pending = pendingRes.count;
+      const categorized = catRes.count;
+      const flags = (flagsRes as { data: { receipt_id: string }[] | null }).data;
+
+      // Flagged count
       let flaggedCount = 0;
       if (effectiveClientId && flags) {
-        const { data: clientReceipts } = await supabase.from("receipts").select("id").eq("firm_id", firmId).eq("client_id", effectiveClientId);
-        const clientReceiptIds = new Set(clientReceipts?.map(r => r.id) || []);
-        flaggedCount = flags.filter(f => clientReceiptIds.has(f.receipt_id)).length;
+        const clientReceiptIds = new Set(
+          ((clientReceiptsRes as { data: { id: string }[] | null }).data || []).map((r) => r.id)
+        );
+        flaggedCount = flags.filter((f) => clientReceiptIds.has(f.receipt_id)).length;
       } else {
-        flaggedCount = new Set(flags?.map(f => f.receipt_id) || []).size;
+        flaggedCount = new Set(flags?.map((f) => f.receipt_id) || []).size;
       }
 
-      // Email stats
-      let emailStats = { received: 0, pending: 0, approved: 0 };
-      if (role === "firm_admin" || role === "owner" || role === "accountant") {
-        const { data: emails } = await supabase.from("email_receipts").select("status").eq("firm_id", firmId);
-        emailStats = {
-          received: emails?.length || 0,
-          pending: emails?.filter(e => e.status === "pending").length || 0,
-          approved: emails?.filter(e => e.status === "approved").length || 0,
-        };
-      }
+      // Email stats from the three independent count queries above.
+      const emailStats = {
+        received: (emailReceivedRes as { count: number | null }).count || 0,
+        pending: (emailPendingRes as { count: number | null }).count || 0,
+        approved: (emailApprovedRes as { count: number | null }).count || 0,
+      };
 
       // Client/accountant counts.
       let clientStats = { total: 0, assigned: 0 };
       let accountantCount = 0;
-      if ((role === "firm_admin" || role === "owner") && !clientFilter) {
-        const { count: totalClients } = await supabase.from("clients").select("*", { count: "exact", head: true }).eq("firm_id", firmId);
-        const { count: assignedClients } = await supabase.from("clients").select("*", { count: "exact", head: true }).eq("firm_id", firmId).not("assigned_accountant_id", "is", null);
-        const { count: accountants } = await supabase.from("firm_users").select("*", { count: "exact", head: true }).eq("firm_id", firmId).eq("role", "accountant");
-        clientStats = { total: totalClients || 0, assigned: assignedClients || 0 };
-        accountantCount = accountants || 0;
+      if (isFirm && !clientFilter) {
+        clientStats = {
+          total: (totalClientsRes as { count: number | null }).count || 0,
+          assigned: (assignedClientsRes as { count: number | null }).count || 0,
+        };
+        accountantCount = (accountantsRes as { count: number | null }).count || 0;
       } else if (role === "accountant" && !clientFilter && accountantClientIds) {
-        // Accountants see how many clients are assigned to them (the
-        // "assigned" count) rather than firm-wide totals.
+        // Accountants see how many clients are assigned to them rather
+        // than firm-wide totals.
         clientStats = { total: accountantClientIds.length, assigned: accountantClientIds.length };
       }
 
       // Recent activity
-      if (role === "firm_admin" || role === "owner" || role === "accountant") {
-        let recentQ = supabase.from("receipts").select("id, vendor, total_cents, created_at").eq("firm_id", firmId).order("created_at", { ascending: false }).limit(5);
-if (effectiveClientId) recentQ = recentQ.eq("client_id", effectiveClientId);
-        else if (accountantClientIds) recentQ = recentQ.in("client_id", accountantClientIds.length > 0 ? accountantClientIds : ["none"]);
-        const { data: recentReceipts } = await recentQ;
-                setRecentActivity((recentReceipts as RecentActivity[]) || []);
+      if (isAccountantOrFirm) {
+        const recentReceipts = (recentRes as { data: RecentActivity[] | null }).data;
+        setRecentActivity(recentReceipts || []);
       }
 
       setStats({

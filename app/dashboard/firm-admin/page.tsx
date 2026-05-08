@@ -85,47 +85,60 @@ if (range === "week") {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
 
-      // Load firm overview
-      let receiptsQuery = supabase
-        .from("receipts")
-        .select("id, status, approved_category, created_at")
-        .eq("firm_id", firmId);
+      // Apply the optional date scope to a count query so filtering happens
+      // in Supabase rather than after pulling every row into memory.
+      const scopeReceiptCount = (q: any) => {
+        q = q.eq("firm_id", firmId);
+        if (startDate) q = q.gte("created_at", startDate);
+        return q;
+      };
 
-      if (startDate) {
-        receiptsQuery = receiptsQuery.gte("created_at", startDate);
-      }
+      const scopeEmailCount = (q: any) => {
+        q = q.eq("firm_id", firmId);
+        if (startDate) q = q.gte("received_at", startDate);
+        return q;
+      };
 
-      const { data: receipts, error: receiptsError } = await receiptsQuery;
-      if (receiptsError) throw receiptsError;
+      // Run firm-overview counts in parallel — they're all independent.
+      const [
+        totalRes,
+        catRes,
+        reviewRes,
+        flagsRes,
+        totalEmailRes,
+        pendingEmailRes,
+        approvedEmailRes,
+      ] = await Promise.all([
+        scopeReceiptCount(supabase.from("receipts").select("*", { count: "exact", head: true })),
+        scopeReceiptCount(
+          supabase.from("receipts").select("*", { count: "exact", head: true }).not("approved_category", "is", null)
+        ),
+        scopeReceiptCount(
+          supabase.from("receipts").select("*", { count: "exact", head: true }).eq("status", "needs_review")
+        ),
+        supabase
+          .from("receipt_flags")
+          .select("receipt_id")
+          .eq("firm_id", firmId)
+          .is("resolved_at", null),
+        scopeEmailCount(supabase.from("email_receipts").select("*", { count: "exact", head: true })),
+        scopeEmailCount(
+          supabase.from("email_receipts").select("*", { count: "exact", head: true }).eq("status", "pending")
+        ),
+        scopeEmailCount(
+          supabase.from("email_receipts").select("*", { count: "exact", head: true }).eq("status", "approved")
+        ),
+      ]);
 
-      const totalReceipts = receipts?.length || 0;
-      const categorized = receipts?.filter(r => r.approved_category).length || 0;
-      const needsReview = receipts?.filter(r => r.status === "needs_review").length || 0;
-
-      // Load flagged receipts
-      const { data: flags } = await supabase
-        .from("receipt_flags")
-        .select("receipt_id")
-        .eq("firm_id", firmId)
-        .is("resolved_at", null);
-
-      const flaggedCount = new Set(flags?.map(f => f.receipt_id) || []).size;
-
-      // Load email stats
-      let emailQuery = supabase
-        .from("email_receipts")
-        .select("status")
-        .eq("firm_id", firmId);
-
-      if (startDate) {
-        emailQuery = emailQuery.gte("received_at", startDate);
-      }
-
-      const { data: emails } = await emailQuery;
-
-      const totalEmails = emails?.length || 0;
-      const emailsPending = emails?.filter(e => e.status === "pending").length || 0;
-      const emailsApproved = emails?.filter(e => e.status === "approved").length || 0;
+      const totalReceipts = totalRes.count || 0;
+      const categorized = catRes.count || 0;
+      const needsReview = reviewRes.count || 0;
+      const flaggedCount = new Set(
+        ((flagsRes.data as { receipt_id: string }[] | null) || []).map((f) => f.receipt_id)
+      ).size;
+      const totalEmails = totalEmailRes.count || 0;
+      const emailsPending = pendingEmailRes.count || 0;
+      const emailsApproved = approvedEmailRes.count || 0;
 
       setFirmOverview({
         total_receipts: totalReceipts,
@@ -138,24 +151,41 @@ if (range === "week") {
         overall_completion_rate: totalReceipts > 0 ? Math.round((categorized / totalReceipts) * 100) : 0,
       });
 
-// Load accountant performance stats
-      const { data: accountants } = await supabase
-        .from("firm_users")
-        .select("id, display_name, auth_user_id")
-        .eq("firm_id", firmId)
-        .eq("role", "accountant");
+      // ── Accountant performance stats ───────────────────────────────────
+      // Old version was N+1: for each accountant we fired 1 client lookup +
+      // 3 receipt counts = 4 round trips per accountant. With 10 accountants
+      // that's 41 sequential trips. Now we fetch the accountant list and
+      // the full client→accountant mapping in parallel up-front, then run
+      // the 3 receipt counts per accountant in parallel rather than serial.
+      const [accountantsRes, allClientsRes] = await Promise.all([
+        supabase
+          .from("firm_users")
+          .select("id, display_name, auth_user_id")
+          .eq("firm_id", firmId)
+          .eq("role", "accountant"),
+        supabase
+          .from("clients")
+          .select("id, assigned_accountant_id")
+          .eq("firm_id", firmId)
+          .not("assigned_accountant_id", "is", null),
+      ]);
+
+      const accountants = accountantsRes.data;
+      const allClients = (allClientsRes.data as { id: string; assigned_accountant_id: string | null }[] | null) || [];
+
+      // Build accountant_id → client_id[] map in JS (single O(n) pass).
+      const clientsByAccountant = new Map<string, string[]>();
+      for (const c of allClients) {
+        if (!c.assigned_accountant_id) continue;
+        const arr = clientsByAccountant.get(c.assigned_accountant_id) || [];
+        arr.push(c.id);
+        clientsByAccountant.set(c.assigned_accountant_id, arr);
+      }
 
       if (accountants && accountants.length > 0) {
         const stats = await Promise.all(accountants.map(async (acc) => {
-          // Get clients assigned to this accountant
-          const { data: assignedClients } = await supabase
-            .from("clients")
-            .select("id")
-            .eq("firm_id", firmId)
-            .eq("assigned_accountant_id", acc.id);
-          
-          const clientIds = assignedClients?.map(c => c.id) || [];
-          
+          const clientIds = clientsByAccountant.get(acc.id) || [];
+
           if (clientIds.length === 0) {
             return {
               accountant_id: acc.id,
@@ -168,26 +198,35 @@ if (range === "week") {
             };
           }
 
-let totalRQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).in("client_id", clientIds);
-          let catRQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).in("client_id", clientIds).not("approved_category", "is", null);
-          let reviewRQ = supabase.from("receipts").select("*", { count: "exact", head: true }).eq("firm_id", firmId).in("client_id", clientIds).eq("status", "needs_review");
-          if (startDate) {
-            totalRQ = totalRQ.gte("created_at", startDate);
-            catRQ = catRQ.gte("created_at", startDate);
-            reviewRQ = reviewRQ.gte("created_at", startDate);
-          }
-          const { count: totalR } = await totalRQ;
-          const { count: catR } = await catRQ;
-          const { count: reviewR } = await reviewRQ;
-          
+          const buildQ = (extra?: (q: any) => any) => {
+            let q = supabase
+              .from("receipts")
+              .select("*", { count: "exact", head: true })
+              .eq("firm_id", firmId)
+              .in("client_id", clientIds);
+            if (startDate) q = q.gte("created_at", startDate);
+            return extra ? extra(q) : q;
+          };
+
+          // The 3 counts are independent — run them in parallel.
+          const [totalR, catR, reviewR] = await Promise.all([
+            buildQ(),
+            buildQ((q) => q.not("approved_category", "is", null)),
+            buildQ((q) => q.eq("status", "needs_review")),
+          ]);
+
+          const totalCount = totalR.count || 0;
+          const catCount = catR.count || 0;
+          const reviewCount = reviewR.count || 0;
+
           return {
             accountant_id: acc.id,
             accountant_email: acc.display_name || acc.auth_user_id,
             total_clients: clientIds.length,
-            total_receipts: totalR || 0,
-            categorized_receipts: catR || 0,
-            needs_review: reviewR || 0,
-            completion_rate: totalR ? Math.round(((catR || 0) / totalR) * 100) : 0,
+            total_receipts: totalCount,
+            categorized_receipts: catCount,
+            needs_review: reviewCount,
+            completion_rate: totalCount ? Math.round((catCount / totalCount) * 100) : 0,
           };
         }));
         setAccountantStats(stats);

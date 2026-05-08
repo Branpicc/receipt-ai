@@ -108,7 +108,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const subscriptionId = session.subscription as string;
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  const priceId = subscription.items.data[0].price.id;
+  const firstItem = subscription.items?.data?.[0];
+  if (!firstItem?.price?.id) {
+    console.error('Subscription has no items', subscriptionId);
+    return;
+  }
+  const priceId = firstItem.price.id;
   const plan = getPlanFromPriceId(priceId);
   const limits = getLimitsForPlan(plan);
 
@@ -146,7 +151,12 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
 
   if (!firm) { console.error('Firm not found for customer:', customerId); return; }
 
-  const priceId = subscription.items.data[0].price.id;
+  const firstItem = subscription.items?.data?.[0];
+  if (!firstItem?.price?.id) {
+    console.error('Subscription has no items', subscription.id);
+    return;
+  }
+  const priceId = firstItem.price.id;
   const plan = getPlanFromPriceId(priceId);
   const limits = getLimitsForPlan(plan);
   const isTrialing = subscription.status === 'trialing';
