@@ -5,8 +5,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
-import { useFeatureGate } from "@/lib/useFeatureGate";
-import UpgradeRequired from "@/components/UpgradeRequired";
 
 type AccountantStats = {
   accountant_id: string;
@@ -29,10 +27,13 @@ type FirmOverview = {
   overall_completion_rate: number;
 };
 
+// Firm-wide analytics for the firm admin / owner. Previously gated behind
+// the "advanced_reports" feature flag, but this is a firm's own
+// operational visibility (their accountants' performance, their own
+// receipt counts) — not really a "premium report" — so it's available
+// regardless of plan. The role check inside checkAccess() still keeps
+// non-admin users out.
 export default function FirmAdminDashboard() {
-  const gate = useFeatureGate("advanced_reports");
-  if (gate.loading) return null;
-  if (!gate.allowed) return <UpgradeRequired feature="advanced_reports" asClient={gate.role === "client"} />;
   return <FirmAdminDashboardContent />;
 }
 

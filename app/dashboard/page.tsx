@@ -5,15 +5,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import Link from "next/link";
-import UsageStats from "@/components/UsageStats";
-import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import ClientSelector from "@/components/ClientSelector";
 import { useClientContext } from "@/lib/ClientContext";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
 import DailyCheckinAdminPanel from "@/components/DailyCheckinAdminPanel";
 import DailyCheckinDashboardCard from "@/components/DailyCheckinDashboardCard";
-import { useToast } from "@/components/Toast";
 
 type RecentActivity = {
   id: string;
@@ -23,8 +20,6 @@ type RecentActivity = {
 };
 
 export default function DashboardHomePage() {
-  const { showToast, updateToast } = useToast();
-  const [refreshKey, setRefreshKey] = useState(0);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalReceipts: 0,
@@ -310,99 +305,25 @@ async function loadStats(role: string | null) {
     }
   }
 
-async function handleMultipleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const fileArray = Array.from(files);
-
-    const firmId = await getMyFirmId();
-    const { data: clients } = await supabase.from("clients").select("id, name").eq("firm_id", firmId).limit(1);
-    if (!clients || clients.length === 0) {
-      showToast({ kind: "error", message: "Please add a client first", autoDismissMs: 4000 });
-      return;
-    }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id;
-    const client = selectedClient ? { id: selectedClient.id, name: selectedClient.name } : clients[0];
-    const batchId = fileArray.length > 1 ? `batch_${Date.now()}` : undefined;
-    const total = fileArray.length;
-
-    // Show "submitted" toast immediately — user can navigate away while uploads
-    // continue in the background. Counter updates as each request resolves.
-    const toastId = showToast({
-      kind: "info",
-      message: total === 1
-        ? `⏳ Submitting receipt…`
-        : `⏳ Submitting 0 of ${total}…`,
-    });
-
-    let succeeded = 0;
-    let failed = 0;
-
-    await Promise.all(
-      fileArray.map(async (file, i) => {
-        try {
-          let uploadFile = file;
-          try { uploadFile = await convertHeicToJpg(file); } catch { uploadFile = file; }
-
-          const formData = new FormData();
-          formData.append("file", uploadFile);
-          formData.append("firmId", firmId);
-          formData.append("clientId", client.id);
-          if (userId) formData.append("userId", userId);
-          if (batchId) formData.append("batchId", batchId);
-          formData.append("batchIndex", String(i + 1));
-          formData.append("batchTotal", String(total));
-
-          const response = await fetch("/api/upload-receipt", { method: "POST", body: formData });
-          if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
-          succeeded++;
-        } catch (err: any) {
-          console.error(`Failed to upload ${file.name}:`, err);
-          failed++;
-        }
-
-        if (total > 1) {
-          updateToast(toastId, {
-            kind: "info",
-            message: `⏳ Submitting ${succeeded + failed} of ${total}…`,
-          });
-        }
-      })
-    );
-
-    if (failed === 0) {
-      updateToast(toastId, {
-        kind: "success",
-        message: total === 1
-          ? `✅ Receipt submitted`
-          : `✅ ${succeeded} receipts submitted`,
-        autoDismissMs: 3500,
-      });
-    } else if (succeeded === 0) {
-      updateToast(toastId, {
-        kind: "error",
-        message: `❌ Failed to submit ${failed} receipt${failed === 1 ? "" : "s"}`,
-        autoDismissMs: 5000,
-      });
-    } else {
-      updateToast(toastId, {
-        kind: "info",
-        message: `⚠️ ${succeeded} submitted • ${failed} failed`,
-        autoDismissMs: 5000,
-      });
-    }
-
-    loadStats(userRole);
-    setRefreshKey(prev => prev + 1);
-  }
-
+  // handleMultipleFiles was used by the now-removed client-style upload
+  // hero. Firm admins / owners don't upload receipts directly; accountants
+  // upload via the UploadOnBehalfModal opened from this page or the
+  // Receipts list.
 
   const isClient = userRole === "client";
   const isAccountant = userRole === "accountant";
   const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
 
-// Redirect clients to their dedicated dashboard
+// Wait until we know the user's role before rendering. Without this
+// guard, the page briefly renders the client-style fallback branch
+// (with upload hero + Plan Usage card) for every user — including
+// firm admins — until userRole resolves. The flash made firm admins
+// think they had upload ability and that the page was "the client view".
+if (!userRole) {
+  return <div className="p-8"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
+}
+
+// Clients have their own dashboard route.
 if (userRole === 'client') {
   window.location.href = '/dashboard/client';
   return <div className="p-8"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
@@ -629,82 +550,9 @@ if (userRole === 'client') {
             </div>
           </div>
         </>
-      ) : (
-        <>
-          {/* Client/Accountant Dashboard */}
-          <div className="bg-gradient-to-br from-accent-600 to-accent-800 dark:from-accent-500 dark:to-accent-700 rounded-xl p-6 mb-8 text-white shadow-lg">
-            <div className="max-w-xl">
-              <h2 className="text-xl font-bold mb-2">Upload Receipts</h2>
-              <p className="text-accent-50 mb-6">Select one or multiple receipts to upload. Our AI will extract all the details automatically.</p>
-              <label htmlFor="hero-upload" className="block border-2 border-dashed border-accent-200 dark:border-accent-300 rounded-xl p-6 text-center cursor-pointer hover:border-white hover:bg-white/10 transition-all">
-                <input
-                  type="file"
-                  id="hero-upload"
-                  accept="image/*,application/pdf,.heic,.heif"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    handleMultipleFiles(e.target.files);
-                    // Reset so picking the same file again still triggers onChange.
-                    e.target.value = "";
-                  }}
-                />
-                <div className="text-4xl mb-3">📸</div>
-                <div className="text-lg font-semibold mb-2">Click to upload or drag here</div>
-                <div className="text-sm text-accent-100">Supports JPG, PNG, PDF, HEIC • Select multiple files</div>
-              </label>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">{isClient ? "My Receipts" : "Total Receipts"}</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalReceipts}</div>
-            </Link>
-            <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">This Month</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.thisMonth}</div>
-            </div>
-            <Link href="/dashboard/receipts?status=needs_review" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Needs Review</div>
-              <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">{stats.pendingReview}</div>
-            </Link>
-            <UsageStats key={refreshKey} />
-          </div>
-
-          <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Link href="/dashboard/receipts" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                <span className="text-2xl">📁</span>
-                <div><div className="font-medium text-gray-900 dark:text-white">{isClient ? "My Receipts" : "All Receipts"}</div><div className="text-sm text-gray-500 dark:text-gray-400">{isClient ? "View and manage" : "Manage and categorize"}</div></div>
-              </Link>
-              {isAccountant && (
-                <>
-                  <Link href="/dashboard/email-inbox" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                    <span className="text-2xl">📧</span>
-                    <div><div className="font-medium text-gray-900 dark:text-white">Email Inbox</div><div className="text-sm text-gray-500 dark:text-gray-400">Review emailed receipts</div></div>
-                  </Link>
-                  <Link href="/dashboard/category-dashboard" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                    <span className="text-2xl">📊</span>
-                    <div><div className="font-medium text-gray-900 dark:text-white">Categories</div><div className="text-sm text-gray-500 dark:text-gray-400">View by expense type</div></div>
-                  </Link>
-                  <Link href="/dashboard/tax-codes" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                    <span className="text-2xl">🧾</span>
-                    <div><div className="font-medium text-gray-900 dark:text-white">Tax Codes</div><div className="text-sm text-gray-500 dark:text-gray-400">T2125 summary</div></div>
-                  </Link>
-                </>
-              )}
-              {isClient && (
-                <Link href="/dashboard/budget-settings" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                  <span className="text-2xl">💰</span>
-                  <div><div className="font-medium text-gray-900 dark:text-white">My Budget</div><div className="text-sm text-gray-500 dark:text-gray-400">Set spending limits</div></div>
-                </Link>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+      ) : null /* clients are redirected to /dashboard/client above; the
+                  comprehensive view above covers firm_admin / owner /
+                  accountant. There's no third state to render. */}
 
       {showUploadOnBehalf && (
         <UploadOnBehalfModal

@@ -71,6 +71,8 @@ const publicRoutes = [
     '/forgot-password',
     '/reset-password',
     '/magic-link',
+    '/privacy',
+    '/terms',
   ]
 
 const isPublicRoute = publicRoutes.some((route) =>
@@ -80,10 +82,11 @@ const isPublicRoute = publicRoutes.some((route) =>
   // Routes that work for both anonymous and authenticated users — we never
   // bounce people away based on session state. /accept-invite needs both
   // (you're invited, you sign up); /verify-email needs both because a user
-  // might click an old verify link after they've already signed in (we
-  // still want to show the "Already verified" success card, not punt them
-  // to /dashboard with a missing-token error).
-  const dualAccessRoutes = ['/accept-invite', '/verify-email']
+  // might click an old verify link after they've already signed in.
+  // /privacy and /terms are linked from the footer and need to be readable
+  // by everyone regardless of session state — bouncing a logged-in user
+  // back to /dashboard when they click "Privacy Policy" was the bug.
+  const dualAccessRoutes = ['/accept-invite', '/verify-email', '/privacy', '/terms']
   const isDualAccessRoute = dualAccessRoutes.some(r => path.startsWith(r))
 
   // If not authenticated and trying to access protected route

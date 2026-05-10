@@ -160,7 +160,6 @@ const isClient = userRole === "client";
 const canBudget = hasFeature(firmPlan, "budget_tracking");
 const canEditHistory = hasFeature(firmPlan, "edit_history");
 const canClientReports = hasFeature(firmPlan, "client_reports");
-const canAdvancedReports = hasFeature(firmPlan, "advanced_reports");
 
 return (
   <EditModeProvider userRole={userRole}>
@@ -516,7 +515,7 @@ return (
           </li>
           {reportsOpen && (
             <>
-              {isFirmAdmin && canAdvancedReports && (
+              {isFirmAdmin && (
                 <li className="ml-4">
                   <Link
                     href="/dashboard/firm-admin"

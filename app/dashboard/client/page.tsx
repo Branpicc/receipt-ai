@@ -84,14 +84,28 @@ export default function ClientDashboardPage() {
 
         const { data: client } = await supabase
           .from("clients")
-          .select("name, email_alias, client_code")
+          .select("name, email_alias, client_code, email_forwarding_address")
           .eq("id", firmUser.client_id)
           .single();
 
         if (client) {
           setClientName(client.name);
-          const emailAlias = client.email_alias || client.client_code;
-setClientEmail(`${emailAlias}@receipts.receipture.ca`);
+          // Prefer the user-editable email_forwarding_address (the field
+          // Settings actually writes to). Fall back to the auto-generated
+          // alias / client_code only when the user hasn't set their own
+          // address yet. Previously we always read email_alias which made
+          // the dashboard show a stale value (or "null@…") even after the
+          // user updated their address in Settings.
+          if (client.email_forwarding_address) {
+            setClientEmail(client.email_forwarding_address);
+          } else {
+            const fallbackAlias = client.email_alias || client.client_code;
+            if (fallbackAlias) {
+              setClientEmail(`${fallbackAlias}@receipts.receipture.ca`);
+            } else {
+              setClientEmail("");
+            }
+          }
         }
 
         await loadStats(firmUser.client_id, firmId);

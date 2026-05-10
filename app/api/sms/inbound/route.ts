@@ -249,26 +249,43 @@ const { data: clients } = await supabase
         const entry = batchEntries.find(e => e.batch_index === num);
         if (!entry) continue;
 
-        const { data: receipt } = await supabase
-          .from('receipts')
+        // The same multi-reply might span both regular receipts (queue
+        // entries with receipt_id) and forwarded email receipts (entries
+        // with email_receipt_id). Resolve which row to update per entry
+        // — the previous version only handled receipt_id and silently
+        // dropped the purpose for any email-receipt slot.
+        const isEmailReceipt = !entry.receipt_id && !!(entry as any).email_receipt_id;
+        const targetTable = isEmailReceipt ? 'email_receipts' : 'receipts';
+        const targetId = isEmailReceipt ? (entry as any).email_receipt_id : entry.receipt_id;
+        if (!targetId) continue;
+
+        const { data: target } = await supabase
+          .from(targetTable)
           .select('vendor')
-          .eq('id', entry.receipt_id)
+          .eq('id', targetId)
           .single();
 
         const suggestions = (entry.suggested_purposes as string[]) || [];
-        const purposeSummary = await summarizePurpose(purposeText, receipt?.vendor || '', suggestions);
+        const purposeSummary = await summarizePurpose(purposeText, target?.vendor || '', suggestions);
 
-        const { error: updateError } = await supabase.from('receipts').update({
-          purpose_text: purposeSummary,
-          purpose_source: 'client',
-          purpose_updated_at: new Date().toISOString(),
-        }).eq('id', entry.receipt_id);
+        const updatePayload: Record<string, any> = isEmailReceipt
+          ? { purpose_text: purposeSummary }
+          : {
+              purpose_text: purposeSummary,
+              purpose_source: 'client',
+              purpose_updated_at: new Date().toISOString(),
+            };
+        const { error: updateError } = await supabase
+          .from(targetTable)
+          .update(updatePayload)
+          .eq('id', targetId);
 
         if (updateError) console.error('❌ Failed to save purpose:', updateError);
-        else console.log('✅ Purpose saved:', purposeSummary, 'for receipt:', entry.receipt_id);
+        else console.log('✅ Purpose saved:', purposeSummary, `for ${targetTable}:`, targetId);
 
-        if (!updateError && receipt?.vendor) {
-          await recategorizeAfterPurpose(entry.receipt_id, receipt.vendor, purposeSummary, client.firm_id);
+        // Re-categorisation only applies to regular receipts.
+        if (!updateError && !isEmailReceipt && target?.vendor) {
+          await recategorizeAfterPurpose(targetId, target.vendor, purposeSummary, client.firm_id);
         }
 
         await supabase.from('sms_queue').update({
@@ -283,7 +300,7 @@ const { data: clients } = await supabase
           type: 'receipt_uploaded',
           title: 'Receipt purpose received',
           message: `${client.name} — receipt ${num}: "${purposeSummary}"`,
-          receipt_id: entry.receipt_id,
+          receipt_id: isEmailReceipt ? null : targetId,
           read: false,
         });
 
