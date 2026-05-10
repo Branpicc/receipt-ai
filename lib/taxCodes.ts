@@ -30,6 +30,16 @@ export const T2125_CODES: TaxCode[] = [
     description: "Business registration, licenses, permits",
     deductible_percent: 100,
     gst_eligible: false,
+    categories: [],
+    form: "T2125",
+  },
+  {
+    code: "8710",
+    line: "Line 8710",
+    name: "Interest and Bank Charges",
+    description: "Interest on business loans, bank fees, credit card charges",
+    deductible_percent: 100,
+    gst_eligible: false,
     categories: ["Bank Charges & Interest"],
     form: "T2125",
   },
@@ -131,6 +141,18 @@ export const T2125_CODES: TaxCode[] = [
     deductible_percent: 100,
     gst_eligible: true,
     categories: ["Travel Expenses"],
+    form: "T2125",
+  },
+  {
+    code: "9945",
+    line: "Line 9945",
+    name: "Business-Use-of-Home Expenses",
+    description: "Portion of utilities, rent, mortgage interest and home maintenance attributable to your home office. Calculated automatically from the home-office % set on the client profile.",
+    deductible_percent: 100,
+    gst_eligible: true,
+    // No category mapping — this line is computed from utility/rent/etc.
+    // receipts × the client's home_office_percentage at report time.
+    categories: [],
     form: "T2125",
   },
   {

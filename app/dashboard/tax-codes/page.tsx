@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
 import ClientFilterDropdown from "@/components/ClientFilterDropdown";
+import { computeReceiptDeductible, type DeductibleLineItem } from "@/lib/computeReceiptDeductible";
+import { getProvinceTax } from "@/lib/taxRates";
 
 type Receipt = {
   id: string;
@@ -44,6 +46,13 @@ export default function TaxCodesPage() {
   const [availableForms, setAvailableForms] = useState<TaxForm[]>(["T2125"]);
   const [clientName, setClientName] = useState<string | null>(null);
   const [incomeType, setIncomeType] = useState<string | null>(null);
+  // Client tax profile — drives the deductible math (registration status,
+  // province → tax rates). Falls back to ON / unregistered when no client
+  // is selected so the report still renders informatively.
+  const [clientProfile, setClientProfile] = useState<{
+    province: string;
+    gst_hst_registered: boolean;
+  }>({ province: "ON", gst_hst_registered: false });
 
   useEffect(() => {
     loadClientInfo();
@@ -55,7 +64,6 @@ export default function TaxCodesPage() {
 
   async function loadClientInfo() {
     try {
-      const firmId = await getMyFirmId();
       const clientId = selectedClientId;
 
       if (!clientId) {
@@ -63,12 +71,13 @@ export default function TaxCodesPage() {
         setActiveForm("T2125");
         setClientName(null);
         setIncomeType(null);
+        setClientProfile({ province: "ON", gst_hst_registered: false });
         return;
       }
 
       const { data: client } = await supabase
         .from("clients")
-        .select("name, income_type")
+        .select("name, income_type, province, gst_hst_registered")
         .eq("id", clientId)
         .single();
 
@@ -78,6 +87,10 @@ export default function TaxCodesPage() {
         const forms = getFormsForIncomeType(client.income_type);
         setAvailableForms(forms);
         setActiveForm(forms[0]);
+        setClientProfile({
+          province: client.province || "ON",
+          gst_hst_registered: !!client.gst_hst_registered,
+        });
       }
     } catch (err) {
       console.error("Failed to load client info:", err);
@@ -101,9 +114,13 @@ export default function TaxCodesPage() {
         startDate = new Date(now.getFullYear(), 0, 1).toISOString();
       }
 
+      // Pull receipts AND the new tax-prep fields (expense_type,
+      // business_percentage, is_capital_asset). Personal receipts and
+      // capital assets are filtered downstream — they belong on the
+      // /dashboard/personal and Capital Assets reports respectively.
       let query = supabase
         .from("receipts")
-        .select("id, vendor, receipt_date, total_cents, approved_category, suggested_category")
+        .select("id, vendor, receipt_date, total_cents, approved_category, suggested_category, expense_type, business_percentage, is_capital_asset")
         .eq("firm_id", firmId)
         .not("approved_category", "is", null);
 
@@ -119,14 +136,24 @@ export default function TaxCodesPage() {
       if (receiptsError) throw receiptsError;
 
       const receiptIds = receiptsData?.map(r => r.id) || [];
-      const { data: taxesData } = await supabase
-        .from("receipt_taxes")
-        .select("receipt_id, amount_cents")
-        .in("receipt_id", receiptIds);
 
-      const taxMap = new Map<string, number>();
-      taxesData?.forEach(t => {
-        taxMap.set(t.receipt_id, (taxMap.get(t.receipt_id) || 0) + t.amount_cents);
+      // Pull line items for all receipts in one query — we use them to
+      // compute the actual business % when items have been individually
+      // categorized as business or personal (e.g. a Staples receipt with
+      // 6 personal + 2 business items gives a real % rather than a
+      // receipt-level guess).
+      const { data: lineItemsData } = receiptIds.length > 0
+        ? await supabase
+            .from("receipt_items")
+            .select("receipt_id, total_cents, expense_type")
+            .in("receipt_id", receiptIds)
+        : { data: [] as any[] };
+
+      const itemsByReceipt = new Map<string, DeductibleLineItem[]>();
+      (lineItemsData || []).forEach((li: any) => {
+        const arr = itemsByReceipt.get(li.receipt_id) || [];
+        arr.push({ total_cents: li.total_cents, expense_type: li.expense_type });
+        itemsByReceipt.set(li.receipt_id, arr);
       });
 
       // Get codes for the active form only
@@ -147,36 +174,36 @@ export default function TaxCodesPage() {
         const category = receipt.approved_category || receipt.suggested_category;
         if (!category) return;
 
-        const taxCode = getTaxCodeForCategory(category, activeForm);
-        if (!taxCode) {
-          // Put in other expenses for this form
-          const otherCode = formCodes.find(tc =>
-            tc.name.toLowerCase().includes("other")
-          );
-          if (otherCode) {
-            const summary = taxCodeMap.get(otherCode.code)!;
-            summary.receipts.push(receipt);
-            const total = receipt.total_cents || 0;
-            const tax = taxMap.get(receipt.id) || 0;
-            summary.total_cents += total;
-            summary.tax_cents += tax;
-            summary.deductible_cents += Math.round(
-              (total - tax) * (otherCode.deductible_percent / 100)
-            );
-          }
-        } else {
-          const summary = taxCodeMap.get(taxCode.code);
-          if (summary) {
-            summary.receipts.push(receipt);
-            const total = receipt.total_cents || 0;
-            const tax = taxMap.get(receipt.id) || 0;
-            summary.total_cents += total;
-            summary.tax_cents += tax;
-            summary.deductible_cents += Math.round(
-              (total - tax) * (taxCode.deductible_percent / 100)
-            );
-          }
-        }
+        // Skip personal and capital-asset receipts up front — they belong
+        // to other reports.
+        if (receipt.expense_type === "personal" || receipt.is_capital_asset) return;
+
+        const matchedCode = getTaxCodeForCategory(category, activeForm);
+        const targetCode =
+          matchedCode ||
+          formCodes.find(tc => tc.name.toLowerCase().includes("other")) ||
+          null;
+        if (!targetCode) return;
+
+        const summary = taxCodeMap.get(targetCode.code);
+        if (!summary) return;
+
+        const lineItems = itemsByReceipt.get(receipt.id) || [];
+        const result = computeReceiptDeductible(
+          receipt,
+          lineItems,
+          clientProfile,
+          targetCode
+        );
+
+        // Skip if the computed business portion is zero (e.g. all line
+        // items marked personal).
+        if (result.business_cents <= 0) return;
+
+        summary.receipts.push(receipt);
+        summary.total_cents += result.business_cents;
+        summary.tax_cents += result.recoverable_tax_cents;
+        summary.deductible_cents += result.deductible_cents;
       });
 
       const summaryArray = Array.from(taxCodeMap.values())
@@ -194,6 +221,37 @@ export default function TaxCodesPage() {
   const totalDeductible = summaries.reduce((sum, s) => sum + s.deductible_cents, 0);
   const totalAmount = summaries.reduce((sum, s) => sum + s.total_cents, 0);
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
+
+// Per-line Excel-compatible export (CSV that opens in Excel without
+// needing a real .xlsx writer). Lets accountants download every receipt
+// for a single CRA line and hand it to a client / tax preparer.
+function exportLineCsv(summary: TaxCodeSummary) {
+  const headers = ["Date", "Vendor", "Total ($)", "Recoverable Tax ($)", "Deductible ($)"];
+  const rows = summary.receipts.map((r: any) => {
+    const total = ((r.total_cents || 0) / 100).toFixed(2);
+    return [r.receipt_date || "", r.vendor || "", total, "", ""];
+  });
+  // Append summary row.
+  rows.push([
+    "",
+    `TOTAL — ${summary.taxCode.name} (Line ${summary.taxCode.line.replace("Line ", "")})`,
+    (summary.total_cents / 100).toFixed(2),
+    (summary.tax_cents / 100).toFixed(2),
+    (summary.deductible_cents / 100).toFixed(2),
+  ]);
+  const csv = [headers, ...rows]
+    .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Line${summary.taxCode.line.replace("Line ", "")}-${summary.taxCode.name.replace(/\s+/g, "_")}-${new Date().toISOString().split("T")[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function exportSummary() {
     const formName = activeForm;
@@ -266,6 +324,17 @@ function exportSummary() {
             <p className="text-sm text-blue-800 dark:text-blue-300">
               📋 Client income type: <strong className="capitalize">{incomeType.replace(/_/g, " ")}</strong> — showing applicable tax forms below
             </p>
+          </div>
+        )}
+
+        {/* Tax-prep banner — explains the assumptions used to compute the
+            deductible numbers so the accountant / client can verify them
+            at a glance instead of guessing why the number changed. */}
+        {selectedClientId && (
+          <div className="mb-6 p-3 bg-gray-50 dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-lg text-xs text-gray-700 dark:text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
+            <span>📍 Province: <strong>{clientProfile.province}</strong> ({getProvinceTax(clientProfile.province).label})</span>
+            <span>🧾 GST/HST registered: <strong>{clientProfile.gst_hst_registered ? "Yes (ITCs claimed)" : "No (full amount deductible)"}</strong></span>
+            <span>Personal receipts and capital assets excluded.</span>
           </div>
         )}
 
@@ -415,6 +484,13 @@ function exportSummary() {
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {summary.receipts.length} receipt{summary.receipts.length !== 1 ? "s" : ""}
                     </div>
+                    <button
+                      onClick={() => exportLineCsv(summary)}
+                      className="mt-2 text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors inline-flex items-center gap-1"
+                      title={`Download all receipts on ${summary.taxCode.line} as a spreadsheet`}
+                    >
+                      📥 Excel
+                    </button>
                   </div>
                 </div>
 

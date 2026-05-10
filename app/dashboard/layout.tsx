@@ -261,6 +261,19 @@ return (
               <span className="font-medium">Receipts</span>
             </Link>
           </li>
+          <li>
+            <Link
+              href="/dashboard/personal"
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                pathname === '/dashboard/personal'
+                  ? 'bg-accent-500 text-white'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
+              }`}
+            >
+              <span className="w-5 h-5 inline-flex items-center justify-center">🏠</span>
+              <span className="font-medium">Personal</span>
+            </Link>
+          </li>
 {!isFirmAdmin && (
           <li>
             <Link

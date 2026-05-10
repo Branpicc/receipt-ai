@@ -39,6 +39,9 @@ type Receipt = {
   source?: string | null;
 ocr_raw_text?: string | null;
   gratuity_cents?: number | null;
+  expense_type?: "business" | "personal" | null;
+  business_percentage?: number | null;
+  is_capital_asset?: boolean | null;
 };
 
 type Folder = {
@@ -60,6 +63,7 @@ type ReceiptItem = {
   quantity: number | null;
   unit_price_cents: number | null;
   total_cents: number | null;
+  expense_type?: "business" | "personal" | null;
 };
 type ReceiptTax = {
   id: string;
@@ -399,7 +403,7 @@ useEffect(() => {
       try {
         const { data: r, error: rErr } = await supabase
           .from("receipts")
-.select(`id, firm_id, client_id, vendor, receipt_date, total_cents, status, created_at, purpose_text, purpose_source, purpose_updated_at, suggested_category, category_confidence, approved_category, category_reasoning, file_path, folder_id, payment_method, card_brand, card_last_four, card_entry_method, source, ocr_raw_text`)
+.select(`id, firm_id, client_id, vendor, receipt_date, total_cents, status, created_at, purpose_text, purpose_source, purpose_updated_at, suggested_category, category_confidence, approved_category, category_reasoning, file_path, folder_id, payment_method, card_brand, card_last_four, card_entry_method, source, ocr_raw_text, expense_type, business_percentage, is_capital_asset`)
           .eq("id", receiptId)
           .single();
         if (rErr) throw rErr;
@@ -417,7 +421,7 @@ useEffect(() => {
           .maybeSingle();
         setPendingDeletionAt(pendingDel?.created_at ?? null);
 
-        const { data: itemRows, error: itemErr } = await supabase.from("receipt_items").select("id,description,quantity,unit_price_cents,total_cents").eq("receipt_id", receiptId).order("id", { ascending: true });
+        const { data: itemRows, error: itemErr } = await supabase.from("receipt_items").select("id,description,quantity,unit_price_cents,total_cents,expense_type").eq("receipt_id", receiptId).order("id", { ascending: true });
         if (itemErr) throw itemErr;
         setItems((itemRows as ReceiptItem[]) || []);
 
@@ -793,6 +797,133 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
   </div>
 )}
 
+{/* ── BUSINESS vs PERSONAL ──
+    Quick prompt right under the Details so the user can confirm whether
+    the receipt is a business expense (default) or a personal one. The
+    answer flows into:
+      • CRA reports (personal receipts skipped)
+      • Card-mismatch flagging (business expense + personal card = flag)
+      • The line items table below where individual items can be
+        categorized to compute a real business %. */}
+<div className="pt-3 border-t border-gray-100 dark:border-dark-border">
+  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+    💼 Business or personal?
+  </div>
+  <div className="flex gap-2">
+    {(["business", "personal"] as const).map((opt) => {
+      const isActive = (receipt.expense_type || "business") === opt;
+      return (
+        <button
+          key={opt}
+          disabled={isReadOnly}
+          onClick={async () => {
+            await supabase
+              .from("receipts")
+              .update({ expense_type: opt })
+              .eq("id", receiptId);
+            setReceipt((prev) => prev ? { ...prev, expense_type: opt } : prev);
+            // Re-evaluate card-type mismatch flag whenever the user
+            // changes the receipt's business/personal classification.
+            try {
+              const { syncCardMismatchFlag } = await import("@/lib/cardMismatchFlag");
+              await syncCardMismatchFlag({
+                supabase,
+                receiptId,
+                firmId: receipt.firm_id,
+                clientId: receipt.client_id,
+                cardBrand: receipt.card_brand,
+                cardLastFour: receipt.card_last_four,
+                expenseType: opt,
+              });
+              // Reload flags so the UI shows the new state.
+              const { data: refreshedFlags } = await supabase
+                .from("receipt_flags")
+                .select("id, flag_type, severity, message, created_at, resolved_at")
+                .eq("receipt_id", receiptId);
+              setFlags((refreshedFlags as ReceiptFlag[]) || []);
+            } catch (err) {
+              console.error("Card-mismatch flag sync failed:", err);
+            }
+          }}
+          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+            isActive
+              ? opt === "business"
+                ? "bg-accent-500 text-white border-accent-500"
+                : "bg-gray-700 text-white border-gray-700 dark:bg-gray-600 dark:border-gray-600"
+              : "bg-white dark:bg-dark-bg text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-border hover:border-accent-400"
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {opt === "business" ? "💼 Business" : "🏠 Personal"}
+        </button>
+      );
+    })}
+  </div>
+  {/* Capital asset toggle. When set, the receipt is excluded from
+      the regular CRA tax-codes report and shows up on the Capital
+      Assets report for the accountant to depreciate via CCA. */}
+  <div className="mt-3">
+    <label className="flex items-start gap-2 text-xs cursor-pointer">
+      <input
+        type="checkbox"
+        checked={!!receipt.is_capital_asset}
+        disabled={isReadOnly}
+        onChange={async (e) => {
+          const next = e.target.checked;
+          await supabase
+            .from("receipts")
+            .update({ is_capital_asset: next })
+            .eq("id", receiptId);
+          setReceipt((prev) => prev ? { ...prev, is_capital_asset: next } : prev);
+        }}
+        className="mt-0.5 accent-accent-500"
+      />
+      <span className="text-gray-700 dark:text-gray-300">
+        🏗️ <strong>Capital asset</strong> (depreciate via CCA instead of expensing)
+        <span className="block text-[11px] text-gray-500 dark:text-gray-400">
+          Use for equipment, computers, vehicles or furniture over $500.
+        </span>
+      </span>
+    </label>
+  </div>
+  {(() => {
+    // Compute the effective business % from line items if any are
+    // categorized; otherwise fall back to the receipt-level setting.
+    const categorized = items.filter(i => i.expense_type === "business" || i.expense_type === "personal");
+    let effectivePct = receipt.business_percentage ?? 100;
+    let computedFromItems = false;
+    if (categorized.length > 0) {
+      const totalCat = categorized.reduce((s, i) => s + (i.total_cents || 0), 0);
+      if (totalCat > 0) {
+        const businessTotal = categorized.filter(i => i.expense_type === "business").reduce((s, i) => s + (i.total_cents || 0), 0);
+        effectivePct = Math.round((businessTotal / totalCat) * 100);
+        computedFromItems = true;
+      }
+    }
+    if (receipt.expense_type === "personal") return null;
+    if (effectivePct === 100) return null;
+    const totalCents = receipt.total_cents || 0;
+    const businessCents = Math.round(totalCents * effectivePct / 100);
+    const personalCents = totalCents - businessCents;
+    return (
+      <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex items-center justify-between">
+          <span>Business portion ({effectivePct}%):</span>
+          <span className="font-semibold text-accent-700 dark:text-accent-300">${(businessCents / 100).toFixed(2)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span>Personal portion ({100 - effectivePct}%):</span>
+          <span className="font-semibold text-gray-700 dark:text-gray-400">${(personalCents / 100).toFixed(2)}</span>
+        </div>
+        {computedFromItems && (
+          <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+            Calculated from line items below
+          </div>
+        )}
+      </div>
+    );
+  })()}
+</div>
+
 {/* ── FOLDER ASSIGNMENT ── */}
                 <div className="pt-3 border-t border-gray-100 dark:border-dark-border">
                   <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">📁 Project Folder</div>
@@ -1006,6 +1137,41 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                                 <div className="text-xl font-bold text-gray-900 dark:text-white">${((item.total_cents || 0) / 100).toFixed(2)}</div>
                               </div>
                             </div>
+                            {/* Per-item business/personal toggle. Saved
+                                immediately so the receipt-level business %
+                                in the Details card updates live. */}
+                            <div className="flex gap-2 mt-3">
+                              {(["business", "personal"] as const).map((opt) => {
+                                const isActive = item.expense_type === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    disabled={isReadOnly}
+                                    onClick={async () => {
+                                      const newValue = isActive ? null : opt;
+                                      const updated = [...items];
+                                      updated[idx].expense_type = newValue;
+                                      setItems(updated);
+                                      if (item.id) {
+                                        await supabase
+                                          .from("receipt_items")
+                                          .update({ expense_type: newValue })
+                                          .eq("id", item.id);
+                                      }
+                                    }}
+                                    className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                                      isActive
+                                        ? opt === "business"
+                                          ? "bg-accent-500 text-white border-accent-500"
+                                          : "bg-gray-700 text-white border-gray-700"
+                                        : "bg-white dark:bg-dark-bg text-gray-600 dark:text-gray-400 border-gray-300 dark:border-dark-border hover:border-accent-400"
+                                    } disabled:opacity-50`}
+                                  >
+                                    {opt === "business" ? "💼 Business" : "🏠 Personal"}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1027,6 +1193,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                               <th className="text-center py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-32">Qty</th>
                               <th className="text-right py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-40">Unit Price</th>
                               <th className="text-right py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-40">Total</th>
+                              <th className="text-center py-4 px-4 font-semibold text-gray-900 dark:text-white text-base w-44">Type</th>
                               <th className="w-20"></th>
                             </tr>
                           </thead>
@@ -1050,6 +1217,40 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                                   </div>
                                 </td>
                                 <td className="py-4 px-4 text-right"><span className="text-2xl font-bold text-gray-900 dark:text-white">${((item.total_cents ?? 0) / 100).toFixed(2)}</span></td>
+                                <td className="py-2 px-2">
+                                  <div className="flex flex-col gap-1">
+                                    {(["business", "personal"] as const).map((opt) => {
+                                      const isActive = item.expense_type === opt;
+                                      return (
+                                        <button
+                                          key={opt}
+                                          disabled={isReadOnly}
+                                          onClick={async () => {
+                                            const newValue = isActive ? null : opt;
+                                            const updated = [...items];
+                                            updated[idx].expense_type = newValue;
+                                            setItems(updated);
+                                            if (item.id) {
+                                              await supabase
+                                                .from("receipt_items")
+                                                .update({ expense_type: newValue })
+                                                .eq("id", item.id);
+                                            }
+                                          }}
+                                          className={`px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                            isActive
+                                              ? opt === "business"
+                                                ? "bg-accent-500 text-white border-accent-500"
+                                                : "bg-gray-700 text-white border-gray-700"
+                                              : "bg-white dark:bg-dark-bg text-gray-600 dark:text-gray-400 border-gray-300 dark:border-dark-border"
+                                          } disabled:opacity-50`}
+                                        >
+                                          {opt === "business" ? "💼" : "🏠"} {opt}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </td>
                                 <td className="py-4 px-4 text-center"><button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-red-600 hover:text-red-800 font-bold text-2xl px-3" title="Delete">✕</button></td>
                               </tr>
                             ))}
@@ -1062,9 +1263,9 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                           try {
                             setErr("");
                             await supabase.from("receipt_items").delete().eq("receipt_id", receiptId);
-                            const itemsToSave = items.filter((it) => it.description?.trim()).map((it, index) => ({ receipt_id: receiptId, description: it.description, quantity: it.quantity, unit_price_cents: it.unit_price_cents, total_cents: it.total_cents, line_index: index + 1 }));
+                            const itemsToSave = items.filter((it) => it.description?.trim()).map((it, index) => ({ receipt_id: receiptId, description: it.description, quantity: it.quantity, unit_price_cents: it.unit_price_cents, total_cents: it.total_cents, line_index: index + 1, expense_type: it.expense_type ?? null }));
                             if (itemsToSave.length > 0) { const { error } = await supabase.from("receipt_items").insert(itemsToSave); if (error) throw error; }
-                            const { data: reloaded } = await supabase.from("receipt_items").select("id,description,quantity,unit_price_cents,total_cents").eq("receipt_id", receiptId).order("id", { ascending: true });
+                            const { data: reloaded } = await supabase.from("receipt_items").select("id,description,quantity,unit_price_cents,total_cents,expense_type").eq("receipt_id", receiptId).order("id", { ascending: true });
                             setItems((reloaded as ReceiptItem[]) || []);
                             await checkLineItemMismatches();
                             alert("Line items saved!");

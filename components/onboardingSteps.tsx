@@ -310,6 +310,21 @@ export function getClientSteps(
         },
       },
     },
+    // ── Tax setup — drives all CRA / HST / deductible math ────────────────
+    {
+      title: "Tax Setup 🧾",
+      description:
+        "Help us calculate your deductible amounts and tax credits accurately. All of this helps make tax season easier.",
+      content: <ClientTaxSetup />,
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__saveTaxSetup) {
+            await (window as any).__saveTaxSetup();
+          }
+        },
+      },
+    },
     {
       title: "How to Upload Receipts 📸",
       description: "Two easy ways to submit your receipts.",
@@ -615,6 +630,269 @@ function ClientSmsSetup() {
         <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
           You can enable SMS notifications later in Settings.
         </p>
+      )}
+    </div>
+  );
+}
+
+// ── Tax Setup ───────────────────────────────────────────────────────────────
+// Captures the per-client info needed to compute deductibles correctly:
+//   • Whether they're GST/HST-registered (drives ITC math)
+//   • Projected annual revenue band (suggests registration + filing freq)
+//   • Home office % (drives Line 9945 / utilities + rent splits)
+//   • Default business-use % for vehicle (Line 9281) and utilities/internet
+//
+// Saves to clients table (gst_hst_registered, projected_revenue_band,
+// home_office_percentage, vehicle_business_percentage,
+// utilities_business_percentage).
+function ClientTaxSetup() {
+  const [gstRegistered, setGstRegistered] = React.useState<boolean>(false);
+  const [revenueBand, setRevenueBand] = React.useState<string>("under_30k");
+  const [hasHomeOffice, setHasHomeOffice] = React.useState<boolean>(false);
+  const [totalRooms, setTotalRooms] = React.useState<number>(6);
+  const [officeRooms, setOfficeRooms] = React.useState<number>(1);
+  const [vehiclePct, setVehiclePct] = React.useState<number>(100);
+  const [utilitiesPct, setUtilitiesPct] = React.useState<number>(0);
+  const [error, setError] = React.useState<string>("");
+  const [saving, setSaving] = React.useState<boolean>(false);
+
+  const homeOfficePct = hasHomeOffice && totalRooms > 0
+    ? Math.round((officeRooms / totalRooms) * 100)
+    : 0;
+
+  const revenueBands = [
+    { value: "under_30k", label: "Under $30,000", desc: "Small supplier — GST/HST registration optional" },
+    { value: "30k_to_400k", label: "$30,000 – $400,000", desc: "Must register for GST/HST. Annual filing OK." },
+    { value: "400k_to_1500k", label: "$400,000 – $1.5M", desc: "Quarterly GST/HST filing required." },
+    { value: "over_1500k", label: "Over $1.5M", desc: "Monthly GST/HST filing required." },
+  ];
+
+  // Recommend registration when revenue is over $30k. The user can still
+  // override (you can voluntarily register below the threshold).
+  React.useEffect(() => {
+    if (revenueBand !== "under_30k") setGstRegistered(true);
+  }, [revenueBand]);
+
+  // When home office is enabled, default utilities % to the same value
+  // (most clients use the same fraction for utilities as for office space).
+  React.useEffect(() => {
+    if (hasHomeOffice) setUtilitiesPct(homeOfficePct);
+    else setUtilitiesPct(0);
+  }, [hasHomeOffice, homeOfficePct]);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setError("");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id")
+        .eq("auth_user_id", user.id)
+        .single();
+      if (!firmUser?.client_id) throw new Error("Client record not found");
+
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({
+          gst_hst_registered: gstRegistered,
+          projected_revenue_band: revenueBand,
+          home_office_percentage: homeOfficePct,
+          vehicle_business_percentage: Math.max(0, Math.min(100, vehiclePct)),
+          utilities_business_percentage: Math.max(0, Math.min(100, utilitiesPct)),
+        })
+        .eq("id", firmUser.client_id);
+
+      if (updateError) throw updateError;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  React.useEffect(() => {
+    (window as any).__saveTaxSetup = handleSave;
+  }, [gstRegistered, revenueBand, homeOfficePct, vehiclePct, utilitiesPct]);
+
+  return (
+    <div className="space-y-5">
+      {/* Why */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <p className="text-sm text-blue-800 dark:text-blue-300">
+          🎯 We use this to compute your deductible amounts and Input Tax Credits accurately on your CRA tax reports. You can update any of this later in Settings.
+        </p>
+      </div>
+
+      {/* Revenue band */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          Projected annual revenue
+        </label>
+        <div className="space-y-2">
+          {revenueBands.map((b) => (
+            <label
+              key={b.value}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                revenueBand === b.value
+                  ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
+                  : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-bg hover:border-accent-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="revenueBand"
+                value={b.value}
+                checked={revenueBand === b.value}
+                onChange={(e) => setRevenueBand(e.target.value)}
+                className="mt-1 accent-accent-500"
+              />
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">{b.label}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{b.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* GST/HST registration */}
+      <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={gstRegistered}
+            onChange={(e) => setGstRegistered(e.target.checked)}
+            className="mt-1 accent-accent-500"
+          />
+          <div>
+            <div className="font-medium text-gray-900 dark:text-white">I'm registered for GST/HST</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Lets us claim Input Tax Credits (ITCs) — the GST/HST you paid gets refunded by CRA.
+              Required if your revenue is over $30k. Optional but allowed below that.
+            </div>
+          </div>
+        </label>
+      </div>
+
+      {/* Home office */}
+      <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+        <label className="flex items-start gap-3 cursor-pointer mb-3">
+          <input
+            type="checkbox"
+            checked={hasHomeOffice}
+            onChange={(e) => setHasHomeOffice(e.target.checked)}
+            className="mt-1 accent-accent-500"
+          />
+          <div>
+            <div className="font-medium text-gray-900 dark:text-white">I have a home office</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Lets us deduct a portion of utilities, rent, internet, etc. on Line 9945.
+            </div>
+          </div>
+        </label>
+
+        {hasHomeOffice && (
+          <div className="grid grid-cols-2 gap-3 ml-6">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Total rooms in your home
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={totalRooms}
+                onChange={(e) => setTotalRooms(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Office-only rooms
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={officeRooms}
+                onChange={(e) => setOfficeRooms(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+              />
+            </div>
+            <div className="col-span-2 text-xs text-accent-700 dark:text-accent-300">
+              Estimated home office: <strong>{homeOfficePct}%</strong> of your home
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Vehicle business % */}
+      <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
+          Vehicle business-use %
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+          What % of your vehicle expenses (gas, maintenance, insurance) is for business? CRA requires a kilometre log if audited.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={vehiclePct}
+            onChange={(e) => setVehiclePct(parseInt(e.target.value))}
+            className="flex-1 accent-accent-500"
+          />
+          <input
+            type="number"
+            min="0"
+            max="100"
+            value={vehiclePct}
+            onChange={(e) => setVehiclePct(parseInt(e.target.value) || 0)}
+            className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center"
+          />
+          <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+        </div>
+      </div>
+
+      {/* Utilities/internet business % — only relevant if home office */}
+      {hasHomeOffice && (
+        <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
+            Utilities & internet business-use %
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Defaults to your home office %. Override if your phone/internet usage skews more or less business.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={utilitiesPct}
+              onChange={(e) => setUtilitiesPct(parseInt(e.target.value))}
+              className="flex-1 accent-accent-500"
+            />
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={utilitiesPct}
+              onChange={(e) => setUtilitiesPct(parseInt(e.target.value) || 0)}
+              className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+      {saving && (
+        <p className="text-xs text-gray-500 dark:text-gray-400">Saving…</p>
       )}
     </div>
   );

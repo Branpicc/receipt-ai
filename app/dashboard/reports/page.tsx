@@ -364,7 +364,46 @@ href="/dashboard/reports/clients"
           </a>
         </div>
         
-        {/* Report Type Selection */}
+        {/* Tax Reports — dedicated pages with their own UIs (CCA, HST,
+            Net Income, Home Office). Separated from the CSV-export
+            section below so accountants don't confuse "view a report"
+            with "export this CSV". */}
+        <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Tax Reports
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <a href="/dashboard/tax-codes" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
+              <div className="text-2xl mb-2">🧾</div>
+              <div className="font-medium text-gray-900 dark:text-white">CRA Tax Codes</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">T2125 line-by-line breakdown of deductibles</div>
+            </a>
+            <a href="/dashboard/reports/capital-assets" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
+              <div className="text-2xl mb-2">🏗️</div>
+              <div className="font-medium text-gray-900 dark:text-white">Capital Assets (CCA)</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Items to depreciate via Capital Cost Allowance</div>
+            </a>
+            <a href="/dashboard/reports/home-office" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
+              <div className="text-2xl mb-2">🏠</div>
+              <div className="font-medium text-gray-900 dark:text-white">Home Office (Line 9945)</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Pro-rated utilities, rent, internet</div>
+            </a>
+            <a href="/dashboard/reports/quarterly-hst" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
+              <div className="text-2xl mb-2">📅</div>
+              <div className="font-medium text-gray-900 dark:text-white">Quarterly HST/GST</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">ITCs by calendar quarter for filing</div>
+            </a>
+            <a href="/dashboard/reports/net-income" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
+              <div className="text-2xl mb-2">💰</div>
+              <div className="font-medium text-gray-900 dark:text-white">Net Income Summary</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Revenue − deductible per month</div>
+            </a>
+          </div>
+        </div>
+
+        {/* CSV Exports — original export-builder for finance / spreadsheet
+            workflows. Separated above so the new tax reports get their
+            own discoverable surface. */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Select Report Type

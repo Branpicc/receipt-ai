@@ -243,6 +243,63 @@ export async function processUploadedReceipt(
       await supabase.from("receipt_items").insert(rows);
     }
 
+    // ── Capital-asset detection ──────────────────────────────────────────
+    // High-value receipts in capital-prone categories (Equipment, Office,
+    // Software, Repairs) get a flag so the accountant can decide whether
+    // to capitalize them via CCA instead of expensing in full.
+    try {
+      const { isLikelyCapitalAsset, suggestCcaClass, CAPITAL_ASSET_THRESHOLD_DOLLARS } = await import("./capitalAsset");
+      const inferredCategory = extracted.vendor && extracted.line_items?.length
+        ? null // category not yet known at this point — categorization runs later
+        : null;
+      // Use the receipt's stored approved/suggested category once available.
+      const { data: receiptForCategory } = await supabase
+        .from("receipts")
+        .select("approved_category, suggested_category, total_cents")
+        .eq("id", receiptId)
+        .single();
+      const cat = receiptForCategory?.approved_category || receiptForCategory?.suggested_category || inferredCategory;
+      if (isLikelyCapitalAsset(receiptForCategory?.total_cents, cat)) {
+        const cls = suggestCcaClass(cat) || "";
+        await supabase.from("receipt_flags").insert([
+          {
+            receipt_id: receiptId,
+            firm_id: firmId,
+            flag_type: "potential_capital_asset",
+            severity: "warn",
+            message: `Receipt total is $${((receiptForCategory?.total_cents || 0) / 100).toFixed(2)} (over the $${CAPITAL_ASSET_THRESHOLD_DOLLARS} threshold) and looks like a capital purchase. Consider marking it as a capital asset (${cls}) so it goes on the CCA schedule instead of being fully expensed this year.`,
+          },
+        ]);
+      }
+    } catch (capErr: any) {
+      console.error("[stage2] capital-asset detection failed:", capErr.message);
+    }
+
+    // ── Card-type mismatch detection ─────────────────────────────────────
+    // If the user has already classified this receipt and the card used
+    // contradicts that, flag it as high-severity.
+    try {
+      const { syncCardMismatchFlag } = await import("./cardMismatchFlag");
+      const { data: rec } = await supabase
+        .from("receipts")
+        .select("expense_type, card_brand, card_last_four")
+        .eq("id", receiptId)
+        .single();
+      if (rec) {
+        await syncCardMismatchFlag({
+          supabase,
+          receiptId,
+          firmId,
+          clientId,
+          cardBrand: rec.card_brand,
+          cardLastFour: rec.card_last_four,
+          expenseType: rec.expense_type,
+        });
+      }
+    } catch (mismatchErr: any) {
+      console.error("[stage2] card-mismatch flag check failed:", mismatchErr.message);
+    }
+
     // Notify other firm users that a new receipt is awaiting review
     try {
       const { data: firmUsers } = await supabase

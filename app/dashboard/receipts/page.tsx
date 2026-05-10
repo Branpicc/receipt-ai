@@ -35,6 +35,7 @@ type Folder = {
 };
 
 type StatusFilter = "all" | "needs_review" | "categorized" | "uncategorized" | "flagged";
+type ExpenseTypeFilter = "all" | "business" | "personal";
 type DateFilter = "any" | "this_week" | "this_month" | "this_year" | "custom";
 type MainView = "receipts" | "folders";
 
@@ -91,6 +92,10 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
 
 // Status filter
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // Business / personal filter — only shown to accountants & firm admins.
+  // Clients have their own dedicated /dashboard/personal page so don't
+  // need a filter on the main receipts list.
+  const [expenseTypeFilter, setExpenseTypeFilter] = useState<ExpenseTypeFilter>("all");
   const [vendorSearch, setVendorSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
@@ -156,7 +161,7 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   // Reload receipts when filters or selected client change
   useEffect(() => {
     if (firmId) loadReceipts();
-}, [firmId, statusFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId, selectedClient]);
+}, [firmId, statusFilter, expenseTypeFilter, dateFilter, customStart, customEnd, dateSearchType, activeFolderId, selectedClient]);
 
   // Load folders on initial load and when switching to folder view or client changes
   useEffect(() => {
@@ -175,7 +180,7 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
 
       let query = supabase
         .from("receipts")
-        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id, client_id, is_demo, clients(name)")
+        .select("id, vendor, receipt_date, total_cents, status, created_at, approved_category, suggested_category, folder_id, client_id, is_demo, expense_type, clients(name)")
         .eq("firm_id", firmId)
         .order("created_at", { ascending: false })
         .range(0, 49999);
@@ -196,6 +201,12 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
       // Filter to folder if inside one
       if (activeFolderId) {
         query = query.eq("folder_id", activeFolderId);
+      }
+
+      // Business / personal filter (accountants & firm admins only — UI
+      // hides this for clients).
+      if (expenseTypeFilter !== "all") {
+        query = query.eq("expense_type", expenseTypeFilter);
       }
 
       // Date filter
@@ -611,6 +622,31 @@ const filtersBarJSX = (
           </button>
         ))}
 </div>
+
+      {/* Business / Personal filter — only shown to accountants and firm
+          admins. Clients have a dedicated /dashboard/personal page. */}
+      {userRole !== "client" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Type:</span>
+          {([
+            { label: "All", value: "all", icon: "📋" },
+            { label: "Business", value: "business", icon: "💼" },
+            { label: "Personal", value: "personal", icon: "🏠" },
+          ] as { label: string; value: ExpenseTypeFilter; icon: string }[]).map((btn) => (
+            <button
+              key={btn.value}
+              onClick={() => setExpenseTypeFilter(btn.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                expenseTypeFilter === btn.value
+                  ? "bg-accent-500 text-white"
+                  : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
+              }`}
+            >
+              {btn.icon} {btn.label}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Vendor search and category filter */}
       <div className="flex flex-wrap gap-3 mt-3">
         <input
@@ -738,8 +774,25 @@ const filtersBarJSX = (
                                   <Link
               key={receipt.id}
               href={`/dashboard/receipts/${receipt.id}`}
-              className="block p-4 rounded-xl border border-gray-200 dark:border-dark-border hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500"
+              className={`relative block p-4 rounded-xl border-2 hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500 ${
+                receipt.has_flags
+                  ? "border-red-400 dark:border-red-600 ring-1 ring-red-300 dark:ring-red-700/50"
+                  : "border-gray-200 dark:border-dark-border"
+              }`}
             >
+              {/* Tilted flag corner indicator — visible to clients on
+                  their own flagged receipts so they can spot issues at a
+                  glance without opening every card. */}
+              {receipt.has_flags && (
+                <span
+                  className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md"
+                  style={{ transform: "rotate(15deg)" }}
+                  title="This receipt has open flags"
+                  aria-label="Flagged"
+                >
+                  🚩
+                </span>
+              )}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="font-medium text-gray-900 dark:text-white">
@@ -757,11 +810,6 @@ const filtersBarJSX = (
                     ) : null;
                   })()}
                 </div>
-                {receipt.has_flags && (
-                  <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-xs rounded-full font-medium">
-                    🚩 Flagged
-                  </span>
-                )}
               </div>
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold text-gray-900 dark:text-white">
