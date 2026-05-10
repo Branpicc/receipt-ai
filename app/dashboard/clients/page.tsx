@@ -12,6 +12,7 @@ type ClientRow = {
   name: string;
   client_code: string;
   email_alias: string | null;
+  email_forwarding_address: string | null;
   timezone: string;
   province: string;
   is_active: boolean;
@@ -70,13 +71,35 @@ const inboxDomain = "receipts.receipture.ca";
     return [...clients].sort((a, b) => a.name.localeCompare(b.name));
   }, [clients]);
 
+  // Filter UI for firm admins managing many clients. Three filters:
+  //   • accountantFilter: "all" / "unassigned" / a specific firm_user.id
+  //   • missingEmailOnly: clients without a custom forwarding address set
+  //   • nameQuery: free-text name search
+  const [accountantFilter, setAccountantFilter] = useState<string>("all");
+  const [missingEmailOnly, setMissingEmailOnly] = useState(false);
+  const [nameQuery, setNameQuery] = useState("");
+
+  const filteredClients = useMemo(() => {
+    return sortedClients.filter(c => {
+      if (accountantFilter === "unassigned" && c.assigned_accountant_id) return false;
+      if (accountantFilter !== "all" && accountantFilter !== "unassigned" && c.assigned_accountant_id !== accountantFilter) return false;
+      // "Missing custom email" = the client hasn't set a forwarding
+      // address AND doesn't have an email_alias either. They only have
+      // the auto-generated client_code, so they have no human-friendly
+      // address to give out.
+      if (missingEmailOnly && (c.email_forwarding_address || c.email_alias)) return false;
+      if (nameQuery.trim() && !c.name.toLowerCase().includes(nameQuery.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [sortedClients, accountantFilter, missingEmailOnly, nameQuery]);
+
   const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
 
   async function loadClients(fId: string) {
     setErr("");
     const { data, error } = await supabase
       .from("clients")
-      .select("id,name,client_code,email_alias,timezone,province,is_active,created_at,assigned_accountant_id,assigned_at")
+      .select("id,name,client_code,email_alias,email_forwarding_address,timezone,province,is_active,created_at,assigned_accountant_id,assigned_at")
       .eq("firm_id", fId);
 
     if (error) {
@@ -352,17 +375,72 @@ const { error } = await supabase.from("clients").insert([
 
         {/* Client List */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm border border-transparent dark:border-dark-border overflow-hidden">
-          <div className="p-6 border-b border-gray-200 dark:border-dark-border font-medium text-gray-900 dark:text-white">
-            Client List ({sortedClients.length})
+          <div className="p-6 border-b border-gray-200 dark:border-dark-border">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <div className="font-medium text-gray-900 dark:text-white">
+                Client List ({filteredClients.length}
+                {filteredClients.length !== sortedClients.length && ` of ${sortedClients.length}`})
+              </div>
+              {(accountantFilter !== "all" || missingEmailOnly || nameQuery.trim()) && (
+                <button
+                  onClick={() => { setAccountantFilter("all"); setMissingEmailOnly(false); setNameQuery(""); }}
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {/* Filters — visible to firm admins (and accountants viewing
+                their own clients), so they can drill into "who's assigned
+                to which accountant", spot unassigned clients, and find
+                clients who haven't set up their custom receipt email. */}
+            {isFirmAdmin && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  value={nameQuery}
+                  onChange={(e) => setNameQuery(e.target.value)}
+                  placeholder="Search by name…"
+                  className="rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg text-gray-900 dark:text-white px-3 py-2 text-sm"
+                />
+                <select
+                  value={accountantFilter}
+                  onChange={(e) => setAccountantFilter(e.target.value)}
+                  className="rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg text-gray-900 dark:text-white px-3 py-2 text-sm"
+                >
+                  <option value="all">All accountants</option>
+                  <option value="unassigned">Unassigned only</option>
+                  {accountants.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {(a as any).display_name || a.email || a.auth_user_id}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-bg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={missingEmailOnly}
+                    onChange={(e) => setMissingEmailOnly(e.target.checked)}
+                    className="accent-accent-500"
+                  />
+                  <span>Missing custom email</span>
+                </label>
+              </div>
+            )}
           </div>
 
-          {sortedClients.length === 0 ? (
+          {filteredClients.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-gray-500 dark:text-gray-400">No clients yet. Add your first client above.</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                {sortedClients.length === 0
+                  ? "No clients yet. Add your first client above."
+                  : "No clients match the current filters."}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200 dark:divide-dark-border">
-              {sortedClients.map((c) => {
+              {filteredClients.map((c) => {
                 const assignedAccountant = accountants.find(a => a.id === c.assigned_accountant_id);
                 const isEditing = editingAlias === c.id;
                 const displayEmail = c.email_alias || c.client_code;

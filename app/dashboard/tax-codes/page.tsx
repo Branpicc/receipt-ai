@@ -14,6 +14,7 @@ import {
 } from "../../../lib/taxCodes";
 import Link from "next/link";
 import { useClientContext } from "@/lib/ClientContext";
+import ClientSelector from "@/components/ClientSelector";
 
 type Receipt = {
   id: string;
@@ -251,6 +252,14 @@ function exportSummary() {
           >
             ← Back to receipts
           </Link>
+        </div>
+
+        {/* Client selector — switch which client's tax codes you're viewing
+            without having to bounce back to the dashboard. Reads/writes the
+            shared ClientContext, so the same selection persists across the
+            dashboard, receipts list, category dashboard, etc. */}
+        <div className="mb-6">
+          <ClientSelector />
         </div>
 
         {/* Income type note */}

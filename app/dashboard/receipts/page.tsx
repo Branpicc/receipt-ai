@@ -107,6 +107,17 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
   // default keeps working as new months arrive without resetting state.
   const [monthOverrides, setMonthOverrides] = useState<Record<string, boolean>>({});
 
+  // Single Download dropdown that exposes both QuickBooks CSV and Excel
+  // exports. Replaces the previous two side-by-side buttons that crowded
+  // the header on mobile viewports.
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  useEffect(() => {
+    if (!showDownloadMenu) return;
+    const close = () => setShowDownloadMenu(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [showDownloadMenu]);
+
   // Folder management
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -808,20 +819,47 @@ const filtersBarJSX = (
                 <span>⬆</span> Upload for client
               </button>
             )}
-            <button
-onClick={exportQuickBooksCSV}
-              disabled={receipts.length === 0}
-              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
-            >
-              📥 QuickBooks CSV
-            </button>
-            <button
-              onClick={exportExcel}
-              disabled={receipts.length === 0}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
-            >
-              📊 Export Excel
-            </button>
+            {/* Single Download dropdown — formerly two side-by-side
+                buttons that crowded the receipts header on mobile. */}
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowDownloadMenu(v => !v); }}
+                disabled={receipts.length === 0}
+                className="px-3 py-1.5 bg-accent-600 hover:bg-accent-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <span>📥</span> Download
+                <svg className="w-3 h-3 opacity-80" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 5l3 3 3-3" />
+                </svg>
+              </button>
+              {showDownloadMenu && receipts.length > 0 && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 mt-1 w-44 bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-lg shadow-lg z-30 overflow-hidden"
+                >
+                  <button
+                    onClick={() => { setShowDownloadMenu(false); exportQuickBooksCSV(); }}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-dark-hover text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                  >
+                    <span>📥</span>
+                    <div>
+                      <div className="font-medium">QuickBooks CSV</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">For accounting software import</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setShowDownloadMenu(false); exportExcel(); }}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-dark-hover text-gray-700 dark:text-gray-200 flex items-center gap-2 border-t border-gray-200 dark:border-dark-border"
+                  >
+                    <span>📊</span>
+                    <div>
+                      <div className="font-medium">Excel</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">Full spreadsheet with details</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
                         <Link
               href="/dashboard"
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
