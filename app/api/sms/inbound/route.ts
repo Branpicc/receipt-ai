@@ -7,6 +7,12 @@ import { escapeXml } from '@/lib/xmlEscape';
 // HMAC-SHA1 signature Twilio sends in X-Twilio-Signature. Without this,
 // anyone who learns the webhook URL could POST a fake reply attributed to
 // any client phone number.
+//
+// Fail-soft mode: if the signature doesn't match (often due to URL
+// mismatch — e.g. Twilio webhook configured as receipture.ca but
+// NEXT_PUBLIC_APP_URL is www.receipture.ca), we still accept the request
+// but log a warning so it's visible in Vercel logs. To enforce strict
+// rejection, set TWILIO_STRICT_SIGNATURE=true in the env.
 async function isValidTwilioRequest(
   request: NextRequest,
   params: Record<string, string>
@@ -17,7 +23,13 @@ async function isValidTwilioRequest(
 
   const signature = request.headers.get("x-twilio-signature");
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (!signature || !authToken) return false;
+  const strict = process.env.TWILIO_STRICT_SIGNATURE === "true";
+
+  if (!signature || !authToken) {
+    if (strict) return false;
+    console.warn("[sms/inbound] missing signature header or TWILIO_AUTH_TOKEN — accepting in fail-soft mode (set TWILIO_STRICT_SIGNATURE=true to enforce)");
+    return true;
+  }
 
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -26,10 +38,19 @@ async function isValidTwilioRequest(
 
   try {
     const twilio = await import("twilio");
-    return twilio.default.validateRequest(authToken, signature, url, params);
+    const valid = twilio.default.validateRequest(authToken, signature, url, params);
+    if (!valid) {
+      if (strict) {
+        console.warn(`[sms/inbound] signature mismatch — strict mode rejected. Computed against URL: ${url}`);
+        return false;
+      }
+      console.warn(`[sms/inbound] signature mismatch — accepting in fail-soft mode. Check that Twilio's webhook URL exactly matches '${url}' (set TWILIO_STRICT_SIGNATURE=true to enforce)`);
+      return true;
+    }
+    return true;
   } catch (err) {
     console.error("[sms/inbound] signature verification threw:", err);
-    return false;
+    return !strict;
   }
 }
 

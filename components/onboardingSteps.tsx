@@ -345,8 +345,10 @@ export function getClientSteps(
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
               Forward receipt emails to your custom address. Our system will extract the receipts automatically!
             </p>
-            <div className="bg-white dark:bg-dark-surface border border-gray-300 dark:border-dark-border rounded px-3 py-2 font-mono text-sm">
-              {currentAlias || "Set your email in the previous step"}@receipts.example.com
+            <div className="bg-white dark:bg-dark-surface border border-gray-300 dark:border-dark-border rounded px-3 py-2 font-mono text-sm break-all">
+              {currentAlias
+                ? <><span className="text-accent-700 dark:text-accent-300 font-semibold">{currentAlias}</span>@receipts.receipture.ca</>
+                : <span className="text-gray-400 dark:text-gray-500">Set your email in the previous step</span>}
             </div>
           </div>
         </div>
@@ -649,12 +651,23 @@ function ClientTaxSetup() {
   const [gstRegistered, setGstRegistered] = React.useState<boolean>(false);
   const [revenueBand, setRevenueBand] = React.useState<string>("under_30k");
   const [hasHomeOffice, setHasHomeOffice] = React.useState<boolean>(false);
-  const [totalRooms, setTotalRooms] = React.useState<number>(6);
-  const [officeRooms, setOfficeRooms] = React.useState<number>(1);
-  const [vehiclePct, setVehiclePct] = React.useState<number>(100);
-  const [utilitiesPct, setUtilitiesPct] = React.useState<number>(0);
+  // Hold rooms / percentages as STRINGS so users can clear the field
+  // and re-type without the input snapping back to "0". Convert at save
+  // time. The previous useState<number> with `parseInt(...) || 0`
+  // forced the value to 0 the moment the field was emptied, making it
+  // impossible to delete the leading zero.
+  const [totalRoomsInput, setTotalRoomsInput] = React.useState<string>("6");
+  const [officeRoomsInput, setOfficeRoomsInput] = React.useState<string>("1");
+  const [hasVehicle, setHasVehicle] = React.useState<boolean>(true);
+  const [vehiclePctInput, setVehiclePctInput] = React.useState<string>("100");
+  const [utilitiesPctInput, setUtilitiesPctInput] = React.useState<string>("0");
   const [error, setError] = React.useState<string>("");
   const [saving, setSaving] = React.useState<boolean>(false);
+
+  const totalRooms = parseInt(totalRoomsInput) || 0;
+  const officeRooms = parseInt(officeRoomsInput) || 0;
+  const vehiclePct = hasVehicle ? Math.max(0, Math.min(100, parseInt(vehiclePctInput) || 0)) : 0;
+  const utilitiesPct = Math.max(0, Math.min(100, parseInt(utilitiesPctInput) || 0));
 
   const homeOfficePct = hasHomeOffice && totalRooms > 0
     ? Math.round((officeRooms / totalRooms) * 100)
@@ -676,8 +689,8 @@ function ClientTaxSetup() {
   // When home office is enabled, default utilities % to the same value
   // (most clients use the same fraction for utilities as for office space).
   React.useEffect(() => {
-    if (hasHomeOffice) setUtilitiesPct(homeOfficePct);
-    else setUtilitiesPct(0);
+    if (hasHomeOffice) setUtilitiesPctInput(String(homeOfficePct));
+    else setUtilitiesPctInput("0");
   }, [hasHomeOffice, homeOfficePct]);
 
   async function handleSave() {
@@ -723,7 +736,7 @@ function ClientTaxSetup() {
       {/* Why */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <p className="text-sm text-blue-800 dark:text-blue-300">
-          🎯 We use this to compute your deductible amounts and Input Tax Credits accurately on your CRA tax reports. You can update any of this later in Settings.
+          🎯 A few quick questions so we can calculate your deductibles correctly. You can change any of this later in Settings.
         </p>
       </div>
 
@@ -771,8 +784,7 @@ function ClientTaxSetup() {
           <div>
             <div className="font-medium text-gray-900 dark:text-white">I'm registered for GST/HST</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">
-              Lets us claim Input Tax Credits (ITCs) — the GST/HST you paid gets refunded by CRA.
-              Required if your revenue is over $30k. Optional but allowed below that.
+              Required if your revenue is over $30k. Optional below that — check this box if you've already registered.
             </div>
           </div>
         </label>
@@ -803,9 +815,10 @@ function ClientTaxSetup() {
               </label>
               <input
                 type="number"
+                inputMode="numeric"
                 min="1"
-                value={totalRooms}
-                onChange={(e) => setTotalRooms(parseInt(e.target.value) || 0)}
+                value={totalRoomsInput}
+                onChange={(e) => setTotalRoomsInput(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
               />
             </div>
@@ -815,9 +828,10 @@ function ClientTaxSetup() {
               </label>
               <input
                 type="number"
+                inputMode="numeric"
                 min="0"
-                value={officeRooms}
-                onChange={(e) => setOfficeRooms(parseInt(e.target.value) || 0)}
+                value={officeRoomsInput}
+                onChange={(e) => setOfficeRoomsInput(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
               />
             </div>
@@ -828,33 +842,53 @@ function ClientTaxSetup() {
         )}
       </div>
 
-      {/* Vehicle business % */}
+      {/* Vehicle business % — opt out entirely if no business vehicle */}
       <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
-        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
-          Vehicle business-use %
+        <label className="flex items-start gap-3 cursor-pointer mb-3">
+          <input
+            type="checkbox"
+            checked={hasVehicle}
+            onChange={(e) => setHasVehicle(e.target.checked)}
+            className="mt-1 accent-accent-500"
+          />
+          <div>
+            <div className="font-medium text-gray-900 dark:text-white">I use a vehicle for business</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Uncheck if you don't claim any vehicle expenses (gas, maintenance, insurance).
+            </div>
+          </div>
         </label>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-          What % of your vehicle expenses (gas, maintenance, insurance) is for business? CRA requires a kilometre log if audited.
-        </p>
-        <div className="flex items-center gap-3">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={vehiclePct}
-            onChange={(e) => setVehiclePct(parseInt(e.target.value))}
-            className="flex-1 accent-accent-500"
-          />
-          <input
-            type="number"
-            min="0"
-            max="100"
-            value={vehiclePct}
-            onChange={(e) => setVehiclePct(parseInt(e.target.value) || 0)}
-            className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center"
-          />
-          <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
-        </div>
+
+        {hasVehicle && (
+          <div className="ml-6">
+            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
+              Vehicle business-use %
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              What % of your vehicle expenses is for business? CRA requires a kilometre log if audited.
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={vehiclePct}
+                onChange={(e) => setVehiclePctInput(e.target.value)}
+                className="flex-1 accent-accent-500"
+              />
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max="100"
+                value={vehiclePctInput}
+                onChange={(e) => setVehiclePctInput(e.target.value)}
+                className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center"
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Utilities/internet business % — only relevant if home office */}
@@ -872,15 +906,16 @@ function ClientTaxSetup() {
               min="0"
               max="100"
               value={utilitiesPct}
-              onChange={(e) => setUtilitiesPct(parseInt(e.target.value))}
+              onChange={(e) => setUtilitiesPctInput(e.target.value)}
               className="flex-1 accent-accent-500"
             />
             <input
               type="number"
+              inputMode="numeric"
               min="0"
               max="100"
-              value={utilitiesPct}
-              onChange={(e) => setUtilitiesPct(parseInt(e.target.value) || 0)}
+              value={utilitiesPctInput}
+              onChange={(e) => setUtilitiesPctInput(e.target.value)}
               className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">%</span>

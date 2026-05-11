@@ -18,7 +18,12 @@ export async function getUserRole(): Promise<UserRole | null> {
       return null;
     }
 
-    return data?.role as UserRole || "client";
+    // Return null when role is unknown — the previous default of "client"
+    // caused a real bug where firm admins were briefly classified as
+    // clients during page load and got redirected to /dashboard/client
+    // (the client-only view). Callers should treat null as "still loading
+    // / unknown" and not fall through to a destructive default.
+    return (data?.role as UserRole) || null;
   } catch (error) {
     console.error("Error getting user role:", error);
     return null;

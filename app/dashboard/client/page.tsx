@@ -6,6 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import Link from "next/link";
 import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import UsageStats from "@/components/UsageStats";
+import ClientMonthlyRevenueCard from "@/components/ClientMonthlyRevenueCard";
 import { useToast } from "@/components/Toast";
 
 type RecentReceipt = {
@@ -555,6 +556,12 @@ function getCategoryColor(category: string) {
           </div>
         </div>
       )}
+
+      {/* Monthly revenue prompt — surfaces in the first week of each
+          month asking the client to log last month's revenue, and shrinks
+          to a quiet "$X for May 2026" line the rest of the time. Feeds
+          the Net Income report. */}
+      <ClientMonthlyRevenueCard clientId={clientId} />
 
       {/* Email Inbox */}
       {clientEmail && (

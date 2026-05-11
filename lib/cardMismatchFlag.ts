@@ -54,6 +54,7 @@ export async function syncCardMismatchFlag(args: Args): Promise<void> {
   if (!matched) {
     // Unrecognized card — that's a separate flag (already handled by the
     // upload pipeline). Don't muddle the two; just clear our flag.
+    console.log(`[card-mismatch] receipt ${receiptId}: card ${cardBrand} ****${cardLastFour} not in client_cards — register the card on the client profile to enable mismatch detection`);
     await clearExistingMismatchFlag(supabase, receiptId);
     return;
   }

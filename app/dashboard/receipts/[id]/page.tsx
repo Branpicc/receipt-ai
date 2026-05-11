@@ -858,60 +858,114 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
       );
     })}
   </div>
-  {/* Capital asset toggle. When set, the receipt is excluded from
-      the regular CRA tax-codes report and shows up on the Capital
-      Assets report for the accountant to depreciate via CCA. */}
-  <div className="mt-3">
-    <label className="flex items-start gap-2 text-xs cursor-pointer">
-      <input
-        type="checkbox"
-        checked={!!receipt.is_capital_asset}
-        disabled={isReadOnly}
-        onChange={async (e) => {
-          const next = e.target.checked;
-          await supabase
-            .from("receipts")
-            .update({ is_capital_asset: next })
-            .eq("id", receiptId);
-          setReceipt((prev) => prev ? { ...prev, is_capital_asset: next } : prev);
-        }}
-        className="mt-0.5 accent-accent-500"
-      />
-      <span className="text-gray-700 dark:text-gray-300">
-        🏗️ <strong>Capital asset</strong> (depreciate via CCA instead of expensing)
-        <span className="block text-[11px] text-gray-500 dark:text-gray-400">
-          Use for equipment, computers, vehicles or furniture over $500.
+  {/* Capital asset toggle — accountant / firm-admin / owner only.
+      Clients shouldn't be deciding whether something is a CCA-eligible
+      capital purchase; that's a tax-prep judgment call. */}
+  {userRole !== "client" && (
+    <div className="mt-3">
+      <label className="flex items-start gap-2 text-xs cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!receipt.is_capital_asset}
+          disabled={isReadOnly}
+          onChange={async (e) => {
+            const next = e.target.checked;
+            await supabase
+              .from("receipts")
+              .update({ is_capital_asset: next })
+              .eq("id", receiptId);
+            setReceipt((prev) => prev ? { ...prev, is_capital_asset: next } : prev);
+          }}
+          className="mt-0.5 accent-accent-500"
+        />
+        <span className="text-gray-700 dark:text-gray-300">
+          🏗️ <strong>Capital asset</strong> (depreciate via CCA instead of expensing)
+          <span className="block text-[11px] text-gray-500 dark:text-gray-400">
+            Use for equipment, computers, vehicles or furniture over $500.
+          </span>
         </span>
-      </span>
-    </label>
-  </div>
+      </label>
+    </div>
+  )}
+  {/* Receipt-level business % slider (only when no items are
+      categorized — otherwise the % is derived from the items). Lets
+      users set a partial-business % for receipts without line items
+      (the classic "80% business gas" case). */}
   {(() => {
-    // Compute the effective business % from line items if any are
-    // categorized; otherwise fall back to the receipt-level setting.
+    if (receipt.expense_type === "personal") return null;
+    const anyItemCategorized = items.some(i => i.expense_type === "business" || i.expense_type === "personal");
+    if (anyItemCategorized) return null;
+    const pct = receipt.business_percentage ?? 100;
+    return (
+      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-dark-border">
+        <div className="flex items-center justify-between text-xs text-gray-700 dark:text-gray-300 mb-1">
+          <span>Business %</span>
+          <span className="font-semibold">{pct}%</span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={pct}
+          disabled={isReadOnly}
+          onChange={async (e) => {
+            const next = parseInt(e.target.value);
+            setReceipt((prev) => prev ? { ...prev, business_percentage: next } : prev);
+          }}
+          onMouseUp={async (e) => {
+            const next = parseInt((e.target as HTMLInputElement).value);
+            await supabase
+              .from("receipts")
+              .update({ business_percentage: next })
+              .eq("id", receiptId);
+          }}
+          onTouchEnd={async (e) => {
+            const next = parseInt((e.target as HTMLInputElement).value);
+            await supabase
+              .from("receipts")
+              .update({ business_percentage: next })
+              .eq("id", receiptId);
+          }}
+          className="w-full accent-accent-500"
+        />
+        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+          Or categorize each line item below for a precise split.
+        </div>
+      </div>
+    );
+  })()}
+
+  {/* Live business / personal portion summary. Always shown so users
+      see the breakdown (even when 100% business — confirms what's
+      flowing into the CRA report). */}
+  {(() => {
+    if (receipt.expense_type === "personal") return null;
+    const totalCents = receipt.total_cents || 0;
+    if (totalCents <= 0) return null;
+
     const categorized = items.filter(i => i.expense_type === "business" || i.expense_type === "personal");
     let effectivePct = receipt.business_percentage ?? 100;
     let computedFromItems = false;
     if (categorized.length > 0) {
       const totalCat = categorized.reduce((s, i) => s + (i.total_cents || 0), 0);
       if (totalCat > 0) {
-        const businessTotal = categorized.filter(i => i.expense_type === "business").reduce((s, i) => s + (i.total_cents || 0), 0);
+        const businessTotal = categorized
+          .filter(i => i.expense_type === "business")
+          .reduce((s, i) => s + (i.total_cents || 0), 0);
         effectivePct = Math.round((businessTotal / totalCat) * 100);
         computedFromItems = true;
       }
     }
-    if (receipt.expense_type === "personal") return null;
-    if (effectivePct === 100) return null;
-    const totalCents = receipt.total_cents || 0;
     const businessCents = Math.round(totalCents * effectivePct / 100);
     const personalCents = totalCents - businessCents;
     return (
-      <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-        <div className="flex items-center justify-between">
-          <span>Business portion ({effectivePct}%):</span>
+      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-dark-border text-xs">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-gray-600 dark:text-gray-400">Business portion ({effectivePct}%)</span>
           <span className="font-semibold text-accent-700 dark:text-accent-300">${(businessCents / 100).toFixed(2)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span>Personal portion ({100 - effectivePct}%):</span>
+          <span className="text-gray-600 dark:text-gray-400">Personal portion ({100 - effectivePct}%)</span>
           <span className="font-semibold text-gray-700 dark:text-gray-400">${(personalCents / 100).toFixed(2)}</span>
         </div>
         {computedFromItems && (
@@ -1127,7 +1181,7 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                     <div className="space-y-3">
                       <div className="space-y-2">
                         {items.map((item, idx) => (
-                          <div key={`${item.id}-${idx}`} className="border rounded-lg p-4 bg-white dark:bg-dark-surface hover:bg-gray-50 dark:bg-dark-hover transition-colors">
+                          <div key={`${item.id}-${idx}`} className="border border-gray-200 dark:border-dark-border rounded-lg p-4 bg-white dark:bg-dark-surface hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="font-medium text-gray-900 dark:text-white mb-1">{item.description || "Untitled Item"}</div>
@@ -1149,9 +1203,13 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                                     disabled={isReadOnly}
                                     onClick={async () => {
                                       const newValue = isActive ? null : opt;
-                                      const updated = [...items];
-                                      updated[idx].expense_type = newValue;
-                                      setItems(updated);
+                                      // Immutable update — replace the
+                                      // single item with a new object so
+                                      // React reliably re-renders the
+                                      // receipt-level split summary.
+                                      setItems((prev) => prev.map((it, i) =>
+                                        i === idx ? { ...it, expense_type: newValue } : it
+                                      ));
                                       if (item.id) {
                                         await supabase
                                           .from("receipt_items")
@@ -1227,9 +1285,9 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
                                           disabled={isReadOnly}
                                           onClick={async () => {
                                             const newValue = isActive ? null : opt;
-                                            const updated = [...items];
-                                            updated[idx].expense_type = newValue;
-                                            setItems(updated);
+                                            setItems((prev) => prev.map((it, i) =>
+                                              i === idx ? { ...it, expense_type: newValue } : it
+                                            ));
                                             if (item.id) {
                                               await supabase
                                                 .from("receipt_items")

@@ -261,6 +261,7 @@ return (
               <span className="font-medium">Receipts</span>
             </Link>
           </li>
+          {isClient && (
           <li>
             <Link
               href="/dashboard/personal"
@@ -270,10 +271,11 @@ return (
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover'
               }`}
             >
-              <span className="w-5 h-5 inline-flex items-center justify-center">🏠</span>
+              <User className="w-5 h-5" />
               <span className="font-medium">Personal</span>
             </Link>
           </li>
+          )}
 {!isFirmAdmin && (
           <li>
             <Link
@@ -554,6 +556,58 @@ return (
                 >
                   <Receipt className="w-4 h-4" />
                   <span className="text-sm">Tax Codes</span>
+                </Link>
+              </li>
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/reports/capital-assets"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname.startsWith('/dashboard/reports/capital-assets')
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span className="text-sm">Capital Assets</span>
+                </Link>
+              </li>
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/reports/home-office"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname.startsWith('/dashboard/reports/home-office')
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <Home className="w-4 h-4" />
+                  <span className="text-sm">Home Office</span>
+                </Link>
+              </li>
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/reports/quarterly-hst"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname.startsWith('/dashboard/reports/quarterly-hst')
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  <span className="text-sm">Quarterly HST</span>
+                </Link>
+              </li>
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/reports/net-income"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname.startsWith('/dashboard/reports/net-income')
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span className="text-sm">Net Income</span>
                 </Link>
               </li>
               {canClientReports && (

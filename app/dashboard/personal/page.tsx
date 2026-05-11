@@ -12,7 +12,7 @@
 // Accountants and firm admins don't get this page — they have a
 // Business / Personal filter on the main receipts list instead.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
@@ -29,10 +29,14 @@ type Receipt = {
   card_last_four: string | null;
 };
 
+type SortKey = "date_desc" | "date_asc" | "amount_desc" | "amount_asc" | "vendor_asc";
+
 export default function PersonalExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [sortKey, setSortKey] = useState<SortKey>("date_desc");
+  const [vendorSearch, setVendorSearch] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -89,7 +93,34 @@ export default function PersonalExpensesPage() {
     );
   }
 
-  const total = receipts.reduce((s, r) => s + (r.total_cents || 0), 0);
+  // Filter + sort the receipts client-side. Vendor search and sort
+  // mirror the patterns on /dashboard/receipts so the experience feels
+  // consistent.
+  const visibleReceipts = useMemo(() => {
+    const filtered = receipts.filter(r => {
+      if (!vendorSearch.trim()) return true;
+      const q = vendorSearch.trim().toLowerCase();
+      return (r.vendor || "").toLowerCase().includes(q);
+    });
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      switch (sortKey) {
+        case "date_asc":
+          return (a.receipt_date || "").localeCompare(b.receipt_date || "");
+        case "date_desc":
+          return (b.receipt_date || "").localeCompare(a.receipt_date || "");
+        case "amount_asc":
+          return (a.total_cents || 0) - (b.total_cents || 0);
+        case "amount_desc":
+          return (b.total_cents || 0) - (a.total_cents || 0);
+        case "vendor_asc":
+          return (a.vendor || "").localeCompare(b.vendor || "");
+      }
+    });
+    return sorted;
+  }, [receipts, vendorSearch, sortKey]);
+
+  const total = visibleReceipts.reduce((s, r) => s + (r.total_cents || 0), 0);
 
   return (
     <div className="p-6 md:p-8">
@@ -104,13 +135,36 @@ export default function PersonalExpensesPage() {
 
         <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-4 mb-6 flex items-center justify-between">
           <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Total personal</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Total personal{vendorSearch ? " (filtered)" : ""}</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">${(total / 100).toFixed(2)}</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-gray-500 dark:text-gray-400">Receipts</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{receipts.length}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{visibleReceipts.length}</div>
           </div>
+        </div>
+
+        {/* Search + sort — mirrors the receipts list so behaviour is
+            consistent across the app. */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <input
+            type="text"
+            value={vendorSearch}
+            onChange={(e) => setVendorSearch(e.target.value)}
+            placeholder="🔍 Search vendor…"
+            className="flex-1 min-w-[200px] text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-2 bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+          />
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-2 bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+          >
+            <option value="date_desc">Newest first</option>
+            <option value="date_asc">Oldest first</option>
+            <option value="amount_desc">Largest amount</option>
+            <option value="amount_asc">Smallest amount</option>
+            <option value="vendor_asc">Vendor (A–Z)</option>
+          </select>
         </div>
 
         {receipts.length === 0 ? (
@@ -121,9 +175,13 @@ export default function PersonalExpensesPage() {
               its details page, it'll show up here.
             </p>
           </div>
+        ) : visibleReceipts.length === 0 ? (
+          <div className="bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border p-12 text-center">
+            <p className="text-gray-600 dark:text-gray-400">No personal expenses match the search.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {receipts.map(r => (
+            {visibleReceipts.map(r => (
               <Link
                 key={r.id}
                 href={`/dashboard/receipts/${r.id}`}
