@@ -75,27 +75,10 @@ export default function PersonalExpensesPage() {
     })();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="p-8">
-        <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-      </div>
-    );
-  }
-
-  if (allowed === false) {
-    return (
-      <div className="p-8">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          This page is only available for client accounts.
-        </p>
-      </div>
-    );
-  }
-
   // Filter + sort the receipts client-side. Vendor search and sort
   // mirror the patterns on /dashboard/receipts so the experience feels
-  // consistent.
+  // consistent. MUST be declared before any conditional early return
+  // below — React enforces a consistent hook order across renders.
   const visibleReceipts = useMemo(() => {
     const filtered = receipts.filter(r => {
       if (!vendorSearch.trim()) return true;
@@ -121,6 +104,24 @@ export default function PersonalExpensesPage() {
   }, [receipts, vendorSearch, sortKey]);
 
   const total = visibleReceipts.reduce((s, r) => s + (r.total_cents || 0), 0);
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+      </div>
+    );
+  }
+
+  if (allowed === false) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          This page is only available for client accounts.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 md:p-8">

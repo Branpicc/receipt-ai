@@ -12,6 +12,11 @@ import DailyCheckinRunner from "@/components/DailyCheckinRunner";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { getMyFirmPlan } from "@/lib/getMyFirmPlan";
 import { hasFeature, type Plan } from "@/lib/featureGates";
+import {
+  loadSidebarReportsPrefs,
+  DEFAULT_PINNED,
+  type SidebarReportKey,
+} from "@/lib/sidebarReportsPrefs";
 import { ClientProvider } from "@/lib/ClientContext";
 import { EditModeProvider } from "@/lib/EditMode";
 import EditModeToggle from "@/components/EditModeToggle";
@@ -57,13 +62,27 @@ export default function DashboardLayout({
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [firmPlan, setFirmPlan] = useState<Plan>(null);
   const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
+  // Pinned tax-report keys. Null while loading; the helper falls back
+  // to DEFAULT_PINNED for users who haven't customized yet. The Reports
+  // page picker fires a window event when the user saves a new set, and
+  // we listen for it here to refresh without a full page reload.
+  const [pinnedReports, setPinnedReports] = useState<SidebarReportKey[]>(DEFAULT_PINNED);
   const router = useRouter();
 
   useEffect(() => {
     loadUserRole();
     loadFirmPlan();
     loadAndApplyTheme();
+    loadPinnedReports();
+    function onChange() { loadPinnedReports(); }
+    window.addEventListener("sidebar-reports-prefs-changed", onChange);
+    return () => window.removeEventListener("sidebar-reports-prefs-changed", onChange);
   }, []);
+
+  async function loadPinnedReports() {
+    const prefs = await loadSidebarReportsPrefs();
+    setPinnedReports(prefs ?? DEFAULT_PINNED);
+  }
 
   // Auto-close the mobile drawer whenever the user navigates to a new page.
   useEffect(() => {
@@ -369,6 +388,11 @@ return (
           </li>
           {operationsOpen && (
             <>
+              {/* Reports section visibility is now per-user — only the
+                  reports the user pinned in their preferences show up
+                  here. Tax Codes is still its own pinned slot (toggled
+                  in the picker) but lives in the Operations block for
+                  historical reasons; the rest hang off pinnedReports. */}
               <li className="ml-4">
                 <Link
                   data-tour="sidebar-receipts"
@@ -545,6 +569,7 @@ return (
                   </Link>
                 </li>
               )}
+              {pinnedReports.includes("tax_codes") && (
               <li className="ml-4">
                 <Link
                   href="/dashboard/tax-codes"
@@ -558,6 +583,8 @@ return (
                   <span className="text-sm">Tax Codes</span>
                 </Link>
               </li>
+              )}
+              {pinnedReports.includes("capital_assets") && (
               <li className="ml-4">
                 <Link
                   href="/dashboard/reports/capital-assets"
@@ -571,6 +598,8 @@ return (
                   <span className="text-sm">Capital Assets</span>
                 </Link>
               </li>
+              )}
+              {pinnedReports.includes("home_office") && (
               <li className="ml-4">
                 <Link
                   href="/dashboard/reports/home-office"
@@ -584,6 +613,8 @@ return (
                   <span className="text-sm">Home Office</span>
                 </Link>
               </li>
+              )}
+              {pinnedReports.includes("quarterly_hst") && (
               <li className="ml-4">
                 <Link
                   href="/dashboard/reports/quarterly-hst"
@@ -597,6 +628,8 @@ return (
                   <span className="text-sm">Quarterly HST</span>
                 </Link>
               </li>
+              )}
+              {pinnedReports.includes("net_income") && (
               <li className="ml-4">
                 <Link
                   href="/dashboard/reports/net-income"
@@ -610,7 +643,8 @@ return (
                   <span className="text-sm">Net Income</span>
                 </Link>
               </li>
-              {canClientReports && (
+              )}
+              {canClientReports && pinnedReports.includes("client_reports") && (
               <li className="ml-4">
   <Link
     data-tour="sidebar-reports-clients"
@@ -626,7 +660,7 @@ href="/dashboard/reports/clients"
   </Link>
 </li>
               )}
-              {canEditHistory && (
+              {canEditHistory && pinnedReports.includes("edit_history") && (
 <li className="ml-4">
   <Link
     data-tour="sidebar-reports-edits"

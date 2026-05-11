@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
+import SidebarReportsPicker from "@/components/SidebarReportsPicker";
+import { loadSidebarReportsPrefs, type SidebarReportKey } from "@/lib/sidebarReportsPrefs";
 
 type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly" | "comprehensive";
 
@@ -18,6 +20,13 @@ export default function ReportsPage() {
   const [selectedClient, setSelectedClient] = useState("");
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
   const [exporting, setExporting] = useState(false);
+
+  // Sidebar customization — if the user has no preference set yet we
+  // pop the picker on first visit. They can re-open it anytime via the
+  // "Customize sidebar" button below.
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerInitial, setPickerInitial] = useState<SidebarReportKey[] | null>(null);
+  const [pickerIsFirstTime, setPickerIsFirstTime] = useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -35,6 +44,21 @@ export default function ReportsPage() {
 
     loadClients();
     setLoading(false);
+
+    // After we know the user has access, check if they've ever picked
+    // their sidebar reports. If not, surface the picker as a first-time
+    // experience. The picker writes to user_preferences and signals the
+    // layout to refetch via a window event.
+    try {
+      const prefs = await loadSidebarReportsPrefs();
+      setPickerInitial(prefs);
+      if (prefs === null) {
+        setPickerIsFirstTime(true);
+        setShowPicker(true);
+      }
+    } catch (err) {
+      console.warn("[reports] sidebar prefs check failed:", err);
+    }
   }
 
   async function loadClients() {
@@ -369,9 +393,17 @@ href="/dashboard/reports/clients"
             section below so accountants don't confuse "view a report"
             with "export this CSV". */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-6 border border-transparent dark:border-dark-border">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Tax Reports
-          </h2>
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Tax Reports
+            </h2>
+            <button
+              onClick={() => { setPickerIsFirstTime(false); setShowPicker(true); }}
+              className="text-xs text-accent-600 dark:text-accent-400 hover:underline"
+            >
+              ⚙️ Customize sidebar
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <a href="/dashboard/tax-codes" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
               <div className="text-2xl mb-2">🧾</div>
@@ -517,6 +549,21 @@ href="/dashboard/reports/clients"
           </div>
         </div>
       </div>
+
+      {showPicker && (
+        <SidebarReportsPicker
+          initial={pickerInitial}
+          isFirstTime={pickerIsFirstTime}
+          onClose={() => setShowPicker(false)}
+          onSaved={(keys) => {
+            setPickerInitial(keys);
+            setShowPicker(false);
+            // Tell the layout sidebar to refetch its prefs so the new
+            // selection shows up immediately without a full reload.
+            window.dispatchEvent(new CustomEvent("sidebar-reports-prefs-changed"));
+          }}
+        />
+      )}
     </div>
   );
 }

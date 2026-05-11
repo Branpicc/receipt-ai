@@ -7,6 +7,7 @@ import Link from "next/link";
 import { convertHeicToJpg } from "@/lib/convertHeicClient";
 import UsageStats from "@/components/UsageStats";
 import ClientMonthlyRevenueCard from "@/components/ClientMonthlyRevenueCard";
+import ClientNetIncomeCard from "@/components/ClientNetIncomeCard";
 import { useToast } from "@/components/Toast";
 
 type RecentReceipt = {
@@ -562,6 +563,11 @@ function getCategoryColor(category: string) {
           to a quiet "$X for May 2026" line the rest of the time. Feeds
           the Net Income report. */}
       <ClientMonthlyRevenueCard clientId={clientId} />
+
+      {/* Monthly net income summary — last 6 months of revenue minus
+          deductible expenses. Mirrors the accountant's Net Income report
+          so the client can see exactly what's flowing into their T1. */}
+      <ClientNetIncomeCard clientId={clientId} />
 
       {/* Email Inbox */}
       {clientEmail && (

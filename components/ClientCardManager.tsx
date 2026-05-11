@@ -138,6 +138,26 @@ export default function ClientCardManager() {
       {/* Add card form */}
       {showForm && (
         <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-xl p-4 space-y-3">
+          {/* Apple Pay / physical / online explainer. The "last 4 digits"
+              we OCR from a receipt corresponds to the card variant used
+              at checkout, which is often DIFFERENT for the same physical
+              card depending on payment method: Apple Pay generates a
+              tokenized DPAN, online purchases sometimes use a virtual
+              number, and the physical chip has its own number on the
+              face of the card. Users need to register each variant they
+              actually use so the mismatch-detection works. */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-start gap-2">
+            <span className="text-lg flex-shrink-0">💡</span>
+            <div className="text-xs text-blue-900 dark:text-blue-200 leading-relaxed">
+              <strong>Heads up — same card, different last-4 digits:</strong>{" "}
+              the last 4 digits printed on a receipt depend on how you paid.
+              Apple Pay / Google Pay show a different number than the chip
+              on the physical card, and online checkouts sometimes use yet
+              another. Add a separate entry here for each variant of the
+              same card you actually use, so we can recognise it on
+              receipts no matter how you tap or type.
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Card Brand</label>
@@ -196,9 +216,12 @@ export default function ClientCardManager() {
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="e.g. Company Visa"
+                placeholder="e.g. Company Visa — Apple Pay"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
               />
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                Tip: include the variant (Apple Pay / Physical / Online) so you can tell them apart.
+              </p>
             </div>
           </div>
 
