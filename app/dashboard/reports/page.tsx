@@ -7,6 +7,20 @@ import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
 import SidebarReportsPicker from "@/components/SidebarReportsPicker";
 import { loadSidebarReportsPrefs, type SidebarReportKey } from "@/lib/sidebarReportsPrefs";
+import {
+  FileSpreadsheet,
+  Download,
+  Loader2,
+  ClipboardList,
+  Receipt as ReceiptIcon,
+  Users,
+  BarChart3,
+  Calendar,
+  FileText,
+  Building2,
+  Home,
+  DollarSign,
+} from "lucide-react";
 
 type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly" | "comprehensive";
 
@@ -81,9 +95,19 @@ export default function ReportsPage() {
     try {
       setExporting(true);
       const firmId = await getMyFirmId();
+      // requireFirmMember on the server side reads the bearer token,
+      // so the supabase session has to ride along with the fetch.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert("Your session expired. Please sign in again.");
+        return;
+      }
       const res = await fetch("/api/exports/master-xlsx", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           firmId,
           clientId: selectedClient || null,
@@ -393,12 +417,14 @@ function getCategoryTaxCode(category: string): string {
   }
 
 const reportTypes = [
-    { value: "receipts", label: "Receipt Summary", icon: "📄", desc: "All receipts with details" },
-    { value: "tax_codes", label: "Tax Code Report", icon: "🧾", desc: "Grouped by T2125 codes" },
-    { value: "clients", label: "Client Report", icon: "👥", desc: "Per-client breakdown" },
-    { value: "categories", label: "Category Report", icon: "📊", desc: "Expenses by category" },
-    { value: "monthly", label: "Monthly Summary", icon: "📅", desc: "Month-over-month" },
-    { value: "comprehensive", label: "Comprehensive Report", icon: "📋", desc: "AI-powered full report" },
+    // icon is now a lucide component; rendered inline below so the
+    // sweep reaches both the CSV builder cards and the top-level nav.
+    { value: "receipts", label: "Receipt Summary", icon: FileText, desc: "All receipts with details" },
+    { value: "tax_codes", label: "Tax Code Report", icon: ReceiptIcon, desc: "Grouped by T2125 codes" },
+    { value: "clients", label: "Client Report", icon: Users, desc: "Per-client breakdown" },
+    { value: "categories", label: "Category Report", icon: BarChart3, desc: "Expenses by category" },
+    { value: "monthly", label: "Monthly Summary", icon: Calendar, desc: "Month-over-month" },
+    { value: "comprehensive", label: "Comprehensive Report", icon: ClipboardList, desc: "AI-powered full report" },
   ];
 
   return (
@@ -414,15 +440,53 @@ const reportTypes = [
               Generate detailed reports for accounting and analysis
             </p>
           </div>
-          
+
 <a
 href="/dashboard/reports/clients"
             className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
           >
-            📋 Client Monthly Reports
+            <ClipboardList className="w-4 h-4" /> Client Monthly Reports
           </a>
         </div>
-        
+
+        {/* Master Excel export — promoted to the top of the page so it
+            isn't lost below the tax-reports cards and CSV builder.
+            Bundles every report into one styled .xlsx that the
+            accountant hands to a tax preparer. The CSV builder below
+            stays for spreadsheet-only workflows. */}
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-green-700 dark:text-green-400" />
+                Master Excel Report
+                <span className="px-2 py-0.5 text-[10px] font-semibold bg-green-600 text-white rounded">NEW</span>
+              </h3>
+              <p className="text-sm text-gray-700 dark:text-gray-300 max-w-2xl">
+                One styled .xlsx with a Summary sheet, every receipt, a tab per CRA line,
+                plus Personal and Capital Assets sheets. Honors the filters below.
+              </p>
+            </div>
+            <button
+              onClick={exportMasterXlsx}
+              disabled={exporting}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download Master .xlsx</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
         {/* Tax Reports — dedicated pages with their own UIs (CCA, HST,
             Net Income, Home Office). Separated from the CSV-export
             section below so accountants don't confuse "view a report"
@@ -441,27 +505,27 @@ href="/dashboard/reports/clients"
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <a href="/dashboard/tax-codes" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-              <div className="text-2xl mb-2">🧾</div>
+              <ReceiptIcon className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <div className="font-medium text-gray-900 dark:text-white">CRA Tax Codes</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">T2125 line-by-line breakdown of deductibles</div>
             </a>
             <a href="/dashboard/reports/capital-assets" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-              <div className="text-2xl mb-2">🏗️</div>
+              <Building2 className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <div className="font-medium text-gray-900 dark:text-white">Capital Assets (CCA)</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Items to depreciate via Capital Cost Allowance</div>
             </a>
             <a href="/dashboard/reports/home-office" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-              <div className="text-2xl mb-2">🏠</div>
+              <Home className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <div className="font-medium text-gray-900 dark:text-white">Home Office (Line 9945)</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Pro-rated utilities, rent, internet</div>
             </a>
             <a href="/dashboard/reports/quarterly-hst" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-              <div className="text-2xl mb-2">📅</div>
+              <Calendar className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <div className="font-medium text-gray-900 dark:text-white">Quarterly HST/GST</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">ITCs by calendar quarter for filing</div>
             </a>
             <a href="/dashboard/reports/net-income" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-              <div className="text-2xl mb-2">💰</div>
+              <DollarSign className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <div className="font-medium text-gray-900 dark:text-white">Net Income Summary</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Revenue − deductible per month</div>
             </a>
@@ -487,7 +551,7 @@ href="/dashboard/reports/clients"
                     : "border-gray-200 dark:border-dark-border hover:border-accent-300"
                 }`}
               >
-                <div className="text-3xl mb-2">{type.icon}</div>
+                <type.icon className="w-7 h-7 mb-2 text-gray-600 dark:text-gray-400" />
                 <div className="font-medium text-gray-900 dark:text-white mb-1">
                   {type.label}
                 </div>
@@ -551,44 +615,6 @@ href="/dashboard/reports/clients"
             </div>
           </div>
         )}
-
-        {/* Master Excel export — full multi-sheet workbook (Summary,
-            All Receipts, per-CRA-line, Personal, Capital Assets). This
-            is the new recommended download since it bundles every report
-            into one styled .xlsx that the accountant hands to a tax
-            preparer. The CSV button below stays for spreadsheet-only
-            workflows. */}
-        <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-                📊 Master Excel Report
-                <span className="px-2 py-0.5 text-[10px] font-semibold bg-green-600 text-white rounded">NEW</span>
-              </h3>
-              <p className="text-sm text-gray-700 dark:text-gray-300 max-w-2xl">
-                One styled .xlsx with a Summary sheet, every receipt, a tab per CRA line,
-                plus Personal and Capital Assets sheets. Honors the filters above.
-              </p>
-            </div>
-            <button
-              onClick={exportMasterXlsx}
-              disabled={exporting}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {exporting ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  <span>Exporting...</span>
-                </>
-              ) : (
-                <>
-                  <span>📥</span>
-                  <span>Download Master .xlsx</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
 
         {/* Export Button */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">

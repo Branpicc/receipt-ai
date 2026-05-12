@@ -18,6 +18,13 @@ import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 import { computeReceiptDeductible, type DeductibleLineItem } from "@/lib/computeReceiptDeductible";
 import { getProvinceTax } from "@/lib/taxRates";
 import { getMyAccountType, type AccountType } from "@/lib/getMyAccountType";
+import {
+  Receipt as ReceiptIcon,
+  FolderOpen,
+  DollarSign,
+  Settings as SettingsIcon,
+  Download,
+} from "lucide-react";
 
 type Receipt = {
   id: string;
@@ -242,6 +249,14 @@ export default function TaxCodesPage() {
 // the exceljs library stays out of the client bundle.
 async function exportLineXlsx(summary: TaxCodeSummary) {
   const firmId = await getMyFirmId();
+  // The export route is firm-scoped via requireFirmMember, which needs
+  // the user's access token in the Authorization header — same pattern
+  // as the Stripe checkout call.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    alert("Your session expired. Please sign in again.");
+    return;
+  }
   let startDate: string | null = null;
   const now = new Date();
   if (dateRange === "month") {
@@ -255,7 +270,10 @@ async function exportLineXlsx(summary: TaxCodeSummary) {
 
   const res = await fetch("/api/exports/tax-line-xlsx", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${session.access_token}`,
+    },
     body: JSON.stringify({
       firmId,
       clientId: selectedClientId,
@@ -320,7 +338,7 @@ function exportSummary() {
       <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white dark:bg-dark-surface rounded-2xl border border-gray-200 dark:border-dark-border p-8">
-            <div className="text-4xl mb-3">🧾</div>
+            <ReceiptIcon className="w-10 h-10 mb-3 text-gray-500 dark:text-gray-400" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
               CRA tax codes are for self-employed users
             </h1>
@@ -331,15 +349,21 @@ function exportSummary() {
             </p>
             <div className="space-y-2">
               <Link href="/dashboard/category-dashboard" className="block p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors">
-                <div className="font-medium text-gray-900 dark:text-white">📂 Categories &amp; Deductibles</div>
+                <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4" /> Categories &amp; Deductibles
+                </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">See your spending grouped by category</div>
               </Link>
               <Link href="/dashboard/reports/net-income" className="block p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors">
-                <div className="font-medium text-gray-900 dark:text-white">💰 Monthly Net Income</div>
+                <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" /> Monthly Net Income
+                </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">Revenue minus deductibles by month</div>
               </Link>
               <Link href="/dashboard/settings" className="block p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors">
-                <div className="font-medium text-gray-900 dark:text-white">⚙️ I am self-employed — switch on</div>
+                <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                  <SettingsIcon className="w-4 h-4" /> I am self-employed — switch on
+                </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">Update your profile to unlock CRA tax-prep</div>
               </Link>
             </div>
@@ -444,9 +468,9 @@ function exportSummary() {
             <button
               onClick={exportSummary}
               disabled={summaries.length === 0}
-              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors inline-flex items-center gap-2"
             >
-              📥 Export {activeForm} CSV
+              <Download className="w-4 h-4" /> Export {activeForm} CSV
             </button>
           </div>
         </div>
@@ -551,7 +575,7 @@ function exportSummary() {
                       className="mt-2 text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors inline-flex items-center gap-1"
                       title={`Download all receipts on ${summary.taxCode.line} as a spreadsheet`}
                     >
-                      📥 Excel
+                      <Download className="w-3 h-3" /> Excel
                     </button>
                   </div>
                 </div>

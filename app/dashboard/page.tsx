@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
+import { getMyAccountType } from "@/lib/getMyAccountType";
 import Link from "next/link";
 import ClientSelector from "@/components/ClientSelector";
 import { useClientContext } from "@/lib/ClientContext";
@@ -11,6 +12,20 @@ import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
 import DailyCheckinAdminPanel from "@/components/DailyCheckinAdminPanel";
 import DailyCheckinDashboardCard from "@/components/DailyCheckinDashboardCard";
+import {
+  Receipt as ReceiptIcon,
+  CheckCircle2,
+  Eye,
+  AlertTriangle,
+  Mail,
+  Users,
+  TrendingUp,
+  BarChart3,
+  Flag,
+  Plus,
+  Upload,
+  User,
+} from "lucide-react";
 
 type RecentActivity = {
   id: string;
@@ -52,6 +67,17 @@ const [accountants, setAccountants] = useState<{ id: string; display_name: strin
 
 async function loadRole() {
   const role = await getUserRole();
+  // Personal accounts get the firm_admin role on their one-person firm,
+  // which would land them on the firm-overview view by default. That
+  // page is overloaded with firm-only chrome (All Clients picker, Team
+  // & Accountants, Detailed Analytics) — so we redirect them to the
+  // client dashboard, which is the cleaner single-user surface. We do
+  // this *before* setUserRole so the firm view doesn't briefly flash.
+  const accountType = await getMyAccountType();
+  if (accountType === "personal" && role !== "client") {
+    window.location.href = "/dashboard/client";
+    return;
+  }
   setUserRole(role);
   loadStats(role);
   updateLastSeen();
@@ -351,8 +377,8 @@ if (userRole === 'client') {
 {/* Accountant Selector — firm admins only */}
 {isFirmAdmin && accountants.length > 0 && (
   <div className="mb-4 flex items-center gap-3">
-    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-      👤 Accountant:
+    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap flex items-center gap-1.5">
+      <User className="w-4 h-4" /> Accountant:
     </label>
     <select
       value={selectedAccountantId || ""}
@@ -392,7 +418,7 @@ if (userRole === 'client') {
             <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm text-gray-500 dark:text-gray-400">Total Receipts</div>
-                <div className="text-2xl">📄</div>
+                <ReceiptIcon className="w-6 h-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalReceipts}</div>
               {isFiltered && <div className="text-xs text-accent-600 dark:text-accent-400 mt-1">{selectedClient?.name}</div>}
@@ -401,7 +427,7 @@ if (userRole === 'client') {
             <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm text-gray-500 dark:text-gray-400">Categorized</div>
-                <div className="text-2xl">✅</div>
+                <CheckCircle2 className="w-6 h-6 text-green-500" />
               </div>
               <div className="text-3xl font-bold text-green-600 dark:text-green-400">{completionRate}%</div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.categorized} of {stats.totalReceipts}</div>
@@ -410,7 +436,7 @@ if (userRole === 'client') {
             <Link href="/dashboard/receipts?status=needs_review" className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 hover:shadow-md dark:hover:bg-dark-hover transition-all border border-transparent dark:border-dark-border">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm text-gray-500 dark:text-gray-400">Needs Review</div>
-                <div className="text-2xl">👀</div>
+                <Eye className="w-6 h-6 text-orange-500" />
               </div>
               <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">{stats.pendingReview}</div>
             </Link>
@@ -418,7 +444,7 @@ if (userRole === 'client') {
             <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm text-gray-500 dark:text-gray-400">Flagged Issues</div>
-                <div className="text-2xl">⚠️</div>
+                <AlertTriangle className="w-6 h-6 text-red-500" />
               </div>
               <div className="text-3xl font-bold text-red-600 dark:text-red-400">{stats.flagged}</div>
             </div>
@@ -429,7 +455,9 @@ if (userRole === 'client') {
             {!isFiltered && (
               <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">📧 Email Processing</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Mail className="w-5 h-5" /> Email Processing
+                  </h3>
                   <Link href="/dashboard/email-inbox" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">View →</Link>
                 </div>
                 <div className="space-y-2">
@@ -444,7 +472,9 @@ if (userRole === 'client') {
             {!isFiltered && isFirmAdmin && (
               <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">👥 Team</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Users className="w-5 h-5" /> Team
+                  </h3>
                   <Link href="/dashboard/clients" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">Manage →</Link>
                 </div>
                 <div className="space-y-2">
@@ -459,7 +489,9 @@ if (userRole === 'client') {
             {!isFiltered && isAccountant && (
               <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">👥 My Clients</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Users className="w-5 h-5" /> My Clients
+                  </h3>
                   <Link href="/dashboard/clients" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">View →</Link>
                 </div>
                 <div className="space-y-2">
@@ -472,7 +504,9 @@ if (userRole === 'client') {
             {/* Recent Activity */}
             <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">📈 Recent Uploads</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" /> Recent Uploads
+                </h3>
                 <Link href="/dashboard/receipts" className="text-sm text-accent-600 dark:text-accent-400 hover:underline">All →</Link>
               </div>
               <div className="space-y-2">
@@ -514,27 +548,27 @@ if (userRole === 'client') {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {isFirmAdmin && (
                 <Link href="/dashboard/firm-admin" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                  <span className="text-2xl">📊</span>
+                  <BarChart3 className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                   <div><div className="font-medium text-gray-900 dark:text-white">Detailed Analytics</div><div className="text-sm text-gray-500 dark:text-gray-400">Deep dive reports</div></div>
                 </Link>
               )}
               <Link href="/dashboard/flags" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                <span className="text-2xl">🚩</span>
+                <Flag className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                 <div><div className="font-medium text-gray-900 dark:text-white">View All Flags</div><div className="text-sm text-gray-500 dark:text-gray-400">Unresolved issues</div></div>
               </Link>
               <Link href="/dashboard/reports" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                <span className="text-2xl">📊</span>
+                <TrendingUp className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                 <div><div className="font-medium text-gray-900 dark:text-white">Export Reports</div><div className="text-sm text-gray-500 dark:text-gray-400">Generate CSV/PDF</div></div>
               </Link>
               {isFirmAdmin && (
                 <Link href="/dashboard/clients" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                  <span className="text-2xl">➕</span>
+                  <Plus className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                   <div><div className="font-medium text-gray-900 dark:text-white">Add New Client</div><div className="text-sm text-gray-500 dark:text-gray-400">Quick setup</div></div>
                 </Link>
               )}
               {isAccountant && (
                 <Link href="/dashboard/email-inbox" className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors">
-                  <span className="text-2xl">📧</span>
+                  <Mail className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                   <div><div className="font-medium text-gray-900 dark:text-white">Email Inbox</div><div className="text-sm text-gray-500 dark:text-gray-400">Review forwarded receipts</div></div>
                 </Link>
               )}
@@ -543,7 +577,7 @@ if (userRole === 'client') {
                   onClick={() => setShowUploadOnBehalf(true)}
                   className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 dark:hover:border-accent-500 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors text-left"
                 >
-                  <span className="text-2xl">⬆</span>
+                  <Upload className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                   <div><div className="font-medium text-gray-900 dark:text-white">Upload for Client</div><div className="text-sm text-gray-500 dark:text-gray-400">Submit on their behalf</div></div>
                 </button>
               )}

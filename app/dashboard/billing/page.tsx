@@ -112,14 +112,18 @@ export default function BillingPage() {
   const [usageStats, setUsageStats] = useState<{ clients: number; clientLimit: number; accountants: number; userLimit: number } | null>(null);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
   // Personal accounts see a one-card layout for the $6.99 plan; firm
-  // accounts see the existing three-tier grid. Loaded async — until it
-  // resolves we render the firm view (matches what existing customers
-  // expect on hard refresh).
+  // accounts see the existing three-tier grid. We hold the page back
+  // with `accountTypeReady=false` until the lookup resolves — without
+  // this gate, the firm pricing flashes for personal users on first
+  // paint while the async getMyAccountType call is in flight.
   const [accountType, setAccountType] = useState<AccountType>("firm");
+  const [accountTypeReady, setAccountTypeReady] = useState(false);
 
   useEffect(() => {
     loadCurrentPlan();
-    getMyAccountType().then(setAccountType).catch(() => setAccountType("firm"));
+    getMyAccountType()
+      .then((t) => { setAccountType(t); setAccountTypeReady(true); })
+      .catch(() => { setAccountType("firm"); setAccountTypeReady(true); });
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("success") === "true") {
       setTimeout(() => loadCurrentPlan(), 2000);
@@ -248,6 +252,16 @@ export default function BillingPage() {
   const isTrialing = subscriptionStatus === "trialing";
   const isActive = subscriptionStatus === "active" || isTrialing;
   const annualDiscount = 0.833; // 2 months free = ~16.7% off
+
+  // Hold the page until we know firm vs. personal so we don't flash
+  // the wrong pricing grid on first paint.
+  if (!accountTypeReady) {
+    return (
+      <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
+        <p className="text-gray-500 dark:text-gray-400">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">

@@ -240,6 +240,12 @@ export default function LandingPage() {
           </div>
 <div className="hidden md:flex items-center gap-3">
             <Link
+              href="/personal"
+              className={`text-sm font-medium transition-colors hover:text-blue-500 ${scrolled ? "text-gray-600" : "text-white/80"}`}
+            >
+              For individuals
+            </Link>
+            <Link
               href="/login"
                             className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${scrolled ? "text-gray-700 hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
             >
@@ -263,7 +269,8 @@ export default function LandingPage() {
                 {item}
               </a>
             ))}
-            <Link href="/login" className="block text-gray-700 font-medium">Sign In</Link>
+            <Link href="/personal" className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>For individuals</Link>
+            <Link href="/login" className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>Sign In</Link>
             <Link
               href="/signup"
               className="block bg-blue-600 text-white text-center py-2 rounded-xl font-semibold"

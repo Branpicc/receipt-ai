@@ -18,9 +18,15 @@ export default function OnboardingWrapper({ children }: { children: React.ReactN
   // We need the account type AND the auto-created client's name/alias
   // to render the personal tour, so we load both even for firm_admins.
   const [accountType, setAccountType] = useState<AccountType>("firm");
+  // Wait for accountType to resolve before showing the modal — without
+  // this gate, the firm-admin tour flashes for personal users until the
+  // async lookup finishes, then swaps mid-flow.
+  const [accountTypeReady, setAccountTypeReady] = useState(false);
 
   useEffect(() => {
-    getMyAccountType().then(setAccountType).catch(() => setAccountType("firm"));
+    getMyAccountType()
+      .then((t) => { setAccountType(t); setAccountTypeReady(true); })
+      .catch(() => { setAccountType("firm"); setAccountTypeReady(true); });
   }, []);
 
   useEffect(() => {
@@ -85,7 +91,7 @@ export default function OnboardingWrapper({ children }: { children: React.ReactN
     setClientAlias(alias);
   }
 
-  if (loading) {
+  if (loading || !accountTypeReady) {
     return <>{children}</>;
   }
 

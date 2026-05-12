@@ -116,6 +116,12 @@ export default function DashboardLayout({
   }, [userRole, pathname]);
 
   async function handleSignOut() {
+    // Native confirm is good enough for a destructive nav action like
+    // sign-out — it blocks the click until the user explicitly agrees,
+    // which prevents the accidental click-on-the-wrong-icon case where
+    // the sign-out button sits next to Settings in the sidebar footer.
+    const ok = window.confirm("Sign out of Receipture?");
+    if (!ok) return;
     await supabase.auth.signOut();
     router.push("/login");
   }
@@ -574,6 +580,21 @@ return (
           </li>
           {reportsOpen && (
             <>
+              {/* Export Reports — first child so users always have a
+                  one-click path to the master .xlsx + CSV exporter. */}
+              <li className="ml-4">
+                <Link
+                  href="/dashboard/reports"
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    pathname === '/dashboard/reports'
+                      ? 'bg-accent-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span className="text-sm">Export Reports</span>
+                </Link>
+              </li>
               {isFirmAdmin && !isPersonal && (
                 <li className="ml-4">
                   <Link
@@ -879,14 +900,16 @@ href="/dashboard/reports/clients"
 
             {/* User Menu */}
             <div className="p-4 border-t border-gray-200 dark:border-dark-border">
-              {/* Role Badge */}
+              {/* Role Badge — personal users have firm_admin role on
+                  their firm-of-one, but showing "Firm Admin" in the
+                  sidebar is misleading. Override the label for them. */}
               {sidebarOpen && userRole && (
                 <div className="mb-3 px-4 py-2 bg-gray-100 dark:bg-dark-hover rounded-lg">
                   <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
-                    Role
+                    Account
                   </div>
                   <div className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
-                    {userRole}
+                    {isPersonal ? "Personal" : userRole.replace("_", " ")}
                   </div>
                 </div>
               )}

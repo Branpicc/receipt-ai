@@ -9,6 +9,16 @@ import UsageStats from "@/components/UsageStats";
 import ClientMonthlyRevenueCard from "@/components/ClientMonthlyRevenueCard";
 import ClientNetIncomeCard from "@/components/ClientNetIncomeCard";
 import { useToast } from "@/components/Toast";
+import {
+  Folder,
+  Wallet,
+  MessageSquare,
+  BarChart3,
+  Settings as SettingsIcon,
+  Mail,
+  FileText,
+  TrendingUp,
+} from "lucide-react";
 
 type RecentReceipt = {
   id: string;
@@ -416,42 +426,42 @@ function getCategoryColor(category: string) {
       {/* Quick Actions */}
 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mb-6">
             <Link href="/dashboard/receipts" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <span className="text-2xl">📁</span>
+          <Folder className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">My Receipts</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">View all</div>
           </div>
         </Link>
         <Link href="/dashboard/budget-settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <span className="text-2xl">💰</span>
+          <Wallet className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">My Budget</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Set limits</div>
           </div>
         </Link>
 <Link href="/dashboard/conversations" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <span className="text-2xl">💬</span>
+          <MessageSquare className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Messages</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Chat with accountant</div>
           </div>
         </Link>
         <Link href="/dashboard/category-dashboard" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <span className="text-2xl">📊</span>
+          <BarChart3 className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">My Spending</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Charts & categories</div>
           </div>
         </Link>
 <Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <span className="text-2xl">⚙️</span>
+          <SettingsIcon className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Settings</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Preferences</div>
           </div>
         </Link>
         <Link href="/dashboard/email-inbox" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <span className="text-2xl">📧</span>
+          <Mail className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Email Receipts</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Forward & manage</div>
@@ -463,7 +473,7 @@ function getCategoryColor(category: string) {
       {budgetStatus.length > 0 && (
         <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-4 mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">💰 Budget This Month</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"><Wallet className="w-4 h-4" /> Budget This Month</h2>
             <Link href="/dashboard/budget-settings" className="text-xs text-accent-600 dark:text-accent-400">Manage →</Link>
           </div>
           <div className="space-y-3">
@@ -488,7 +498,7 @@ function getCategoryColor(category: string) {
       {recentReceipts.length > 0 && (
         <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-100 dark:border-dark-border overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-dark-border flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">📄 Recent Receipts</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileText className="w-4 h-4" /> Recent Receipts</h2>
             <Link href="/dashboard/receipts" className="text-xs text-accent-600 dark:text-accent-400">View All →</Link>
           </div>
           <div className="divide-y divide-gray-100 dark:divide-dark-border">
@@ -520,7 +530,7 @@ function getCategoryColor(category: string) {
       {recentReports.length > 0 && (
         <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-100 dark:border-dark-border overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-dark-border flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">📊 Monthly Reports</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Monthly Reports</h2>
             {clientId && <Link href={`/dashboard/reports/clients/${clientId}`} className="text-xs text-accent-600 dark:text-accent-400">View All →</Link>}
           </div>
           <div className="divide-y divide-gray-100 dark:divide-dark-border">
