@@ -66,6 +66,24 @@ const { data: firmUser } = await supabase
   .eq("auth_user_id", user?.id)
   .single();
 
+// Personal accounts are firm-of-one — there's exactly one client
+// (themselves) and no need to switch between them. Bail out so every
+// client-selector component (ClientFilterDropdown, ClientSelector,
+// the receipts page filter) renders null via its existing
+// clients.length === 0 guard. Without this gate, personal users saw
+// firm-admin "All Clients" pickers across reports, receipts, flags,
+// email inbox, and the category dashboard.
+const { data: firmRow } = await supabase
+  .from("firms")
+  .select("account_type")
+  .eq("id", firmId)
+  .single();
+if (firmRow?.account_type === "personal") {
+  setClients([]);
+  setLoadingClients(false);
+  return;
+}
+
 let clientQuery = supabase
   .from("clients")
   .select("id, name, email_alias, assigned_accountant_id")

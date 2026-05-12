@@ -9,6 +9,10 @@ export default function UsageStats({ onRefresh }: { onRefresh?: () => void }) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  // Personal accounts have no team and exactly one client (themselves) —
+  // the "Clients X/5 · Accountants 0/1" card is firm-flavored noise for
+  // them. Hide the whole card.
+  const [isPersonal, setIsPersonal] = useState<boolean>(false);
 
   useEffect(() => {
     loadStats();
@@ -29,9 +33,15 @@ export default function UsageStats({ onRefresh }: { onRefresh?: () => void }) {
 
       const { data: firm } = await supabase
         .from("firms")
-        .select("subscription_tier, subscription_plan, subscription_status")
+        .select("subscription_tier, subscription_plan, subscription_status, account_type")
         .eq("id", firmId)
         .single();
+
+      if (firm?.account_type === "personal") {
+        setIsPersonal(true);
+        setLoading(false);
+        return;
+      }
 
       const plan = firm?.subscription_plan || firm?.subscription_tier || "starter";
 
@@ -81,8 +91,9 @@ export default function UsageStats({ onRefresh }: { onRefresh?: () => void }) {
     }
   };
 
-  // Don't render for non-admins or while loading
-  if (loading || !stats || (userRole !== "firm_admin" && userRole !== "owner")) {
+  // Don't render for non-admins, while loading, or for personal accounts
+  // (firm-of-one — no team/client limits worth showing).
+  if (loading || isPersonal || !stats || (userRole !== "firm_admin" && userRole !== "owner")) {
     return null;
   }
 

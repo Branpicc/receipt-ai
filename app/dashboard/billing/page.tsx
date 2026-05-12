@@ -161,6 +161,11 @@ export default function BillingPage() {
         professional: { clients: 20, users: 3 },
         enterprise: { clients: -1, users: -1 },
         trial: { clients: 20, users: 3 },
+        // Personal accounts are firm-of-one: exactly one client (themselves)
+        // and exactly one user. Without this entry the limits dict fell
+        // back to {0, 0}, so the current-plan banner showed "Clients 1/0"
+        // and "Accountants 0/0".
+        personal: { clients: 1, users: 1 },
       };
 
       const planLimits = limits[plan || ""] || { clients: 0, users: 0 };
@@ -284,15 +289,20 @@ export default function BillingPage() {
                 <p className="text-sm text-green-700 dark:text-green-300 mt-1">
                   {isActive ? "Your subscription is active" : "Subscription inactive — please update payment method"}
                 </p>
-                {/* Usage stats */}
+                {/* Usage stats — personal accounts only see Receipts
+                    (firm-of-one, no team or multi-client scope). */}
                 {usageStats && (
                   <div className="flex gap-4 mt-2">
-                    <span className="text-xs text-green-700 dark:text-green-400">
-                      Clients: {usageStats.clients}{usageStats.clientLimit !== -1 ? `/${usageStats.clientLimit}` : " (unlimited)"}
-                    </span>
-                    <span className="text-xs text-green-700 dark:text-green-400">
-                      Accountants: {usageStats.accountants}{usageStats.userLimit !== -1 ? `/${usageStats.userLimit}` : " (unlimited)"}
-                    </span>
+                    {accountType !== "personal" && (
+                      <>
+                        <span className="text-xs text-green-700 dark:text-green-400">
+                          Clients: {usageStats.clients}{usageStats.clientLimit !== -1 ? `/${usageStats.clientLimit}` : " (unlimited)"}
+                        </span>
+                        <span className="text-xs text-green-700 dark:text-green-400">
+                          Accountants: {usageStats.accountants}{usageStats.userLimit !== -1 ? `/${usageStats.userLimit}` : " (unlimited)"}
+                        </span>
+                      </>
+                    )}
                     <span className="text-xs text-green-700 dark:text-green-400">
                       Receipts: Unlimited
                     </span>
