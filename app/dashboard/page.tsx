@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
@@ -35,6 +36,13 @@ type RecentActivity = {
 };
 
 export default function DashboardHomePage() {
+  const router = useRouter();
+  // Single-shot guard for the personal/client redirect. Without this,
+  // a transient re-mount of the dashboard page (e.g. when the layout
+  // re-runs an effect) could fire the redirect a second time and bounce
+  // the user, which in combination with route-driven tours used to
+  // produce an infinite navigation loop.
+  const didRedirectRef = useRef(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalReceipts: 0,
@@ -70,12 +78,18 @@ async function loadRole() {
   // Personal accounts get the firm_admin role on their one-person firm,
   // which would land them on the firm-overview view by default. That
   // page is overloaded with firm-only chrome (All Clients picker, Team
-  // & Accountants, Detailed Analytics) — so we redirect them to the
-  // client dashboard, which is the cleaner single-user surface. We do
-  // this *before* setUserRole so the firm view doesn't briefly flash.
+  // & Accountants, Detailed Analytics) — so we route them to the client
+  // dashboard, which is the cleaner single-user surface.
+  //
+  // Use router.replace (Next.js client-side nav, no full reload) and
+  // guard with a ref so the redirect can only fire once. The previous
+  // version used window.location.href, which combined with route-driven
+  // sidebar tours produced an infinite navigation loop on personal
+  // accounts.
   const accountType = await getMyAccountType();
-  if (accountType === "personal" && role !== "client") {
-    window.location.href = "/dashboard/client";
+  if (accountType === "personal" && role !== "client" && !didRedirectRef.current) {
+    didRedirectRef.current = true;
+    router.replace("/dashboard/client");
     return;
   }
   setUserRole(role);
@@ -349,9 +363,14 @@ if (!userRole) {
   return <div className="p-8"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
 }
 
-// Clients have their own dashboard route.
+// Clients have their own dashboard route. Same router.replace + ref
+// guard pattern as the personal-account redirect above — never use
+// window.location.href here, it caused the infinite-loop bug.
 if (userRole === 'client') {
-  window.location.href = '/dashboard/client';
+  if (!didRedirectRef.current) {
+    didRedirectRef.current = true;
+    router.replace('/dashboard/client');
+  }
   return <div className="p-8"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
 }
 
