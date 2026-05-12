@@ -56,10 +56,23 @@ export default function SidebarTour() {
       if (!user) return;
       const { data: fu } = await supabase
         .from("firm_users")
-        .select("role, email_verified_at, onboarding_completed, onboarding_skipped, tour_completed_at, tour_skipped_at")
+        .select("role, email_verified_at, onboarding_completed, onboarding_skipped, tour_completed_at, tour_skipped_at, firm_id")
         .eq("auth_user_id", user.id)
         .maybeSingle();
       if (!fu) return;
+
+      // Personal accounts (firm_admin role on a firm-of-one) must not
+      // run the firm-admin sidebar tour. The tour's steps live on routes
+      // like /dashboard, /dashboard/clients, /dashboard/team — but
+      // /dashboard redirects personal users back to /dashboard/client,
+      // which creates an infinite navigation loop. Bail out before
+      // touching state if this is a personal firm.
+      const { data: firm } = await supabase
+        .from("firms")
+        .select("account_type")
+        .eq("id", fu.firm_id)
+        .maybeSingle();
+      if (firm?.account_type === "personal") return;
 
       setAuthUserId(user.id);
       const role = fu.role;
