@@ -4,20 +4,30 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import OnboardingModal from "./OnboardingModal";
-import { firmAdminSteps, accountantSteps, getClientSteps } from "./onboardingSteps";
+import { firmAdminSteps, accountantSteps, getClientSteps, getPersonalSteps } from "./onboardingSteps";
 import { useOnboarding } from "@/lib/useOnboarding";
+import { getMyAccountType, type AccountType } from "@/lib/getMyAccountType";
 
 export default function OnboardingWrapper({ children }: { children: React.ReactNode }) {
   const { showOnboarding, userRole, loading, completeOnboarding, skipOnboarding } = useOnboarding();
   const [clientName, setClientName] = useState("");
   const [clientAlias, setClientAlias] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
+  // Personal-account onboarding reuses the same firm_admin trigger
+  // (firms.account_type='personal' but firm_users.role='firm_admin').
+  // We need the account type AND the auto-created client's name/alias
+  // to render the personal tour, so we load both even for firm_admins.
+  const [accountType, setAccountType] = useState<AccountType>("firm");
 
   useEffect(() => {
-    if (userRole === "client") {
+    getMyAccountType().then(setAccountType).catch(() => setAccountType("firm"));
+  }, []);
+
+  useEffect(() => {
+    if (userRole === "client" || accountType === "personal") {
       loadClientInfo();
     }
-  }, [userRole]);
+  }, [userRole, accountType]);
 
   async function loadClientInfo() {
     try {
@@ -83,14 +93,16 @@ export default function OnboardingWrapper({ children }: { children: React.ReactN
     return <>{children}</>;
   }
 
-  // Determine which steps to show based on role
+  // Determine which steps to show based on role + account type. Personal
+  // accounts override the firm_admin tour with their own copy.
   let steps: any[] = [];
-  if (userRole === "firm_admin" || userRole === "owner") {
+  if (accountType === "personal") {
+    steps = getPersonalSteps(clientName, clientAlias, handleClientEmailSave);
+  } else if (userRole === "firm_admin" || userRole === "owner") {
     steps = firmAdminSteps;
   } else if (userRole === "accountant") {
     steps = accountantSteps;
   } else if (userRole === "client") {
-    // Regenerate steps with current alias (reactive)
     steps = getClientSteps(clientName, clientAlias, handleClientEmailSave);
   }
 

@@ -10,7 +10,7 @@
 // so a Starter trial sees Starter features, an Enterprise trial sees
 // Enterprise features.
 
-export type Plan = "starter" | "professional" | "enterprise" | "free" | null | undefined;
+export type Plan = "starter" | "professional" | "enterprise" | "free" | "personal" | null | undefined;
 
 // All gates are boolean: a feature is either available on a plan or not.
 // Keep the keys human-readable so the upgrade page can use them as IDs.

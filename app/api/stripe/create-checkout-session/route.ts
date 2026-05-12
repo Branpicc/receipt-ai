@@ -36,6 +36,13 @@ export async function POST(request: NextRequest) {
       priceId = interval === 'annual'
         ? (process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL || STRIPE_PRICES.ENTERPRISE)
         : STRIPE_PRICES.ENTERPRISE;
+    } else if (planName === 'personal') {
+      // Personal plan: $6.99/mo or $54.99/yr. Annual env is required when
+      // the user picks annual; fall back to monthly if it's not set so
+      // checkout doesn't fail with an empty priceId.
+      priceId = interval === 'annual'
+        ? (STRIPE_PRICES.PERSONAL_ANNUAL || STRIPE_PRICES.PERSONAL)
+        : STRIPE_PRICES.PERSONAL;
     } else {
       return NextResponse.json({ error: 'Invalid plan name' }, { status: 400 });
     }

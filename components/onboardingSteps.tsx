@@ -1266,3 +1266,250 @@ if (primaryIncome.includes("other") && !otherIncomeText.trim() && primaryIncome.
     </div>
   );
 }
+
+// ── Personal account profile (self-employed toggle + marital status) ────────
+// Writes to clients.is_self_employed and clients.marital_status. The
+// is_self_employed value drives whether we expose CRA tax-prep forms to
+// the user (T2125, CCA, home office, quarterly HST). marital_status is
+// captured for future T1 credits but doesn't change business-deductible
+// math today.
+function PersonalProfileSetup() {
+  const [isSelfEmployed, setIsSelfEmployed] = React.useState<boolean>(false);
+  const [maritalStatus, setMaritalStatus] = React.useState<string>("single");
+  const [error, setError] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  const maritalOptions = [
+    { value: "single", label: "Single" },
+    { value: "married", label: "Married" },
+    { value: "common_law", label: "Common-law" },
+    { value: "separated", label: "Separated" },
+    { value: "divorced", label: "Divorced" },
+    { value: "widowed", label: "Widowed" },
+  ];
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setError("");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id")
+        .eq("auth_user_id", user.id)
+        .single();
+      if (!firmUser?.client_id) throw new Error("Profile record not found");
+      const { error: updateErr } = await supabase
+        .from("clients")
+        .update({
+          is_self_employed: isSelfEmployed,
+          marital_status: maritalStatus,
+        })
+        .eq("id", firmUser.client_id);
+      if (updateErr) throw updateErr;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  React.useEffect(() => {
+    (window as any).__savePersonalProfile = handleSave;
+  }, [isSelfEmployed, maritalStatus]);
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          Are you self-employed or running a side business?
+        </label>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+          If yes, we&apos;ll show you CRA tax-prep forms (T2125, capital cost allowance, home office, quarterly HST). Otherwise we&apos;ll keep things simple.
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSelfEmployed(true)}
+            className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium border-2 transition-colors ${
+              isSelfEmployed
+                ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300"
+                : "border-gray-200 dark:border-dark-border text-gray-600 dark:text-gray-400"
+            }`}
+          >
+            ✅ Yes, self-employed
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsSelfEmployed(false)}
+            className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium border-2 transition-colors ${
+              !isSelfEmployed
+                ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300"
+                : "border-gray-200 dark:border-dark-border text-gray-600 dark:text-gray-400"
+            }`}
+          >
+            🙅 No, personal use only
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          Marital status
+        </label>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+          We don&apos;t use this for business deductible math, but it&apos;s needed later for T1 credits like the spousal amount and GST/HST credit.
+        </p>
+        <select
+          value={maritalStatus}
+          onChange={(e) => setMaritalStatus(e.target.value)}
+          className="w-full px-4 py-3 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+        >
+          {maritalOptions.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {saving && <p className="text-sm text-blue-600 dark:text-blue-400">Saving…</p>}
+    </div>
+  );
+}
+
+// ── Personal account onboarding tour ────────────────────────────────────────
+// Lean five-to-six-step flow with personal-flavored copy. We skip team /
+// firm / accountant references entirely. The tax-setup step is only
+// shown to users who marked themselves as self-employed (the toggle in
+// PersonalProfileSetup persists immediately, then the wizard decides
+// whether to surface it).
+export function getPersonalSteps(
+  userName: string,
+  currentAlias: string | null,
+  onSaveAlias: (alias: string) => Promise<void>
+) {
+  return [
+    {
+      title: "Welcome to Receipture! 🎉",
+      description: "Your personal receipt and tax-prep assistant.",
+      content: (
+        <div className="space-y-4">
+          <p>
+            Hi <strong>{userName || "there"}</strong>! Here&apos;s how Receipture works
+            for personal accounts:
+          </p>
+          <ul className="space-y-2 list-disc list-inside">
+            <li>Snap a photo, email, or text a receipt — we extract everything</li>
+            <li>See your monthly spend and (if self-employed) net income</li>
+            <li>Export tax-ready reports for the CRA — or just your records</li>
+          </ul>
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-4">
+            <p className="text-sm text-blue-900 dark:text-blue-200">
+              💡 You&apos;re on the 7-day free trial. After that the Personal plan is $6.99/month — cancel anytime.
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Your receipt email address 📧",
+      description: "Forward bills and online order confirmations straight in.",
+      content: <ClientEmailSetup currentAlias={currentAlias} onSave={onSaveAlias} />,
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__saveClientEmail) {
+            await (window as any).__saveClientEmail();
+          }
+        },
+      },
+    },
+    {
+      title: "SMS reminders (optional) 📱",
+      description: "Get a quick text asking what each receipt was for.",
+      content: <ClientSmsSetup />,
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__saveClientSms) {
+            await (window as any).__saveClientSms();
+          }
+        },
+      },
+    },
+    {
+      title: "A bit about you 👤",
+      description: "Helps us show the right reports and tax forms.",
+      content: <PersonalProfileSetup />,
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__savePersonalProfile) {
+            await (window as any).__savePersonalProfile();
+          }
+        },
+      },
+    },
+    {
+      title: "Tax setup 🧾",
+      description:
+        "Quick details so we can calculate your deductibles correctly. Skip whichever sections don't apply.",
+      content: <ClientTaxSetup />,
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__saveTaxSetup) {
+            await (window as any).__saveTaxSetup();
+          }
+        },
+      },
+    },
+    {
+      title: "Make the sidebar yours ⚙️",
+      description: "Pick which reports you want pinned in the sidebar.",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-700 dark:text-gray-300">
+            The Reports page has a <strong>Customize sidebar</strong> button at
+            the top — use it any time to choose which reports show up in your
+            navigation. Some examples worth pinning:
+          </p>
+          <ul className="space-y-2 list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
+            <li>📈 Net Income (revenue − deductibles by month)</li>
+            <li>🧾 CRA Tax Codes (line-by-line if self-employed)</li>
+            <li>🏠 Home Office (Line 9945 if you work from home)</li>
+            <li>📅 Quarterly HST (if you&apos;re registered)</li>
+          </ul>
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <p className="text-sm text-blue-900 dark:text-blue-200">
+              💡 You can re-open this picker anytime from the Reports page — no need to decide now.
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "You're ready to go! 🚀",
+      description: "Snap your first receipt and we'll do the rest.",
+      content: (
+        <div className="space-y-4">
+          <p className="text-lg font-medium text-gray-900 dark:text-white">
+            Three easy ways to add a receipt:
+          </p>
+          <ol className="space-y-3 list-decimal list-inside text-gray-700 dark:text-gray-300">
+            <li>Tap the <strong>+ Upload</strong> button — photo, PDF, or HEIC</li>
+            <li>Forward the order email to your receipt email address</li>
+            <li>If you set up SMS, text a photo to the number you saw</li>
+          </ol>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mt-6">
+            <p className="text-sm text-green-900 dark:text-green-200">
+              💡 Tip: capture receipts as soon as you get them — past-you will thank future-you at tax time.
+            </p>
+          </div>
+        </div>
+      ),
+    },
+  ];
+}

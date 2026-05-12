@@ -15,6 +15,12 @@ export const STRIPE_PRICES = {
   STARTER: process.env.STRIPE_PRICE_STARTER!,
   PROFESSIONAL: process.env.STRIPE_PRICE_PROFESSIONAL!,
   ENTERPRISE: process.env.STRIPE_PRICE_ENTERPRISE!,
+  // Personal — single-user plan with 7-day trial. Standalone from the
+  // firm tiers; firms.account_type='personal' means we route billing
+  // here regardless of the firm-tier price IDs above. Annual is $54.99
+  // (~34% off the $6.99×12 = $83.88 monthly cost).
+  PERSONAL: process.env.STRIPE_PRICE_PERSONAL!,
+  PERSONAL_ANNUAL: process.env.STRIPE_PRICE_PERSONAL_ANNUAL!,
 };
 
 // Plan limits for firm version
@@ -45,5 +51,15 @@ export const PLAN_LIMITS = {
     clients: -1,   // unlimited
     users: -1,     // unlimited
     features: ['all'],
+  },
+  // Personal — firm-of-one architecture. One auto-created client (self),
+  // one user (the owner), no teammates. Full feature set within that
+  // scope; team/firm-admin/messaging features are simply hidden in the
+  // UI for personal accounts rather than gated here.
+  personal: {
+    receipts: -1,
+    clients: 1,
+    users: 1,
+    features: ['basic_categorization', 'csv_export', 'xlsx_export', 'tax_codes', 'email_support'],
   },
 };

@@ -17,6 +17,7 @@ import { useClientContext } from "@/lib/ClientContext";
 import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 import { computeReceiptDeductible, type DeductibleLineItem } from "@/lib/computeReceiptDeductible";
 import { getProvinceTax } from "@/lib/taxRates";
+import { getMyAccountType, type AccountType } from "@/lib/getMyAccountType";
 
 type Receipt = {
   id: string;
@@ -53,6 +54,15 @@ export default function TaxCodesPage() {
     province: string;
     gst_hst_registered: boolean;
   }>({ province: "ON", gst_hst_registered: false });
+  // Personal-account gates: CRA tax codes are inherently business-only,
+  // so non-self-employed personal users get a friendly explainer instead
+  // of an empty report. We load both pieces and gate the render below.
+  const [accountType, setAccountType] = useState<AccountType>("firm");
+  const [isSelfEmployed, setIsSelfEmployed] = useState<boolean>(true);
+
+  useEffect(() => {
+    getMyAccountType().then(setAccountType).catch(() => setAccountType("firm"));
+  }, []);
 
   useEffect(() => {
     loadClientInfo();
@@ -77,7 +87,7 @@ export default function TaxCodesPage() {
 
       const { data: client } = await supabase
         .from("clients")
-        .select("name, income_type, province, gst_hst_registered")
+        .select("name, income_type, province, gst_hst_registered, is_self_employed")
         .eq("id", clientId)
         .single();
 
@@ -91,6 +101,10 @@ export default function TaxCodesPage() {
           province: client.province || "ON",
           gst_hst_registered: !!client.gst_hst_registered,
         });
+        // Default to true when the column is null so existing firm clients
+        // keep seeing the full tax-codes report. Personal users get
+        // is_self_employed set explicitly during onboarding.
+        setIsSelfEmployed(client.is_self_employed !== false);
       }
     } catch (err) {
       console.error("Failed to load client info:", err);
@@ -222,31 +236,43 @@ export default function TaxCodesPage() {
   const totalAmount = summaries.reduce((sum, s) => sum + s.total_cents, 0);
   const totalTax = summaries.reduce((sum, s) => sum + s.tax_cents, 0);
 
-// Per-line Excel-compatible export (CSV that opens in Excel without
-// needing a real .xlsx writer). Lets accountants download every receipt
-// for a single CRA line and hand it to a client / tax preparer.
-function exportLineCsv(summary: TaxCodeSummary) {
-  const headers = ["Date", "Vendor", "Total ($)", "Recoverable Tax ($)", "Deductible ($)"];
-  const rows = summary.receipts.map((r: any) => {
-    const total = ((r.total_cents || 0) / 100).toFixed(2);
-    return [r.receipt_date || "", r.vendor || "", total, "", ""];
+// Per-line .xlsx export — calls the server route which generates a real
+// styled spreadsheet (header block, totals, flagged-row highlights, all
+// the tax-prep columns the accountant wants). We do it server-side so
+// the exceljs library stays out of the client bundle.
+async function exportLineXlsx(summary: TaxCodeSummary) {
+  const firmId = await getMyFirmId();
+  let startDate: string | null = null;
+  const now = new Date();
+  if (dateRange === "month") {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  } else if (dateRange === "quarter") {
+    const quarter = Math.floor(now.getMonth() / 3);
+    startDate = new Date(now.getFullYear(), quarter * 3, 1).toISOString();
+  } else if (dateRange === "year") {
+    startDate = new Date(now.getFullYear(), 0, 1).toISOString();
+  }
+
+  const res = await fetch("/api/exports/tax-line-xlsx", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      firmId,
+      clientId: selectedClientId,
+      form: activeForm,
+      code: summary.taxCode.code,
+      startDate,
+    }),
   });
-  // Append summary row.
-  rows.push([
-    "",
-    `TOTAL — ${summary.taxCode.name} (Line ${summary.taxCode.line.replace("Line ", "")})`,
-    (summary.total_cents / 100).toFixed(2),
-    (summary.tax_cents / 100).toFixed(2),
-    (summary.deductible_cents / 100).toFixed(2),
-  ]);
-  const csv = [headers, ...rows]
-    .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  if (!res.ok) {
+    alert("Export failed: " + (await res.text()));
+    return;
+  }
+  const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Line${summary.taxCode.line.replace("Line ", "")}-${summary.taxCode.name.replace(/\s+/g, "_")}-${new Date().toISOString().split("T")[0]}.csv`;
+  a.download = `Line${summary.taxCode.line.replace("Line ", "")}-${summary.taxCode.name.replace(/\s+/g, "_")}-${new Date().toISOString().split("T")[0]}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -287,6 +313,42 @@ function exportSummary() {
     URL.revokeObjectURL(url);
   }
   
+  // Personal + non-self-employed → CRA tax codes don't apply. Render a
+  // friendly explainer pointing them at the reports that do.
+  if (accountType === "personal" && !isSelfEmployed) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white dark:bg-dark-surface rounded-2xl border border-gray-200 dark:border-dark-border p-8">
+            <div className="text-4xl mb-3">🧾</div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              CRA tax codes are for self-employed users
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              You&apos;ve marked this account as personal use only, so business
+              tax-prep forms (T2125, capital cost allowance, home office) don&apos;t
+              apply. Try one of these instead:
+            </p>
+            <div className="space-y-2">
+              <Link href="/dashboard/category-dashboard" className="block p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors">
+                <div className="font-medium text-gray-900 dark:text-white">📂 Categories &amp; Deductibles</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">See your spending grouped by category</div>
+              </Link>
+              <Link href="/dashboard/reports/net-income" className="block p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors">
+                <div className="font-medium text-gray-900 dark:text-white">💰 Monthly Net Income</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Revenue minus deductibles by month</div>
+              </Link>
+              <Link href="/dashboard/settings" className="block p-4 rounded-lg border border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors">
+                <div className="font-medium text-gray-900 dark:text-white">⚙️ I am self-employed — switch on</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Update your profile to unlock CRA tax-prep</div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg p-8">
       <div className="max-w-7xl mx-auto">
@@ -485,7 +547,7 @@ function exportSummary() {
                       {summary.receipts.length} receipt{summary.receipts.length !== 1 ? "s" : ""}
                     </div>
                     <button
-                      onClick={() => exportLineCsv(summary)}
+                      onClick={() => exportLineXlsx(summary)}
                       className="mt-2 text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors inline-flex items-center gap-1"
                       title={`Download all receipts on ${summary.taxCode.line} as a spreadsheet`}
                     >

@@ -11,6 +11,7 @@ import SidebarTour from "@/components/SidebarTour";
 import DailyCheckinRunner from "@/components/DailyCheckinRunner";
 import { getUserRole, UserRole } from "@/lib/getUserRole";
 import { getMyFirmPlan } from "@/lib/getMyFirmPlan";
+import { getMyAccountType, type AccountType } from "@/lib/getMyAccountType";
 import { hasFeature, type Plan } from "@/lib/featureGates";
 import {
   loadSidebarReportsPrefs,
@@ -61,6 +62,10 @@ export default function DashboardLayout({
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [firmPlan, setFirmPlan] = useState<Plan>(null);
+  // Personal vs. firm account. Loaded asynchronously like firmPlan; until
+  // it resolves we treat the user as a firm account so existing firm
+  // accounts don't briefly lose their nav items on hard refresh.
+  const [accountType, setAccountType] = useState<AccountType>("firm");
   const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
   // Pinned tax-report keys. Null while loading; the helper falls back
   // to DEFAULT_PINNED for users who haven't customized yet. The Reports
@@ -72,6 +77,7 @@ export default function DashboardLayout({
   useEffect(() => {
     loadUserRole();
     loadFirmPlan();
+    loadAccountType();
     loadAndApplyTheme();
     loadPinnedReports();
     function onChange() { loadPinnedReports(); }
@@ -169,9 +175,18 @@ function applyTheme(theme: "light" | "dark" | "system") {
     setFirmPlan(plan);
   }
 
+  async function loadAccountType() {
+    const t = await getMyAccountType();
+    setAccountType(t);
+  }
+
 const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
 const isAccountant = userRole === "accountant" || userRole === "owner" || userRole === "firm_admin";
 const isClient = userRole === "client";
+// Personal accounts are firm-of-one — the user is technically a firm_admin
+// of their own one-person firm. We hide team/firm/messaging nav for them
+// because those features have no meaning when there's nobody else around.
+const isPersonal = accountType === "personal";
 
 // Tier-gated features (Pro+ only). The plan loads asynchronously, so until
 // it's known we render conservatively — gated nav items hide while loading
@@ -466,77 +481,82 @@ return (
             </>
           )}
 
-          {/* Team & Clients Section */}
-          <li className="mt-2">
-            <button
-              onClick={() => setTeamOpen(!teamOpen)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
-            >          
-              <Users className="w-5 h-5" />
-              <span className="flex-1 text-left font-medium">Team & Clients</span>
-              {teamOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          </li>
-          {teamOpen && (
+          {/* Team & Clients Section — hidden entirely for personal accounts
+              (firm-of-one, no teammates, single auto-created client). */}
+          {!isPersonal && (
             <>
-              <li className="ml-4">
-                <Link
-                  data-tour="sidebar-clients"
-                  href="/dashboard/clients"
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                    pathname === '/dashboard/clients' || pathname.startsWith('/dashboard/clients/')
-                      ? 'bg-accent-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                  }`}
+              <li className="mt-2">
+                <button
+                  onClick={() => setTeamOpen(!teamOpen)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover"
                 >
-                  <Building2 className="w-4 h-4" />
-                  <span className="text-sm">Clients</span>
-                </Link>
+                  <Users className="w-5 h-5" />
+                  <span className="flex-1 text-left font-medium">Team & Clients</span>
+                  {teamOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
               </li>
+              {teamOpen && (
+                <>
+                  <li className="ml-4">
+                    <Link
+                      data-tour="sidebar-clients"
+                      href="/dashboard/clients"
+                      className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                        pathname === '/dashboard/clients' || pathname.startsWith('/dashboard/clients/')
+                          ? 'bg-accent-500 text-white'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                      }`}
+                    >
+                      <Building2 className="w-4 h-4" />
+                      <span className="text-sm">Clients</span>
+                    </Link>
+                  </li>
 
-              <li className="ml-4">
-                <Link
-                  href="/dashboard/conversations"
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                    pathname.startsWith('/dashboard/conversations')
-                      ? 'bg-accent-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                  }`}
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="text-sm">Messages</span>
-                </Link>
-              </li>
+                  <li className="ml-4">
+                    <Link
+                      href="/dashboard/conversations"
+                      className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                        pathname.startsWith('/dashboard/conversations')
+                          ? 'bg-accent-500 text-white'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                      }`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span className="text-sm">Messages</span>
+                    </Link>
+                  </li>
 
-              <li className="ml-4">
-                <Link
-                  data-tour="sidebar-approvals"
-                  href="/dashboard/approval-requests"
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                    pathname === '/dashboard/approval-requests'
-                      ? 'bg-accent-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                  }`}
-                >
-                  <ClipboardList className="w-4 h-4" />
-                  <span className="text-sm">Requests</span>
-                </Link>
-              </li>
-              {isFirmAdmin && (
-                <li className="ml-4">
-                  <Link
-                    data-tour="sidebar-team"
-                    href="/dashboard/team"
-                    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                      pathname === '/dashboard/team'
-                        ? 'bg-accent-500 text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                    }`}
-                  >
-                    <User className="w-4 h-4" />
-                    <span className="text-sm">Team</span>
-                  </Link>
-                </li>
+                  <li className="ml-4">
+                    <Link
+                      data-tour="sidebar-approvals"
+                      href="/dashboard/approval-requests"
+                      className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                        pathname === '/dashboard/approval-requests'
+                          ? 'bg-accent-500 text-white'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                      }`}
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      <span className="text-sm">Requests</span>
+                    </Link>
+                  </li>
+                  {isFirmAdmin && (
+                    <li className="ml-4">
+                      <Link
+                        data-tour="sidebar-team"
+                        href="/dashboard/team"
+                        className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                          pathname === '/dashboard/team'
+                            ? 'bg-accent-500 text-white'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                        }`}
+                      >
+                        <User className="w-4 h-4" />
+                        <span className="text-sm">Team</span>
+                      </Link>
+                    </li>
+                  )}
+                </>
               )}
             </>
           )}
@@ -554,7 +574,7 @@ return (
           </li>
           {reportsOpen && (
             <>
-              {isFirmAdmin && (
+              {isFirmAdmin && !isPersonal && (
                 <li className="ml-4">
                   <Link
                     href="/dashboard/firm-admin"
@@ -819,21 +839,23 @@ href="/dashboard/reports/clients"
               <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
             </div>
           </li>
-          <li className="relative group">
-            <button
-              onClick={() => {
-                setSidebarOpen(true);
-                setTeamOpen(true);
-              }}
-              className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-            >
-              <Users className="w-5 h-5" />
-            </button>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
-              Team & Clients
-              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-            </div>
-          </li>
+          {!isPersonal && (
+            <li className="relative group">
+              <button
+                onClick={() => {
+                  setSidebarOpen(true);
+                  setTeamOpen(true);
+                }}
+                className="flex items-center justify-center w-12 h-12 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+              >
+                <Users className="w-5 h-5" />
+              </button>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">
+                Team & Clients
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+              </div>
+            </li>
+          )}
           <li className="relative group">
             <button
               onClick={() => {

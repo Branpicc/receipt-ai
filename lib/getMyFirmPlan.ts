@@ -34,7 +34,13 @@ export async function getMyFirmPlan(): Promise<Plan> {
     const plan = firm?.subscription_plan || firm?.subscription_tier || null;
     if (!plan) return null;
 
-    if (plan === "starter" || plan === "professional" || plan === "enterprise" || plan === "free") {
+    if (
+      plan === "starter" ||
+      plan === "professional" ||
+      plan === "enterprise" ||
+      plan === "free" ||
+      plan === "personal"
+    ) {
       return plan;
     }
     // Anything else (e.g. legacy "trial" left in subscription_tier) → fall

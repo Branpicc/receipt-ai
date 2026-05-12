@@ -537,8 +537,9 @@ XLSX.writeFile(wb, `Receipts-${new Date().toISOString().split('T')[0]}.xlsx`);
   // Shared filters bar — used in receipt list view AND inside folders
 const filtersBarJSX = (
     <div className="space-y-3 mb-6">
-            {/* Date filter */}
-      <div className="flex flex-wrap items-center gap-2">
+            {/* Date filter — pills on ≥md (more scannable), compact
+                dropdown on mobile where the row was crowding the header. */}
+      <div className="hidden md:flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Date:</span>
         {dateButtons.map((btn) => (
           <button
@@ -581,6 +582,30 @@ const filtersBarJSX = (
         )}
       </div>
 
+      {/* Mobile: Date dropdown */}
+      <div className="md:hidden flex items-center gap-2">
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Date:</label>
+        <select
+          value={dateFilter}
+          onChange={(e) => handleDateFilterChange(e.target.value as DateFilter)}
+          className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+        >
+          {dateButtons.map((btn) => (
+            <option key={btn.value} value={btn.value}>{btn.label}</option>
+          ))}
+        </select>
+        {dateFilter !== "any" && (
+          <select
+            value={dateSearchType}
+            onChange={(e) => setDateSearchType(e.target.value as "receipt_date" | "created_at")}
+            className="px-2 py-2 text-xs border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+          >
+            <option value="receipt_date">Receipt date</option>
+            <option value="created_at">Submitted</option>
+          </select>
+        )}
+      </div>
+
       {/* Custom date range pickers */}
       {showCustomRange && (
         <div className="flex flex-wrap items-center gap-3 pl-1">
@@ -605,8 +630,8 @@ const filtersBarJSX = (
         </div>
       )}
 
-      {/* Status filter */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Status filter — pills on desktop, dropdown on mobile. */}
+      <div className="hidden md:flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Status:</span>
         {statusButtons.map((btn) => (
           <button
@@ -623,29 +648,57 @@ const filtersBarJSX = (
         ))}
 </div>
 
+      {/* Mobile: Status dropdown */}
+      <div className="md:hidden flex items-center gap-2">
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Status:</label>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+        >
+          {statusButtons.map((btn) => (
+            <option key={btn.value} value={btn.value}>{btn.icon} {btn.label}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Business / Personal filter — only shown to accountants and firm
           admins. Clients have a dedicated /dashboard/personal page. */}
       {userRole !== "client" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Type:</span>
-          {([
-            { label: "All", value: "all", icon: "📋" },
-            { label: "Business", value: "business", icon: "💼" },
-            { label: "Personal", value: "personal", icon: "🏠" },
-          ] as { label: string; value: ExpenseTypeFilter; icon: string }[]).map((btn) => (
-            <button
-              key={btn.value}
-              onClick={() => setExpenseTypeFilter(btn.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                expenseTypeFilter === btn.value
-                  ? "bg-accent-500 text-white"
-                  : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
-              }`}
+        <>
+          <div className="hidden md:flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Type:</span>
+            {([
+              { label: "All", value: "all", icon: "📋" },
+              { label: "Business", value: "business", icon: "💼" },
+              { label: "Personal", value: "personal", icon: "🏠" },
+            ] as { label: string; value: ExpenseTypeFilter; icon: string }[]).map((btn) => (
+              <button
+                key={btn.value}
+                onClick={() => setExpenseTypeFilter(btn.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                  expenseTypeFilter === btn.value
+                    ? "bg-accent-500 text-white"
+                    : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
+                }`}
+              >
+                {btn.icon} {btn.label}
+              </button>
+            ))}
+          </div>
+          <div className="md:hidden flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Type:</label>
+            <select
+              value={expenseTypeFilter}
+              onChange={(e) => setExpenseTypeFilter(e.target.value as ExpenseTypeFilter)}
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
             >
-              {btn.icon} {btn.label}
-            </button>
-          ))}
-        </div>
+              <option value="all">📋 All</option>
+              <option value="business">💼 Business</option>
+              <option value="personal">🏠 Personal</option>
+            </select>
+          </div>
+        </>
       )}
       {/* Vendor search and category filter */}
       <div className="flex flex-wrap gap-3 mt-3">

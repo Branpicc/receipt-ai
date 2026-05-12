@@ -1,26 +1,20 @@
 /**
- * Self-serve firm-admin signup.
+ * Personal-account signup.
  *
- * Public endpoint — no caller authentication required, since signing up
- * means you don't have an account yet. This is the *only* path by which
- * a firm_admin role is created via self-serve; accountants and clients
- * exist only through the existing invite flow.
+ * Architecturally identical to /api/signup (firm signup), with these
+ * differences:
+ *   • No firmName field — we mint a hidden firm-of-one named after the
+ *     user so existing firm_id-scoped queries keep working without
+ *     plumbing a second tenancy model.
+ *   • firms.account_type = 'personal' (gates UI: hide team/messaging,
+ *     show personal-plan billing only).
+ *   • subscription_plan = 'personal' (7-day trial state still applies).
+ *   • A single client row is auto-created representing the user
+ *     themselves, and firm_users.client_id is set so the dashboard
+ *     defaults to that client without any picker.
  *
- * Flow:
- *   1. Validate inputs (email format, password strength, firm/full names).
- *   2. Reject if a Supabase auth user with this email already exists.
- *   3. supabase.auth.admin.createUser({ email_confirm: true }) — auto-
- *      confirms so Supabase doesn't fire its own un-branded verification
- *      email; we send our own next.
- *   4. Create the firms row with created_via_self_serve = true.
- *   5. Create the firm_users row with role = firm_admin, email_verified_at
- *      left null so the dashboard banner appears until they click verify.
- *   6. Issue a single-use token in email_verifications, send our branded
- *      verification email via SendGrid.
- *
- * If any step after the auth user is created fails, we tear down what we
- * built so a partial signup doesn't leave an orphaned auth user the email
- * can never be re-used for.
+ * Same rollback semantics: if firm/firm_users/client creation fails we
+ * delete the auth user so the email isn't permanently burned.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -51,29 +45,23 @@ function passwordError(pw: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const firmName: string = (body.firmName || "").trim();
     const fullName: string = (body.fullName || "").trim();
     const email: string = (body.email || "").trim().toLowerCase();
     const password: string = body.password || "";
 
-    if (!firmName) return badRequest("Firm name is required.");
-    if (firmName.length > 200) return badRequest("Firm name is too long.");
     if (!fullName) return badRequest("Your full name is required.");
     if (fullName.length > 200) return badRequest("Name is too long.");
     if (!email || !EMAIL_RE.test(email)) return badRequest("Enter a valid email address.");
     const pwErr = passwordError(password);
     if (pwErr) return badRequest(pwErr);
 
-    // Reject if an auth user with this email already exists. listUsers
-    // paginates; in practice we won't have so many users that the first
-    // page misses a match, but we'll loop to be safe.
-    const lower = email;
+    // Reject duplicate auth users.
     let page = 1;
     while (page < 50) {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
       if (error) throw error;
       if (!data.users || data.users.length === 0) break;
-      if (data.users.some(u => u.email?.toLowerCase() === lower)) {
+      if (data.users.some(u => u.email?.toLowerCase() === email)) {
         return NextResponse.json(
           { error: "An account with this email already exists. Try signing in instead." },
           { status: 409 }
@@ -83,7 +71,7 @@ export async function POST(request: NextRequest) {
       page++;
     }
 
-    // 1. Create auth user (auto-confirm to suppress Supabase's email).
+    // 1. Create auth user (auto-confirm so Supabase's email is suppressed).
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -98,22 +86,53 @@ export async function POST(request: NextRequest) {
     }
     const authUserId = created.user.id;
 
-    // 2. Create firm. Roll back auth user on failure. Explicitly mark
-    //    account_type so gating doesn't depend on the column's default.
+    // 2. Create the firm-of-one. account_type='personal' is the marker
+    //    every downstream gate keys on.
+    const firmName = `${fullName} (personal)`;
     const { data: firm, error: firmErr } = await supabaseAdmin
       .from("firms")
-      .insert([{ name: firmName, created_via_self_serve: true, account_type: "firm" }])
+      .insert([{
+        name: firmName,
+        created_via_self_serve: true,
+        account_type: "personal",
+        subscription_plan: "personal",
+        subscription_tier: "trial",
+      }])
       .select("id")
       .single();
     if (firmErr || !firm) {
       try { await supabaseAdmin.auth.admin.deleteUser(authUserId); } catch {}
       return NextResponse.json(
-        { error: firmErr?.message || "Failed to create firm." },
+        { error: firmErr?.message || "Failed to create account." },
         { status: 500 }
       );
     }
 
-    // 3. Create firm_users row. Roll back firm + auth user on failure.
+    // 3. Auto-create the single client representing the user. Default
+    //    to ON / not registered — they tune this in onboarding.
+    const { data: client, error: clientErr } = await supabaseAdmin
+      .from("clients")
+      .insert([{
+        firm_id: firm.id,
+        name: fullName,
+        province: "ON",
+        gst_hst_registered: false,
+        is_active: true,
+        is_self_employed: false,
+      }])
+      .select("id")
+      .single();
+    if (clientErr || !client) {
+      try { await supabaseAdmin.from("firms").delete().eq("id", firm.id); } catch {}
+      try { await supabaseAdmin.auth.admin.deleteUser(authUserId); } catch {}
+      return NextResponse.json(
+        { error: clientErr?.message || "Failed to create account." },
+        { status: 500 }
+      );
+    }
+
+    // 4. firm_users row — role is firm_admin so they have full control of
+    //    their own data; client_id pins the dashboard to "themselves".
     const { error: fuErr } = await supabaseAdmin
       .from("firm_users")
       .insert([{
@@ -122,25 +141,26 @@ export async function POST(request: NextRequest) {
         role: "firm_admin",
         display_name: fullName,
         email_verified_at: null,
+        client_id: client.id,
       }]);
     if (fuErr) {
+      try { await supabaseAdmin.from("clients").delete().eq("id", client.id); } catch {}
       try { await supabaseAdmin.from("firms").delete().eq("id", firm.id); } catch {}
       try { await supabaseAdmin.auth.admin.deleteUser(authUserId); } catch {}
       return NextResponse.json(
-        { error: fuErr.message || "Failed to link user to firm." },
+        { error: fuErr.message || "Failed to set up account." },
         { status: 500 }
       );
     }
 
-    // 4. Issue verification token + send branded email.
+    // 5. Verification token + branded email.
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + TOKEN_TTL_HOURS * 60 * 60 * 1000).toISOString();
     const { error: tokenErr } = await supabaseAdmin
       .from("email_verifications")
       .insert([{ auth_user_id: authUserId, token, expires_at: expiresAt }]);
     if (tokenErr) {
-      // The user account is fine — they can use Resend from the banner.
-      console.error("[signup] Failed to insert verification token:", tokenErr);
+      console.error("[signup/personal] Failed to insert verification token:", tokenErr);
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -150,14 +170,12 @@ export async function POST(request: NextRequest) {
       await sendVerifyEmail(email, fullName, verifyUrl);
     } catch (emailErr) {
       const msg = (emailErr as { message?: string })?.message || String(emailErr);
-      console.error("[signup] Failed to send verification email:", msg);
-      // Account is created; user can resend from the banner. Don't fail
-      // the request.
+      console.error("[signup/personal] Failed to send verification email:", msg);
     }
 
     return NextResponse.json({ success: true, email });
   } catch (err) {
-    console.error("[signup] Unexpected error:", err);
+    console.error("[signup/personal] Unexpected error:", err);
     const msg = (err as { message?: string })?.message || "Internal server error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }

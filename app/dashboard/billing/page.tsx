@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { supabase } from "@/lib/supabaseClient";
+import { getMyAccountType, type AccountType } from "@/lib/getMyAccountType";
 
 type Plan = {
   name: string;
@@ -16,6 +17,31 @@ type Plan = {
   recommended?: boolean;
   isTrial?: boolean;
   isEnterprise?: boolean;
+};
+
+// Personal-account plan. Two billing intervals: $6.99/mo or $54.99/yr.
+// Annual saves ~34% vs. paying monthly ($83.88/yr). We render this on
+// its own when account_type is 'personal' — the firm tiers are
+// completely hidden in that view.
+const PERSONAL_MONTHLY_PRICE = 6.99;
+const PERSONAL_ANNUAL_PRICE = 54.99;
+const personalPlan: Plan = {
+  name: "Personal",
+  tier: "personal",
+  price: `$${PERSONAL_MONTHLY_PRICE}`,
+  priceMonthly: PERSONAL_MONTHLY_PRICE,
+  description: "For individuals and self-employed Canadians",
+  clients: "Just you — one profile",
+  users: "Single user",
+  features: [
+    "Unlimited receipts (photo, email, SMS)",
+    "AI categorization & OCR",
+    "Self-employed CRA tax-prep forms",
+    "Capital Cost Allowance & home office tracking",
+    "Monthly net income summary",
+    "Real .xlsx + CSV exports",
+    "Email support",
+  ],
 };
 
 const plans: Plan[] = [
@@ -85,9 +111,15 @@ export default function BillingPage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [usageStats, setUsageStats] = useState<{ clients: number; clientLimit: number; accountants: number; userLimit: number } | null>(null);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
+  // Personal accounts see a one-card layout for the $6.99 plan; firm
+  // accounts see the existing three-tier grid. Loaded async — until it
+  // resolves we render the firm view (matches what existing customers
+  // expect on hard refresh).
+  const [accountType, setAccountType] = useState<AccountType>("firm");
 
   useEffect(() => {
     loadCurrentPlan();
+    getMyAccountType().then(setAccountType).catch(() => setAccountType("firm"));
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("success") === "true") {
       setTimeout(() => loadCurrentPlan(), 2000);
@@ -288,7 +320,9 @@ export default function BillingPage() {
           </div>
         )}
 
-        {/* Billing interval toggle */}
+        {/* Billing interval toggle — applies to firm tiers and to the
+            Personal plan (which also has monthly $6.99 + annual $54.99
+            options). */}
         <div className="flex items-center justify-center gap-3 mb-8">
           <button
             onClick={() => setBillingInterval("monthly")}
@@ -315,13 +349,22 @@ export default function BillingPage() {
           </button>
         </div>
 
-        {/* Pricing cards */}
-        <div className="grid md:grid-cols-3 gap-6">
-          {plans.map((plan) => {
+        {/* Pricing cards — personal accounts get a single $6.99 card,
+            firm accounts get the three-tier grid. */}
+        <div className={accountType === "personal" ? "max-w-md mx-auto" : "grid md:grid-cols-3 gap-6"}>
+          {(accountType === "personal" ? [personalPlan] : plans).map((plan) => {
             const isCurrentPlan = currentPlan?.toLowerCase() === plan.tier.toLowerCase();
-            const displayPrice = billingInterval === "annual" && plan.priceMonthly
-              ? `$${Math.round(plan.priceMonthly * annualDiscount)}`
-              : plan.price;
+            // Personal annual is a flat $54.99/year, displayed as the
+            // equivalent monthly rate so the comparison is apples-to-apples
+            // against the $6.99 monthly card. Firm tiers keep the
+            // 2-months-free formula based on their priceMonthly.
+            const personalAnnualMonthly = PERSONAL_ANNUAL_PRICE / 12;
+            const displayPrice =
+              plan.tier === "personal" && billingInterval === "annual"
+                ? `$${personalAnnualMonthly.toFixed(2)}`
+                : billingInterval === "annual" && plan.priceMonthly
+                ? `$${Math.round(plan.priceMonthly * annualDiscount)}`
+                : plan.price;
 
             return (
               <div
@@ -355,7 +398,9 @@ export default function BillingPage() {
                   <span className="text-gray-500 dark:text-gray-400">/month</span>
                   {billingInterval === "annual" && plan.priceMonthly && (
                     <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      Billed ${Math.round(plan.priceMonthly * annualDiscount * 12)}/year
+                      {plan.tier === "personal"
+                        ? `Billed $${PERSONAL_ANNUAL_PRICE}/year — save ~34%`
+                        : `Billed $${Math.round(plan.priceMonthly * annualDiscount * 12)}/year`}
                     </div>
                   )}
                 </div>
@@ -410,26 +455,50 @@ export default function BillingPage() {
           })}
         </div>
 
-        {/* FAQ */}
+        {/* FAQ — copy switches based on account type so personal users
+            don't see firm-only jargon (user seats, firm admin, etc.) */}
         <div className="mt-12 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Common Questions</h2>
           <div className="grid md:grid-cols-2 gap-6 text-sm">
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white mb-1">Does the firm admin count as a user seat?</p>
-              <p className="text-gray-600 dark:text-gray-400">No — the firm admin account is separate. User seats refer to accountant accounts only.</p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white mb-1">Are receipts really unlimited?</p>
-              <p className="text-gray-600 dark:text-gray-400">Yes — all paid plans include unlimited receipt uploads and processing with no monthly caps.</p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white mb-1">What happens when my trial ends?</p>
-              <p className="text-gray-600 dark:text-gray-400">You'll need to choose a paid plan to continue. Your data is always kept safe.</p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white mb-1">Can I switch plans anytime?</p>
-              <p className="text-gray-600 dark:text-gray-400">Yes — upgrade or downgrade at any time. Changes take effect immediately.</p>
-            </div>
+            {accountType === "personal" ? (
+              <>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">What does the Personal plan include?</p>
+                  <p className="text-gray-600 dark:text-gray-400">Unlimited receipts, all extraction methods (photo, email, SMS), AI categorization, and tax-prep reports if you&apos;re self-employed.</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">What happens when my 7-day trial ends?</p>
+                  <p className="text-gray-600 dark:text-gray-400">You can subscribe for $6.99/month to keep using it. Your data is always kept safe and exportable.</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">Can I cancel anytime?</p>
+                  <p className="text-gray-600 dark:text-gray-400">Yes — cancel from this page at any time. You&apos;ll keep access until the end of the billing period.</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">I&apos;m not self-employed — is this still useful?</p>
+                  <p className="text-gray-600 dark:text-gray-400">Yes! You&apos;ll still get receipt capture, spending summaries, and exports. The CRA tax-prep forms are simply hidden until you mark yourself as self-employed.</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">Does the firm admin count as a user seat?</p>
+                  <p className="text-gray-600 dark:text-gray-400">No — the firm admin account is separate. User seats refer to accountant accounts only.</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">Are receipts really unlimited?</p>
+                  <p className="text-gray-600 dark:text-gray-400">Yes — all paid plans include unlimited receipt uploads and processing with no monthly caps.</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">What happens when my trial ends?</p>
+                  <p className="text-gray-600 dark:text-gray-400">You&apos;ll need to choose a paid plan to continue. Your data is always kept safe.</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white mb-1">Can I switch plans anytime?</p>
+                  <p className="text-gray-600 dark:text-gray-400">Yes — upgrade or downgrade at any time. Changes take effect immediately.</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

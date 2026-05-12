@@ -77,6 +77,41 @@ export default function ReportsPage() {
     }
   }
 
+  async function exportMasterXlsx() {
+    try {
+      setExporting(true);
+      const firmId = await getMyFirmId();
+      const res = await fetch("/api/exports/master-xlsx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firmId,
+          clientId: selectedClient || null,
+          dateFrom: dateFrom || null,
+          dateTo: dateTo || null,
+        }),
+      });
+      if (!res.ok) {
+        alert("Export failed: " + (await res.text()));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Master-Report-${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to export: " + err.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function exportReport() {
     try {
       setExporting(true);
@@ -517,15 +552,53 @@ href="/dashboard/reports/clients"
           </div>
         )}
 
+        {/* Master Excel export — full multi-sheet workbook (Summary,
+            All Receipts, per-CRA-line, Personal, Capital Assets). This
+            is the new recommended download since it bundles every report
+            into one styled .xlsx that the accountant hands to a tax
+            preparer. The CSV button below stays for spreadsheet-only
+            workflows. */}
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                📊 Master Excel Report
+                <span className="px-2 py-0.5 text-[10px] font-semibold bg-green-600 text-white rounded">NEW</span>
+              </h3>
+              <p className="text-sm text-gray-700 dark:text-gray-300 max-w-2xl">
+                One styled .xlsx with a Summary sheet, every receipt, a tab per CRA line,
+                plus Personal and Capital Assets sheets. Honors the filters above.
+              </p>
+            </div>
+            <button
+              onClick={exportMasterXlsx}
+              disabled={exporting}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <span>📥</span>
+                  <span>Download Master .xlsx</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
         {/* Export Button */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                Ready to Export
+                Single-report CSV
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Report will be downloaded as CSV file
+                Just the selected report above, as a CSV file
               </p>
             </div>
 
@@ -542,7 +615,7 @@ href="/dashboard/reports/clients"
               ) : (
                 <>
                   <span>📥</span>
-                  <span>Export Report</span>
+                  <span>Export CSV</span>
                 </>
               )}
             </button>
