@@ -176,6 +176,158 @@ const clientModules: Module[] = [
   },
 ];
 
+// ── PERSONAL ACCOUNT MODULES ──────────────────────────────────────────────────
+// Personal-account users (firm-of-one, $6.99/mo) don't have an accountant
+// categorizing their receipts and don't have firm/team chrome — the
+// client modules above assume both. This set rewrites the same five
+// topics with personal-flavored copy: AI does the categorization, you
+// review it; reports are yours alone; CRA forms appear only if you
+// marked yourself self-employed.
+const personalModules: Module[] = [
+  {
+    id: "personal-getting-started",
+    title: "Welcome to Receipture",
+    description: "Everything you need to know to get started",
+    icon: "🚀",
+    duration: "3 min",
+    steps: [
+      {
+        title: "What is Receipture?",
+        content: "Receipture takes your receipts off your plate. Snap a photo, forward an order email, or text it in — our AI extracts the vendor, date, total, tax, and category in seconds.\n\nIf you're self-employed, we also produce CRA tax-prep forms (T2125, capital cost allowance, home office, quarterly HST) so April becomes a download-and-hand-off instead of a weekend lost to spreadsheets.",
+        tip: "There's no accountant in the loop — Receipture's AI handles the categorization. You confirm anything that looks off.",
+      },
+      {
+        title: "Your Dashboard",
+        content: "When you log in, your dashboard shows:\n\n• **My Receipts** — Total submitted\n• **This Month** — Submitted in the current month\n• **Categorized %** — How many are AI-categorized\n• **Budget Status** — Spending vs. monthly limits\n• **Recent Receipts** — Your latest uploads\n• **Monthly Net Income** (self-employed) — Revenue minus deductibles by month",
+        tip: "Check the dashboard weekly so nothing slips through the cracks.",
+      },
+      {
+        title: "Your Sidebar",
+        content: "Use the left sidebar to navigate:\n\n• 🏠 **Dashboard** — Stats and recent activity\n• 📁 **Receipts** — All your submitted receipts\n• 💰 **Budget** — Set and track spending limits by category\n• 📊 **Reports** — Export Reports, CRA tax-codes, Net Income, Capital Assets, etc.\n• ⚙️ **Settings** — Your profile, cards, email, training\n\nYou can pin which reports show in the sidebar from the Reports page (the **Customize sidebar** button at the top).",
+        tip: "Pin Receipture to your phone's home screen for one-tap uploads when you're on the go.",
+      },
+    ],
+  },
+  {
+    id: "personal-uploading",
+    title: "Uploading Receipts",
+    description: "Three ways in: photo, email, or text",
+    icon: "📸",
+    duration: "5 min",
+    steps: [
+      {
+        title: "Option 1: Upload from Your Device",
+        content: "The fastest way from a phone or computer:\n\n1. Go to your **Dashboard**\n2. Tap or click the upload area that says 'Click to upload or drag here'\n3. Select one or more receipt images\n4. Wait a few seconds — our AI extracts the details automatically\n\nSupported formats: JPG, PNG, PDF, HEIC.",
+        tip: "You can select multiple receipts at once.",
+      },
+      {
+        title: "Try It Now — Upload a Real Receipt",
+        content: "Let's upload a real receipt right now. Select a receipt photo below — it'll be saved to your account so you can find it in Receipts after this training.\n\nIf you have SMS enabled, you'll also get a text asking what the receipt was for.",
+        tip: "Use any receipt you have handy — even one from today.",
+        interactive: "upload_receipt",
+      },
+      {
+        title: "Option 2: Email Forwarding",
+        content: "Forward your online order confirmations:\n\n1. Find your receipt email address in **Settings → Email Forwarding** (or on your Dashboard)\n2. Save it as a contact (e.g. 'Receipture Inbox')\n3. When you get a receipt from Amazon, Uber, Shopify, etc. — just forward it\n4. We extract everything automatically\n\nThe SMS prompt for purpose still fires, so you can label the expense without opening the app.",
+        tip: "Forward and forget — the simplest method for online purchases.",
+      },
+      {
+        title: "Option 3: Text a Photo",
+        content: "If you've set up SMS, you can text a photo of a paper receipt to your Receipture number — same result as the upload button, but without opening the app. Great for in-the-moment captures right after a coffee or a fuel stop.",
+        tip: "Photograph receipts the moment you get them so you don't lose them.",
+      },
+      {
+        title: "After You Upload",
+        content: "Once you submit a receipt:\n\n1. Our AI reads it and pulls vendor, date, total, and tax\n2. You get a text asking the purpose of the expense (if SMS is on)\n3. Reply with a number or your own description — our AI cleans it up\n4. The receipt is categorized automatically and flagged if anything looks off\n5. You can review/edit anytime from **Receipts**\n\nUnlike a firm account, there's no accountant approval step — the receipt goes straight into your reports.",
+        tip: "Reply to SMS while the purchase is fresh — the purpose field gets used by your CRA reports.",
+      },
+    ],
+  },
+  {
+    id: "personal-sms",
+    title: "SMS Notifications",
+    description: "Reply to purpose prompts without opening the app",
+    icon: "📱",
+    duration: "3 min",
+    steps: [
+      {
+        title: "What is the SMS Feature?",
+        content: "After every receipt, Receipture can text you asking what the expense was for. The purpose field shows up on your CRA exports (if self-employed) and in your category dashboard — it makes audit-time much easier.\n\nExample message:\n\n'Hi Alex. We got your receipt from Staples for $45.99. What was this for?\n1. Office supplies\n2. Business equipment\n3. Other'",
+        tip: "Save the Receipture number as a contact so you recognize the texts.",
+      },
+      {
+        title: "How to Reply",
+        content: "Two ways:\n\n• **Reply with a number** — Type '1', '2', or '3' to pick from the suggestions\n• **Reply in your own words** — Type 'fuel for the trip to Toronto' and our AI cleans it into a tidy record\n\nBoth work great — pick whichever is faster.",
+        tip: "Plain English is fine — no need to format anything.",
+      },
+      {
+        title: "Changing Your SMS Timing",
+        content: "You can choose when SMS prompts arrive:\n\n• **Instantly** — Right after each upload (recommended)\n• **5 or 30 minutes later** — A short delay so you can finish what you were doing\n• **1 or 4 hours later** — Batch during natural breaks\n• **End of day** — One summary text at your chosen time\n\nChange this in **Settings → Profile** under Receipt Text Messages.",
+        tip: "If you upload many receipts a day, 'End of day' keeps your inbox tidy.",
+      },
+      {
+        title: "Setting Up Your Phone Number",
+        content: "To receive SMS messages:\n\n1. Go to **Settings → Profile**\n2. Scroll to Receipt Text Messages\n3. Toggle it on and enter your mobile number\n4. Pick a timing preference\n5. Save\n\nDisable any time from the same screen — your uploads still work, you just won't get prompted.",
+        tip: "Canadian and US numbers both work.",
+      },
+    ],
+  },
+  {
+    id: "personal-budget-reports",
+    title: "Budgets &amp; Reports",
+    description: "Stay on top of spending and tax-prep",
+    icon: "📊",
+    duration: "5 min",
+    steps: [
+      {
+        title: "Set a Budget",
+        content: "Budgets are optional but useful:\n\n• Know how much you're spending per category each month\n• Get visual warnings before you overspend\n• Have realistic numbers at tax time\n\nGo to **Budget** in the sidebar (or **My Budget** on the dashboard) and set a monthly limit for any category.",
+        tip: "Even a rough budget is better than none — you can adjust later.",
+      },
+      {
+        title: "Set Your First Budget Right Now",
+        content: "Let's set a real monthly limit for one of your categories. It'll show on your dashboard immediately.",
+        tip: "Start with your biggest category — Meals, Office Supplies, or Vehicle are common.",
+        interactive: "set_budget",
+      },
+      {
+        title: "Reading Your Budget Status",
+        content: "Each budget shows a progress bar:\n\n• 🟢 **Green** — Under 80% used\n• 🟠 **Orange** — 80–100% — approaching the limit\n• 🔴 **Red** — Over budget\n\nNumbers show **Spent / Monthly Limit**. Example: $340 / $500 means you've spent $340 of your $500 meals budget this month.",
+        tip: "Check mid-month so you have time to adjust.",
+      },
+      {
+        title: "Exporting Reports",
+        content: "Head to **Reports** in the sidebar to access:\n\n• **Master Excel Report** — One styled .xlsx with a Summary sheet, every receipt, a tab per CRA line, plus Personal and Capital Assets sheets\n• **Net Income Summary** — Revenue minus deductibles by month\n• **CRA Tax Codes** (self-employed only) — T2125 line-by-line breakdown\n• **Capital Assets** — Items to depreciate via Capital Cost Allowance\n• **Home Office (Line 9945)** — Pro-rated utilities, rent, internet\n• **Quarterly HST/GST** — ITCs by calendar quarter\n\nYou can hand the Master Excel to a tax preparer or use it yourself.",
+        tip: "Pin the reports you actually use from the Customize sidebar button on the Reports page.",
+      },
+    ],
+  },
+  {
+    id: "personal-cards",
+    title: "Registering Your Cards",
+    description: "Catch personal-card usage on business receipts",
+    icon: "💳",
+    duration: "2 min",
+    steps: [
+      {
+        title: "Why Register Your Cards?",
+        content: "When a receipt is uploaded, we match the last 4 digits of the card used at checkout against your registered cards. If we see a card we don't recognise (or a card you marked 'personal') on a business receipt, we flag it for review.\n\nThis catches the common case: you accidentally tap your personal card at a coffee shop, but the meal was for a client.",
+        tip: "Flagged receipts show up under **Flags** in the sidebar.",
+      },
+      {
+        title: "Same Card, Different Last 4 Digits",
+        content: "Heads-up: the last 4 digits printed on a receipt depend on how you paid. Apple Pay / Google Pay use a different number than the physical chip, and online checkouts sometimes use yet another.\n\nAdd a separate entry for each variant of the same card you actually use, so we can recognise it no matter how you tap or type.",
+        tip: "Name each entry with the variant — e.g. 'Personal Visa — Apple Pay' vs 'Personal Visa — Physical'.",
+      },
+      {
+        title: "Adding a Card",
+        content: "1. Go to **Settings → Profile**\n2. Scroll to **💳 My Business Cards**\n3. Click **+ Add Card**\n4. Pick the brand, enter the last 4 digits, choose Business or Personal, and (optionally) a nickname\n5. Click **Save Card**\n\nRepeat for each card variant you use.",
+        tip: "You can also do this during onboarding — there's a dedicated card step in the personal sign-up flow.",
+      },
+    ],
+  },
+];
+
 // ── ACCOUNTANT MODULES ────────────────────────────────────────────────────────
 const accountantModules: Module[] = [
   {
@@ -972,6 +1124,9 @@ const [completedModules, setCompletedModules] = useState<string[]>(() => {
   const [interactiveDone, setInteractiveDone] = useState(false);
 
   function getModules(): Module[] {
+    // Personal-account users get their own module set — the client set
+    // assumes an accountant categorizes receipts, which isn't true here.
+    if (userRole === "personal") return personalModules;
     if (userRole === "client") return clientModules;
     if (userRole === "accountant") return accountantModules;
     if (userRole === "firm_admin" || userRole === "owner") return firmAdminModules;

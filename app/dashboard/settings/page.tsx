@@ -67,6 +67,12 @@ type Tab = "profile" | "notifications" | "billing" | "email" | "security" | "wal
 export default function SettingsPage() {
   const { showToast } = useToast();
   const [user, setUser] = useState<UserInfo | null>(null);
+  // Personal accounts are firm_admin on a firm-of-one; the settings
+  // page surfaces firm-admin chrome by default. We override several
+  // tabs/sections below to behave more like the client view when this
+  // flag is true (email forwarding, card manager, income type, training
+  // modules).
+  const [isPersonal, setIsPersonal] = useState<boolean>(false);
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: "system",
     language: "en",
@@ -164,8 +170,19 @@ useEffect(() => {
         firmId: firmUser.firm_id,
         displayName: firmUser.display_name,
       });
-      
+
       setDisplayName(firmUser.display_name || "");
+
+      // Detect personal account so downstream tabs/sections can switch
+      // to the client-style layout. The settings page is the one place
+      // where personal users still see a lot of firm chrome; this flag
+      // drives the override gates below.
+      const { data: firmRow } = await supabase
+        .from("firms")
+        .select("account_type")
+        .eq("id", firmUser.firm_id)
+        .single();
+      setIsPersonal(firmRow?.account_type === "personal");
 
       // Load income type for clients
       if (firmUser.role === "client" && firmUser.client_id) {
@@ -692,7 +709,9 @@ try {
     { id: "profile" as Tab, label: "Profile", icon: "👤" },
     { id: "notifications" as Tab, label: "Notifications", icon: "🔔" },
     ...(user.role === "firm_admin" || user.role === "owner" ? [{ id: "billing" as Tab, label: "Billing & Plan", icon: "💳" }] : []),
-    ...(isClient ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
+    // Email forwarding belongs to anyone who actually uses a personal
+    // receipt inbox — clients and personal-account users both do.
+    ...(isClient || isPersonal ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
     { id: "security" as Tab, label: "Security", icon: "🔒" },
     { id: "walkthroughs" as Tab, label: "Walk-throughs", icon: "🧭" },
     { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
@@ -749,7 +768,7 @@ onClick={() => {
 
                 <div className="space-y-4">
 
-                  {isClient && (
+                  {(isClient || isPersonal) && (
                     <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4 bg-gray-50 dark:bg-dark-bg/40">
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div>
@@ -931,8 +950,10 @@ onClick={() => {
                                   </div>
               </div>
 
-{/* Income Type — clients only */}
-              {isClient && (
+{/* Income Type — clients and personal-account users (both have a
+                  client_id pinned to their firm_users row, so the save handler
+                  below resolves the right client). */}
+              {(isClient || isPersonal) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Income Type
@@ -972,8 +993,10 @@ onClick={() => {
                 </div>
               )}
 
-              {/* Business Card Manager — clients only */}
-              {isClient && (
+              {/* Business Card Manager — clients and personal-account
+                  users (both have a single client_id pinned on their
+                  firm_users row, so the manager scopes correctly). */}
+              {(isClient || isPersonal) && (
                 <div className="border-t border-gray-200 dark:border-dark-border pt-6">
                   <ClientCardManager />
                 </div>
@@ -1265,6 +1288,38 @@ if (eligibility.eligible) {
                             </li>
                           </>
                         )}
+                        {billingInfo.plan === 'personal' && (
+                          <>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Unlimited receipts (photo, email, SMS)</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">AI categorization &amp; OCR</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Self-employed CRA tax-prep forms</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Capital Cost Allowance &amp; home office tracking</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Monthly net income summary</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Real .xlsx + CSV exports</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span className="text-gray-700 dark:text-gray-300">Email support</span>
+                            </li>
+                          </>
+                        )}
                         {billingInfo.plan === 'professional' && (
                           <>
                             <li className="flex items-start gap-2 text-sm">
@@ -1302,7 +1357,7 @@ if (eligibility.eligible) {
           )}
 
           {/* Email Forwarding Tab (Clients Only) */}
-          {activeTab === "email" && isClient && (
+          {activeTab === "email" && (isClient || isPersonal) && (
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Email Forwarding
@@ -1445,10 +1500,12 @@ if (eligibility.eligible) {
       {activeTab === "walkthroughs" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Replay either of Receipture&apos;s first-time guides any time. Firm admins can also clear the demo dataset that was seeded when they first signed in.
+            {isPersonal
+              ? "Replay Receipture's first-time onboarding any time."
+              : "Replay either of Receipture's first-time guides any time. Firm admins can also clear the demo dataset that was seeded when they first signed in."}
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 ${isPersonal ? "" : "md:grid-cols-2"} gap-4`}>
             <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
               <div className="text-2xl mb-2">🎯</div>
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
@@ -1466,24 +1523,33 @@ if (eligibility.eligible) {
               </button>
             </div>
 
-            <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
-              <div className="text-2xl mb-2">🧭</div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                Sidebar tour
-              </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
-              </p>
-              <button
-                onClick={handleReplaySidebarTour}
-                className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
-              >
-                Replay sidebar tour
-              </button>
-            </div>
+            {/* Sidebar tour — hidden for personal accounts. SidebarTour
+                bails out early for them (its chapters walk through firm
+                features like Clients/Team/Analytics that don't exist
+                for a firm-of-one), so the button would do nothing. */}
+            {!isPersonal && (
+              <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
+                <div className="text-2xl mb-2">🧭</div>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                  Sidebar tour
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                  Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
+                </p>
+                <button
+                  onClick={handleReplaySidebarTour}
+                  className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+                >
+                  Replay sidebar tour
+                </button>
+              </div>
+            )}
           </div>
 
-          {(user?.role === "firm_admin" || user?.role === "owner") && (
+          {/* Clear demo data — firm accounts only. Personal signups
+              don't seed demo data, so the button has nothing to clear
+              for them. */}
+          {!isPersonal && (user?.role === "firm_admin" || user?.role === "owner") && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800 p-4 bg-amber-50 dark:bg-amber-900/10">
               <div className="text-2xl mb-2">🧹</div>
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
@@ -1622,10 +1688,14 @@ onClick={() => hardDeleteUser(u.id, u.auth_user_id, u.display_name, u.client_id)
         </div>
       )}
 
-      {/* Training Tab */}
+      {/* Training Tab — personal accounts get the dedicated personal
+          module set (5 modules covering uploads, SMS, budgets/reports,
+          and card registration). The client set assumed 'your
+          accountant will categorize' which doesn't apply to a
+          firm-of-one. */}
       {activeTab === "training" && (
         <TrainingModules
-          userRole={user.role}
+          userRole={isPersonal ? "personal" : user.role}
           isPlanEnterprise={billingInfo?.plan === "enterprise"}
         />
       )}
