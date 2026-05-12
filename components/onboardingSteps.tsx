@@ -1318,6 +1318,11 @@ function PersonalProfileSetup() {
 
   React.useEffect(() => {
     (window as any).__savePersonalProfile = handleSave;
+    // Publish current toggle state so the tax-setup step can hide
+    // business-only sections in real time as the user changes their
+    // mind on this step before clicking Save.
+    (window as any).__isPersonalSelfEmployed = isSelfEmployed;
+    window.dispatchEvent(new Event("receipture:personal-self-employed-changed"));
   }, [isSelfEmployed, maritalStatus]);
 
   return (
@@ -1375,6 +1380,392 @@ function PersonalProfileSetup() {
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {saving && <p className="text-sm text-blue-600 dark:text-blue-400">Saving…</p>}
+    </div>
+  );
+}
+
+// ── Personal-account tax setup ──────────────────────────────────────────────
+// Personal-flavored variant of ClientTaxSetup. When the user marked
+// themselves as NOT self-employed in the previous step, business-only
+// fields (GST/HST registration, home office, vehicle %) are hidden and
+// the copy switches to personal-budget framing. We listen for the
+// `receipture:personal-self-employed-changed` event so going back to
+// step 4, flipping the toggle, then coming back here re-renders us
+// with the correct fields.
+function PersonalTaxSetup() {
+  const initialSelfEmployed =
+    typeof window !== "undefined"
+      ? ((window as any).__isPersonalSelfEmployed ?? false)
+      : false;
+  const [selfEmployed, setSelfEmployed] = React.useState<boolean>(initialSelfEmployed);
+  const [gstRegistered, setGstRegistered] = React.useState<boolean>(false);
+  const [revenueBand, setRevenueBand] = React.useState<string>("under_30k");
+  const [hasHomeOffice, setHasHomeOffice] = React.useState<boolean>(false);
+  const [totalRoomsInput, setTotalRoomsInput] = React.useState<string>("6");
+  const [officeRoomsInput, setOfficeRoomsInput] = React.useState<string>("1");
+  const [hasVehicle, setHasVehicle] = React.useState<boolean>(false);
+  const [vehiclePctInput, setVehiclePctInput] = React.useState<string>("100");
+  const [utilitiesPctInput, setUtilitiesPctInput] = React.useState<string>("0");
+  const [error, setError] = React.useState<string>("");
+  const [saving, setSaving] = React.useState<boolean>(false);
+
+  const totalRooms = parseInt(totalRoomsInput) || 0;
+  const officeRooms = parseInt(officeRoomsInput) || 0;
+  const vehiclePct = hasVehicle ? Math.max(0, Math.min(100, parseInt(vehiclePctInput) || 0)) : 0;
+  const utilitiesPct = Math.max(0, Math.min(100, parseInt(utilitiesPctInput) || 0));
+  const homeOfficePct = hasHomeOffice && totalRooms > 0
+    ? Math.round((officeRooms / totalRooms) * 100)
+    : 0;
+
+  React.useEffect(() => {
+    function onChange() {
+      const next = (window as any).__isPersonalSelfEmployed ?? false;
+      setSelfEmployed(next);
+    }
+    window.addEventListener("receipture:personal-self-employed-changed", onChange);
+    return () => window.removeEventListener("receipture:personal-self-employed-changed", onChange);
+  }, []);
+
+  // For non-self-employed users we still capture revenue band — but
+  // reframe it as their take-home / household income so the question
+  // doesn't sound like it's about a business.
+  const personalRevenueBands = [
+    { value: "under_30k", label: "Under $30,000", desc: "Lower-income — many federal credits may apply." },
+    { value: "30k_to_400k", label: "$30,000 – $100,000", desc: "Standard tax bracket range." },
+    { value: "400k_to_1500k", label: "$100,000 – $250,000", desc: "Higher tax bracket." },
+    { value: "over_1500k", label: "Over $250,000", desc: "Top tax bracket." },
+  ];
+  const businessRevenueBands = [
+    { value: "under_30k", label: "Under $30,000", desc: "Small supplier — GST/HST registration optional" },
+    { value: "30k_to_400k", label: "$30,000 – $400,000", desc: "Must register for GST/HST. Annual filing OK." },
+    { value: "400k_to_1500k", label: "$400,000 – $1.5M", desc: "Quarterly GST/HST filing required." },
+    { value: "over_1500k", label: "Over $1.5M", desc: "Monthly GST/HST filing required." },
+  ];
+  const revenueBands = selfEmployed ? businessRevenueBands : personalRevenueBands;
+
+  React.useEffect(() => {
+    if (selfEmployed && revenueBand !== "under_30k") setGstRegistered(true);
+  }, [revenueBand, selfEmployed]);
+
+  React.useEffect(() => {
+    if (hasHomeOffice) setUtilitiesPctInput(String(homeOfficePct));
+    else setUtilitiesPctInput("0");
+  }, [hasHomeOffice, homeOfficePct]);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setError("");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id")
+        .eq("auth_user_id", user.id)
+        .single();
+      if (!firmUser?.client_id) throw new Error("Profile record not found");
+      const payload: Record<string, unknown> = {
+        projected_revenue_band: revenueBand,
+      };
+      // Only persist business-only fields when the user is self-employed
+      // — otherwise we'd be silently flipping booleans on the clients
+      // record that the rest of the app keys off.
+      if (selfEmployed) {
+        payload.gst_hst_registered = gstRegistered;
+        payload.home_office_percentage = homeOfficePct;
+        payload.vehicle_business_percentage = Math.max(0, Math.min(100, vehiclePct));
+        payload.utilities_business_percentage = Math.max(0, Math.min(100, utilitiesPct));
+      } else {
+        payload.gst_hst_registered = false;
+        payload.home_office_percentage = 0;
+        payload.vehicle_business_percentage = 0;
+        payload.utilities_business_percentage = 0;
+      }
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update(payload)
+        .eq("id", firmUser.client_id);
+      if (updateError) throw updateError;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  React.useEffect(() => {
+    (window as any).__saveTaxSetup = handleSave;
+  }, [selfEmployed, gstRegistered, revenueBand, homeOfficePct, vehiclePct, utilitiesPct]);
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <p className="text-sm text-blue-800 dark:text-blue-300">
+          {selfEmployed
+            ? "A few quick questions so we can calculate your deductibles correctly. You can change any of this later in Settings."
+            : "Just one quick question — this helps us show the right credits and tax brackets. Change it anytime in Settings."}
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          {selfEmployed ? "Projected annual revenue" : "Approximate annual income"}
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+          {selfEmployed
+            ? "Your projected gross business revenue — drives GST/HST registration and filing frequency."
+            : "Your approximate total income (employment + other). We don't share this — it just helps us flag relevant credits."}
+        </p>
+        <div className="space-y-2">
+          {revenueBands.map((b) => (
+            <label
+              key={b.value}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                revenueBand === b.value
+                  ? "border-accent-500 bg-accent-50 dark:bg-accent-900/20"
+                  : "border-gray-200 dark:border-dark-border bg-white dark:bg-dark-bg hover:border-accent-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="personalRevenueBand"
+                value={b.value}
+                checked={revenueBand === b.value}
+                onChange={(e) => setRevenueBand(e.target.value)}
+                className="mt-1 accent-accent-500"
+              />
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">{b.label}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{b.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Business-only sections — only render for self-employed users.
+          Non-self-employed users have already marked themselves as
+          personal-use only on step 4, so showing GST/HST registration,
+          home office, and business-vehicle % would be confusing. */}
+      {selfEmployed && (
+        <>
+          <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={gstRegistered}
+                onChange={(e) => setGstRegistered(e.target.checked)}
+                className="mt-1 accent-accent-500"
+              />
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">I&apos;m registered for GST/HST</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Required if your revenue is over $30k. Optional below that — check this box if you&apos;ve already registered.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+            <label className="flex items-start gap-3 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={hasHomeOffice}
+                onChange={(e) => setHasHomeOffice(e.target.checked)}
+                className="mt-1 accent-accent-500"
+              />
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">I have a home office</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Lets us deduct a portion of utilities, rent, internet, etc. on Line 9945.
+                </div>
+              </div>
+            </label>
+            {hasHomeOffice && (
+              <div className="grid grid-cols-2 gap-3 ml-6">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Total rooms in your home</label>
+                  <input type="number" inputMode="numeric" min="1" value={totalRoomsInput} onChange={(e) => setTotalRoomsInput(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Office-only rooms</label>
+                  <input type="number" inputMode="numeric" min="0" value={officeRoomsInput} onChange={(e) => setOfficeRoomsInput(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white" />
+                </div>
+                <div className="col-span-2 text-xs text-accent-700 dark:text-accent-300">
+                  Estimated home office: <strong>{homeOfficePct}%</strong> of your home
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+            <label className="flex items-start gap-3 cursor-pointer mb-3">
+              <input type="checkbox" checked={hasVehicle} onChange={(e) => setHasVehicle(e.target.checked)} className="mt-1 accent-accent-500" />
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">I use a vehicle for business</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Uncheck if you don&apos;t claim any vehicle expenses (gas, maintenance, insurance).
+                </div>
+              </div>
+            </label>
+            {hasVehicle && (
+              <div className="ml-6">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Vehicle business-use %</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  What % of your vehicle expenses is for business? CRA requires a kilometre log if audited.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input type="range" min="0" max="100" value={vehiclePct} onChange={(e) => setVehiclePctInput(e.target.value)} className="flex-1 accent-accent-500" />
+                  <input type="number" inputMode="numeric" min="0" max="100" value={vehiclePctInput} onChange={(e) => setVehiclePctInput(e.target.value)} className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center" />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {hasHomeOffice && (
+            <div className="bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg p-4">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Utilities &amp; internet business-use %</label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Defaults to your home office %. Override if your phone/internet usage skews more or less business.
+              </p>
+              <div className="flex items-center gap-3">
+                <input type="range" min="0" max="100" value={utilitiesPct} onChange={(e) => setUtilitiesPctInput(e.target.value)} className="flex-1 accent-accent-500" />
+                <input type="number" inputMode="numeric" min="0" max="100" value={utilitiesPctInput} onChange={(e) => setUtilitiesPctInput(e.target.value)} className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white text-center" />
+                <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {saving && <p className="text-sm text-blue-600 dark:text-blue-400">Saving…</p>}
+    </div>
+  );
+}
+
+// ── Personal-account card-info step ─────────────────────────────────────────
+// Asks the user to register the last 4 digits of any card they use for
+// purchases. Personal users can't access the firm sidebar tour, so the
+// card-info prompt that used to live only in Settings would be easy to
+// miss — we surface it during onboarding instead. Skipping is fine; they
+// can always add cards later from Settings.
+function PersonalCardSetup() {
+  const [cardBrand, setCardBrand] = React.useState<string>("Visa");
+  const [lastFour, setLastFour] = React.useState<string>("");
+  const [nickname, setNickname] = React.useState<string>("");
+  const [error, setError] = React.useState<string>("");
+  const [saving, setSaving] = React.useState<boolean>(false);
+  const [savedCount, setSavedCount] = React.useState<number>(0);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setError("");
+      // No card added — that's allowed, just continue.
+      if (!lastFour) return;
+      if (!/^\d{4}$/.test(lastFour)) {
+        throw new Error("Last 4 digits must be exactly 4 numbers");
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: firmUser } = await supabase
+        .from("firm_users")
+        .select("client_id, firm_id")
+        .eq("auth_user_id", user.id)
+        .single();
+      if (!firmUser?.client_id) throw new Error("Profile record not found");
+      const { error: insertErr } = await supabase
+        .from("client_cards")
+        .insert({
+          client_id: firmUser.client_id,
+          firm_id: firmUser.firm_id,
+          card_brand: cardBrand,
+          last_four: lastFour,
+          card_type: "business",
+          nickname: nickname.trim() || null,
+        });
+      if (insertErr) throw insertErr;
+      setSavedCount(c => c + 1);
+      setLastFour("");
+      setNickname("");
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  React.useEffect(() => {
+    (window as any).__savePersonalCard = handleSave;
+  }, [cardBrand, lastFour, nickname]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
+          <strong>Why we ask:</strong> when a receipt is uploaded, we match the
+          last 4 digits of the card used at checkout against your registered
+          cards. If we see a card we don&apos;t recognise on a business receipt,
+          we&apos;ll flag it for review. Adding cards is optional — you can do
+          it later from Settings.
+        </p>
+        <p className="text-xs text-blue-800 dark:text-blue-300 mt-2">
+          Heads-up: Apple Pay / Google Pay use a different last-4 than the
+          physical card chip, and online checkouts sometimes use yet
+          another. Add each variant you actually use.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Card brand</label>
+          <select
+            value={cardBrand}
+            onChange={(e) => setCardBrand(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+          >
+            {["Visa", "Mastercard", "Amex", "Discover", "Interac"].map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Last 4 digits</label>
+          <input
+            type="text"
+            value={lastFour}
+            onChange={(e) => setLastFour(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="1234"
+            maxLength={4}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-surface text-gray-900 dark:text-white font-mono"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nickname (optional)</label>
+        <input
+          type="text"
+          value={nickname}
+          onChange={(e) => setNickname(e.target.value)}
+          placeholder="e.g. Personal Visa — Apple Pay"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
+        />
+      </div>
+
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {saving && <p className="text-sm text-blue-600 dark:text-blue-400">Saving…</p>}
+      {savedCount > 0 && (
+        <p className="text-sm text-green-700 dark:text-green-400">
+          Added {savedCount} card{savedCount === 1 ? "" : "s"}. Add another or click Continue.
+        </p>
+      )}
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        Leave blank and click Continue to skip — you can always add cards from Settings later.
+      </p>
     </div>
   );
 }
@@ -1455,13 +1846,26 @@ export function getPersonalSteps(
     {
       title: "Tax setup 🧾",
       description:
-        "Quick details so we can calculate your deductibles correctly. Skip whichever sections don't apply.",
-      content: <ClientTaxSetup />,
+        "Quick details so we can calculate your deductibles correctly.",
+      content: <PersonalTaxSetup />,
       action: {
         label: "Save & Continue →",
         onClick: async () => {
           if ((window as any).__saveTaxSetup) {
             await (window as any).__saveTaxSetup();
+          }
+        },
+      },
+    },
+    {
+      title: "Register your cards 💳",
+      description: "So we can flag receipts paid on a card we don't recognise.",
+      content: <PersonalCardSetup />,
+      action: {
+        label: "Save & Continue →",
+        onClick: async () => {
+          if ((window as any).__savePersonalCard) {
+            await (window as any).__savePersonalCard();
           }
         },
       },
