@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
+import { getMyAccountType } from "@/lib/getMyAccountType";
 import { useRouter } from "next/navigation";
 import SidebarReportsPicker from "@/components/SidebarReportsPicker";
 import { loadSidebarReportsPrefs, type SidebarReportKey } from "@/lib/sidebarReportsPrefs";
@@ -20,6 +21,7 @@ import {
   Building2,
   Home,
   DollarSign,
+  Target,
 } from "lucide-react";
 
 type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly" | "comprehensive";
@@ -27,6 +29,10 @@ type ReportType = "receipts" | "tax_codes" | "clients" | "categories" | "monthly
 export default function ReportsPage() {
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
+  // Personal-account flag — used to filter the report-type list below
+  // so we don't surface firm-wide options (Client Report, Comprehensive
+  // Report) to a firm-of-one user who can't act on them.
+  const [isPersonal, setIsPersonal] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<ReportType>("receipts");
   const [dateFrom, setDateFrom] = useState("");
@@ -55,6 +61,13 @@ export default function ReportsPage() {
       router.push("/dashboard");
       return;
     }
+
+    // Personal-account users have firm_admin role, so they pass the
+    // access check above — but several report types (Client Report,
+    // Comprehensive Report) are firm-wide and meaningless to them.
+    // Mark the flag here so the report-type list below filters them out.
+    const accountType = await getMyAccountType();
+    setIsPersonal(accountType === "personal");
 
     loadClients();
     setLoading(false);
@@ -416,7 +429,7 @@ function getCategoryTaxCode(category: string): string {
     );
   }
 
-const reportTypes = [
+const allReportTypes = [
     // icon is now a lucide component; rendered inline below so the
     // sweep reaches both the CSV builder cards and the top-level nav.
     { value: "receipts", label: "Receipt Summary", icon: FileText, desc: "All receipts with details" },
@@ -426,6 +439,15 @@ const reportTypes = [
     { value: "monthly", label: "Monthly Summary", icon: Calendar, desc: "Month-over-month" },
     { value: "comprehensive", label: "Comprehensive Report", icon: ClipboardList, desc: "AI-powered full report" },
   ];
+
+  // Personal-account users only have one client (themselves), so
+  // "Per-client breakdown" and the firm-wide AI Comprehensive Report
+  // would be confusing or empty. Filter them out at the source rather
+  // than gating each report renderer downstream.
+  const personalHiddenReports = new Set(["clients", "comprehensive"]);
+  const reportTypes = isPersonal
+    ? allReportTypes.filter(r => !personalHiddenReports.has(r.value))
+    : allReportTypes;
 
   return (
     <div className="p-8 bg-gray-50 dark:bg-dark-bg min-h-screen">
@@ -529,6 +551,16 @@ href="/dashboard/reports/clients"
               <div className="font-medium text-gray-900 dark:text-white">Net Income Summary</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Revenue − deductible per month</div>
             </a>
+            {/* Goals report — personal-account only. Shows contribution
+                totals over any window (month/quarter/half/year/custom)
+                with CSV + .xlsx export. */}
+            {isPersonal && (
+              <a href="/dashboard/reports/goals" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
+                <Target className="w-6 h-6 mb-2 text-accent-500" />
+                <div className="font-medium text-gray-900 dark:text-white">Goal Contributions</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">What you contributed to each goal</div>
+              </a>
+            )}
           </div>
         </div>
 
@@ -595,23 +627,29 @@ href="/dashboard/reports/clients"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Client
-                </label>
-                <select
-                  value={selectedClient}
-                  onChange={(e) => setSelectedClient(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
-                >
-                  <option value="">All Clients</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Client filter — firm/accountant accounts only. Personal
+                  users already scope to their single client via
+                  ClientContext, so a "pick a client" dropdown here
+                  would be empty firm chrome. */}
+              {!isPersonal && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Client
+                  </label>
+                  <select
+                    value={selectedClient}
+                    onChange={(e) => setSelectedClient(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                  >
+                    <option value="">All Clients</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         )}

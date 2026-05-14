@@ -44,6 +44,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Target,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -62,10 +63,20 @@ export default function DashboardLayout({
   const [reportsOpen, setReportsOpen] = useState(true);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [firmPlan, setFirmPlan] = useState<Plan>(null);
-  // Personal vs. firm account. Loaded asynchronously like firmPlan; until
-  // it resolves we treat the user as a firm account so existing firm
-  // accounts don't briefly lose their nav items on hard refresh.
-  const [accountType, setAccountType] = useState<AccountType>("firm");
+  // Personal vs. firm account. We cache the last-known value in
+  // localStorage so the *next* visit paints with the right sidebar set
+  // immediately. Without this cache, personal users briefly saw firm
+  // chrome (Team & Clients, Analytics) flash on every load while the
+  // async getMyAccountType call was in flight.
+  const [accountType, setAccountType] = useState<AccountType>(() => {
+    if (typeof window === "undefined") return "firm";
+    try {
+      const cached = localStorage.getItem("receipture-account-type");
+      return cached === "personal" ? "personal" : "firm";
+    } catch {
+      return "firm";
+    }
+  });
   const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
   // Pinned tax-report keys. Null while loading; the helper falls back
   // to DEFAULT_PINNED for users who haven't customized yet. The Reports
@@ -184,6 +195,9 @@ function applyTheme(theme: "light" | "dark" | "system") {
   async function loadAccountType() {
     const t = await getMyAccountType();
     setAccountType(t);
+    // Cache for the next visit so the sidebar paints with the right
+    // chrome on first render instead of flashing the firm-admin items.
+    try { localStorage.setItem("receipture-account-type", t); } catch {}
   }
 
 const isFirmAdmin = userRole === "firm_admin" || userRole === "owner";
@@ -455,6 +469,24 @@ return (
                   <span className="text-sm">Categories</span>
                 </Link>
               </li>
+              {/* Goals — personal accounts only. Sits directly under
+                  Categories per the personal-dashboard design. Firm
+                  accounts don't see it. */}
+              {isPersonal && (
+                <li className="ml-4">
+                  <Link
+                    href="/dashboard/goals"
+                    className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                      pathname === '/dashboard/goals' || pathname.startsWith('/dashboard/goals/')
+                        ? 'bg-accent-500 text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
+                    }`}
+                  >
+                    <Target className="w-4 h-4" />
+                    <span className="text-sm">Goals</span>
+                  </Link>
+                </li>
+              )}
               <li className="ml-4">
                 <Link
                   data-tour="sidebar-flags"

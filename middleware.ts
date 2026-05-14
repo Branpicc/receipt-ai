@@ -161,6 +161,11 @@ const isPublicRoute = publicRoutes.some((route) =>
           '/dashboard/email-inbox',
           '/dashboard/personal',
           '/dashboard/flags',
+          // Goals page is personal-only; firm/accountant accounts have
+          // no use for it (their clients each have their own data). The
+          // page itself enforces personal-account access; this whitelist
+          // entry lets the route load past the middleware client filter.
+          '/dashboard/goals',
         ];
 
         const isClientLike = role === 'client' || isPersonal;

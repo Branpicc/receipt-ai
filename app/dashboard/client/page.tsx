@@ -18,7 +18,9 @@ import {
   Mail,
   FileText,
   TrendingUp,
+  Target,
 } from "lucide-react";
+import { getMyAccountType } from "@/lib/getMyAccountType";
 
 type RecentReceipt = {
   id: string;
@@ -71,9 +73,14 @@ export default function ClientDashboardPage() {
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([]);
   const [recentReports, setRecentReports] = useState<MonthlyReport[]>([]);
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
+  // Personal-account flag — this dashboard route serves both clients
+  // and personal users (firm-of-one). The Goals card only shows for
+  // personal users; clients have no goals feature.
+  const [isPersonal, setIsPersonal] = useState(false);
 
   useEffect(() => {
     loadClientInfo();
+    getMyAccountType().then(t => setIsPersonal(t === "personal")).catch(() => {});
   }, []);
 
   async function loadClientInfo() {
@@ -439,13 +446,18 @@ function getCategoryColor(category: string) {
             <div className="text-xs text-gray-500 dark:text-gray-400">Set limits</div>
           </div>
         </Link>
-<Link href="/dashboard/conversations" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-          <MessageSquare className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-          <div>
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">Messages</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Chat with accountant</div>
-          </div>
-        </Link>
+{/* Messages — clients only. Personal accounts have no accountant
+            to message; the conversations feature is part of the
+            firm-client relationship. */}
+        {!isPersonal && (
+          <Link href="/dashboard/conversations" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+            <MessageSquare className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+            <div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">Messages</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Chat with accountant</div>
+            </div>
+          </Link>
+        )}
         <Link href="/dashboard/category-dashboard" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <BarChart3 className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
@@ -453,6 +465,17 @@ function getCategoryColor(category: string) {
             <div className="text-xs text-gray-500 dark:text-gray-400">Charts & categories</div>
           </div>
         </Link>
+        {/* Goals card — personal accounts only. Per the design, sits
+            directly under Categories ("My Spending") in the grid. */}
+        {isPersonal && (
+          <Link href="/dashboard/goals" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
+            <Target className="w-6 h-6 text-accent-500 flex-shrink-0" />
+            <div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">Goals</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Save & track progress</div>
+            </div>
+          </Link>
+        )}
 <Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <SettingsIcon className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
