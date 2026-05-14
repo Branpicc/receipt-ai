@@ -24,7 +24,7 @@ import GoalCard from "@/components/GoalCard";
 import { GoalEditorModal, GoalContributeModal } from "@/components/GoalModals";
 import GoalCelebration, { celebrationTier, type CelebrationTier } from "@/components/GoalCelebration";
 import PaycheckSplitter from "@/components/PaycheckSplitter";
-import { fetchGoalsWithProgress, archiveGoal } from "@/lib/goalsApi";
+import { fetchGoalsWithProgress, archiveGoal, isGoalCompleted } from "@/lib/goalsApi";
 import type { Goal, GoalWithProgress } from "@/lib/goalTypes";
 
 type Tab = "goals" | "splitter";
@@ -139,56 +139,17 @@ export default function GoalsPage() {
         </div>
 
         {tab === "goals" ? (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {goals.length} active goal{goals.length === 1 ? "" : "s"}
-              </p>
-              <button
-                onClick={() => { setEditing(undefined); setEditorOpen(true); }}
-                className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg inline-flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> New goal
-              </button>
-            </div>
-
-            {goals.length === 0 ? (
-              <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-2xl p-10 text-center">
-                <Sparkles className="w-10 h-10 text-accent-500 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                  Start with a goal
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-sm mx-auto">
-                  Save for a vacation, pay down a credit card, build an emergency fund, or
-                  budget for monthly bills. Mark a goal as <strong>important</strong> for a
-                  fireworks animation when you cross the finish line.
-                </p>
-                <button
-                  onClick={() => { setEditing(undefined); setEditorOpen(true); }}
-                  className="px-5 py-2.5 bg-accent-500 hover:bg-accent-600 text-white font-medium rounded-lg inline-flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Create your first goal
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {goals.map(g => (
-                  <GoalCard
-                    key={g.id}
-                    goal={g}
-                    onContribute={() => setContributing(g)}
-                    onEdit={() => { setEditing(g); setEditorOpen(true); }}
-                    onOpenHistory={() => { setEditing(g); setEditorOpen(true); }}
-                    onArchive={async () => {
-                      if (!confirm(`Archive "${g.name}"? You can recreate it any time — history is preserved.`)) return;
-                      await archiveGoal(g.id);
-                      await loadGoals(clientId);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          <GoalsTab
+            goals={goals}
+            onCreateNew={() => { setEditing(undefined); setEditorOpen(true); }}
+            onContribute={(g) => setContributing(g)}
+            onEdit={(g) => { setEditing(g); setEditorOpen(true); }}
+            onArchive={async (g) => {
+              if (!confirm(`Archive "${g.name}"? You can recreate it any time — history is preserved.`)) return;
+              await archiveGoal(g.id);
+              await loadGoals(clientId!);
+            }}
+          />
         ) : (
           <PaycheckSplitter
             clientId={clientId}
@@ -246,6 +207,119 @@ export default function GoalsPage() {
           show={true}
           onDone={() => setCelebration(null)}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Goals tab — splits the list into Active and Completed ─────────────────
+// "Completed" = isGoalCompleted() from goalsApi (target hit on a
+// non-recurring goal, OR target_date has passed). The Completed section
+// is collapsed by default so it stays out of the way once a user
+// accumulates a long history.
+function GoalsTab({
+  goals,
+  onCreateNew,
+  onContribute,
+  onEdit,
+  onArchive,
+}: {
+  goals: GoalWithProgress[];
+  onCreateNew: () => void;
+  onContribute: (g: GoalWithProgress) => void;
+  onEdit: (g: GoalWithProgress) => void;
+  onArchive: (g: GoalWithProgress) => void;
+}) {
+  const [showCompleted, setShowCompleted] = useState(false);
+  const active = goals.filter(g => !isGoalCompleted(g));
+  const completed = goals.filter(g => isGoalCompleted(g));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {active.length} active goal{active.length === 1 ? "" : "s"}
+          {completed.length > 0 && (
+            <span className="ml-2 text-gray-400 dark:text-gray-500">· {completed.length} completed</span>
+          )}
+        </p>
+        <button
+          onClick={onCreateNew}
+          className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg inline-flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> New goal
+        </button>
+      </div>
+
+      {goals.length === 0 ? (
+        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-2xl p-10 text-center">
+          <Sparkles className="w-10 h-10 text-accent-500 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+            Start with a goal
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-sm mx-auto">
+            Save for a vacation, pay down a credit card, build an emergency fund, or
+            budget for monthly bills. Mark a goal as <strong>important</strong> for a
+            fireworks animation when you cross the finish line.
+          </p>
+          <button
+            onClick={onCreateNew}
+            className="px-5 py-2.5 bg-accent-500 hover:bg-accent-600 text-white font-medium rounded-lg inline-flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Create your first goal
+          </button>
+        </div>
+      ) : (
+        <>
+          {active.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {active.map(g => (
+                <GoalCard
+                  key={g.id}
+                  goal={g}
+                  onContribute={() => onContribute(g)}
+                  onEdit={() => onEdit(g)}
+                  onOpenHistory={() => onEdit(g)}
+                  onArchive={() => onArchive(g)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-2xl p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+              No active goals — everything in this section is finished. Nice work.
+            </div>
+          )}
+
+          {completed.length > 0 && (
+            <div className="mt-8">
+              <button
+                onClick={() => setShowCompleted(s => !s)}
+                className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover"
+              >
+                <span className="flex items-center gap-2">
+                  🏁 Completed goals ({completed.length})
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {showCompleted ? "Hide" : "Show"}
+                </span>
+              </button>
+              {showCompleted && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3 opacity-90">
+                  {completed.map(g => (
+                    <GoalCard
+                      key={g.id}
+                      goal={g}
+                      onContribute={() => onContribute(g)}
+                      onEdit={() => onEdit(g)}
+                      onOpenHistory={() => onEdit(g)}
+                      onArchive={() => onArchive(g)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

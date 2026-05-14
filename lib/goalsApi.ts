@@ -93,6 +93,29 @@ export async function fetchGoalsWithProgress(clientId: string): Promise<GoalWith
   });
 }
 
+// Determines whether a goal should live in the "Completed" section.
+// A goal is considered completed when:
+//   • it has a positive target AND the lifetime contributions have
+//     hit/exceeded that target, AND it does NOT recur (recurring
+//     goals like bills always reset and shouldn't move to completed), OR
+//   • its target_date is in the past (regardless of progress) — e.g.
+//     a vacation goal whose trip date has come and gone, whether or
+//     not the user hit their savings target.
+//
+// Used by the goals page to split the grid into Active and Completed.
+export function isGoalCompleted(g: GoalWithProgress): boolean {
+  const recurring = !!g.reset_frequency && g.reset_frequency !== "never";
+  if (g.target_cents > 0 && !recurring && g.contributed_total_cents >= g.target_cents) {
+    return true;
+  }
+  if (g.target_date) {
+    const target = new Date(g.target_date);
+    target.setHours(23, 59, 59, 999);
+    if (target.getTime() < Date.now()) return true;
+  }
+  return false;
+}
+
 export async function fetchGoalContributions(goalId: string): Promise<GoalContribution[]> {
   const { data, error } = await supabase
     .from("goal_contributions")
@@ -224,23 +247,51 @@ export async function deletePaycheckSplit(splitId: string): Promise<void> {
 }
 
 // Compute how much each split item gets given a paycheck $ amount.
-// Returns the per-item dollar amount and the leftover (paycheck minus
-// the sum of allocations).
+//   - '%' rows: paycheck × percent
+//   - '$' rows: fixed dollars (in cents)
+//   - 'remainder' rows: whatever's left after % + $ rows are subtracted
+//     from the paycheck. If multiple remainder rows exist (shouldn't,
+//     but defensively) the leftover is split evenly across them. If the
+//     %/$ rows already exceed the paycheck, remainder rows get $0
+//     (never negative).
+// Returns the per-item dollar amount AND a leftover cents value. With a
+// remainder row present, leftover is always 0 (remainder ate it all);
+// without one, leftover equals the unallocated chunk.
 export function computeSplitAllocation(
   paycheckCents: number,
   items: SplitItem[]
 ): { items: { item: SplitItem; allocatedCents: number }[]; leftoverCents: number } {
+  // First pass: compute fixed and percent rows, leave remainder=0.
   const allocations = items.map(item => {
-    const cents = item.kind === "%"
-      ? Math.round(paycheckCents * (item.value / 100))
-      : Math.round(item.value * 100); // value is dollars when kind='$'
+    let cents = 0;
+    if (item.kind === "%") cents = Math.round(paycheckCents * (item.value / 100));
+    else if (item.kind === "$") cents = Math.round(item.value * 100);
+    // remainder rows resolve in the second pass below
     return { item, allocatedCents: Math.max(0, cents) };
   });
-  const total = allocations.reduce((s, a) => s + a.allocatedCents, 0);
-  return {
-    items: allocations,
-    leftoverCents: paycheckCents - total,
-  };
+  const nonRemainderTotal = allocations
+    .filter(a => a.item.kind !== "remainder")
+    .reduce((s, a) => s + a.allocatedCents, 0);
+  const remainderRows = allocations.filter(a => a.item.kind === "remainder");
+
+  const remainderPool = Math.max(0, paycheckCents - nonRemainderTotal);
+
+  if (remainderRows.length === 0) {
+    return { items: allocations, leftoverCents: paycheckCents - nonRemainderTotal };
+  }
+
+  // Distribute the remainder pool evenly across remainder rows. With
+  // one row (the common case) it just gets everything that's left.
+  const perRow = Math.floor(remainderPool / remainderRows.length);
+  const rounding = remainderPool - perRow * remainderRows.length;
+  let extra = rounding;
+  for (const a of allocations) {
+    if (a.item.kind === "remainder") {
+      a.allocatedCents = perRow + (extra > 0 ? 1 : 0);
+      if (extra > 0) extra -= 1;
+    }
+  }
+  return { items: allocations, leftoverCents: 0 };
 }
 
 // Bulk-commit a paycheck split — writes a goal_contributions row for

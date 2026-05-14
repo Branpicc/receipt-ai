@@ -219,12 +219,21 @@ function SplitterCard({
   const percentTotal = items.filter(i => i.kind === "%").reduce((s, i) => s + i.value, 0);
   const percentExceeds = percentTotal > 100;
 
-  function addRow(preset: "savings" | "investment" | "bills" | "spending" | "custom") {
+  // True if at least one row already absorbs the leftover. We use this
+  // to disable the "remainder" preset button — having two remainder
+  // rows works (the leftover is split evenly) but is almost never what
+  // the user intends, so we steer them away from it.
+  const hasRemainder = items.some(i => i.kind === "remainder");
+
+  function addRow(preset: "savings" | "investment" | "bills" | "spending" | "remainder" | "custom") {
     const presets: Record<string, { label: string; kind: SplitItem["kind"]; value: number }> = {
       savings: { label: "Savings", kind: "%", value: 10 },
       investment: { label: "Investments", kind: "%", value: 15 },
       bills: { label: "Bills", kind: "$", value: 0 },
       spending: { label: "Spending / chequing", kind: "%", value: 0 },
+      // Remainder row: "Put what's left into Chequing" is the canonical
+      // use case, so we pre-fill the label that way. User can rename.
+      remainder: { label: "Chequing (leftover)", kind: "remainder", value: 0 },
       custom: { label: "", kind: "%", value: 0 },
     };
     const p = presets[preset];
@@ -331,16 +340,26 @@ function SplitterCard({
               >
                 <option value="%">%</option>
                 <option value="$">$</option>
+                <option value="remainder">Rest</option>
               </select>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step={it.kind === "%" ? "1" : "0.01"}
-                value={it.value || ""}
-                onChange={(e) => updateItem(it.id, { value: parseFloat(e.target.value) || 0 })}
-                className="col-span-2 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
-              />
+              {/* Value input is meaningless for remainder rows — disable
+                  it and show a placeholder so the user knows it auto-
+                  fills with whatever's left after the other rows. */}
+              {it.kind === "remainder" ? (
+                <div className="col-span-2 px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400 italic border border-dashed border-gray-300 dark:border-dark-border rounded-lg">
+                  whatever's left
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step={it.kind === "%" ? "1" : "0.01"}
+                  value={it.value || ""}
+                  onChange={(e) => updateItem(it.id, { value: parseFloat(e.target.value) || 0 })}
+                  className="col-span-2 px-2 py-1.5 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
+              )}
               <select
                 value={it.goal_id || ""}
                 onChange={(e) => updateItem(it.id, { goal_id: e.target.value || null })}
@@ -380,6 +399,18 @@ function SplitterCard({
             <Plus className="inline w-3 h-3 -mt-0.5" /> {p}
           </button>
         ))}
+        {/* "Put remaining into…" — single remainder row only. Disable
+            once one exists since splitting the leftover across multiple
+            remainder rows is rarely what the user wants. */}
+        <button
+          type="button"
+          onClick={() => addRow("remainder")}
+          disabled={hasRemainder}
+          className="px-2.5 py-1 text-[11px] text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-dark-border rounded-full hover:border-accent-400 hover:text-accent-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title={hasRemainder ? "Only one remainder row per split" : undefined}
+        >
+          <Plus className="inline w-3 h-3 -mt-0.5" /> Put rest into…
+        </button>
       </div>
 
       {/* Save the edits without committing a paycheck */}

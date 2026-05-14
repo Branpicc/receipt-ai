@@ -301,6 +301,28 @@ export function GoalContributeModal({
       setError("Enter a positive amount.");
       return;
     }
+    // Confirm if the contribution would overshoot a fixed target.
+    // Particularly important for bills and fixed-amount goals where
+    // double-paying is usually a mistake (e.g. typing $1500 into a
+    // $150 utility bill). For open-ended goals (target_cents = 0)
+    // there's no "too much" — skip the prompt entirely.
+    if (hasTarget) {
+      const overshoot = currentCents + cents - goal.target_cents;
+      if (overshoot > 0 && currentCents < goal.target_cents + 1) {
+        const overDollars = (overshoot / 100).toFixed(2);
+        const totalDollars = ((currentCents + cents) / 100).toFixed(2);
+        const targetDollars = (goal.target_cents / 100).toFixed(2);
+        const ok = window.confirm(
+          `Heads up — this contribution puts you $${overDollars} over the target.\n\n` +
+          `Target: $${targetDollars}\n` +
+          `After contributing: $${totalDollars}\n\n` +
+          (goal.category === "bills"
+            ? "For bills this is usually a mistake. Continue anyway?"
+            : "Continue?")
+        );
+        if (!ok) return;
+      }
+    }
     setSaving(true);
     try {
       await contribute({

@@ -857,11 +857,16 @@ onClick={() => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Role
+                      Account type
                     </label>
                     <input
                       type="text"
-                      value={user.role.replace("_", " ")}
+                      // Personal accounts technically have firm_admin role
+                      // on their firm-of-one, but showing "Firm admin"
+                      // here is misleading — they're a single user. Swap
+                      // the label to "Personal" so the surface matches
+                      // the rest of the personal experience.
+                      value={isPersonal ? "Personal" : user.role.replace("_", " ")}
                       disabled
                       className="w-full px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-gray-100 dark:bg-dark-bg text-gray-900 dark:text-white capitalize"
                     />
@@ -1501,11 +1506,11 @@ if (eligibility.eligible) {
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {isPersonal
-              ? "Replay Receipture's first-time onboarding any time."
+              ? "Replay either of Receipture's first-time guides any time."
               : "Replay either of Receipture's first-time guides any time. Firm admins can also clear the demo dataset that was seeded when they first signed in."}
           </p>
 
-          <div className={`grid grid-cols-1 ${isPersonal ? "" : "md:grid-cols-2"} gap-4`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
               <div className="text-2xl mb-2">🎯</div>
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
@@ -1523,27 +1528,24 @@ if (eligibility.eligible) {
               </button>
             </div>
 
-            {/* Sidebar tour — hidden for personal accounts. SidebarTour
-                bails out early for them (its chapters walk through firm
-                features like Clients/Team/Analytics that don't exist
-                for a firm-of-one), so the button would do nothing. */}
-            {!isPersonal && (
-              <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
-                <div className="text-2xl mb-2">🧭</div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  Sidebar tour
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
-                  Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
-                </p>
-                <button
-                  onClick={handleReplaySidebarTour}
-                  className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
-                >
-                  Replay sidebar tour
-                </button>
-              </div>
-            )}
+            {/* Sidebar tour — available for firm accounts AND personal
+                accounts (each has its own chapter set in
+                sidebarTourChapters.ts). */}
+            <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
+              <div className="text-2xl mb-2">🧭</div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                Sidebar tour
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                Multi-chapter immersive guide pointing out where each section lives. Pops up immediately, no reload.
+              </p>
+              <button
+                onClick={handleReplaySidebarTour}
+                className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+              >
+                Replay sidebar tour
+              </button>
+            </div>
           </div>
 
           {/* Clear demo data — firm accounts only. Personal signups

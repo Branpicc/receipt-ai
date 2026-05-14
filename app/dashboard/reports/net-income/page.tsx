@@ -40,7 +40,7 @@ function ymKey(year: number, month: number) {
 }
 
 export default function NetIncomeReportPage() {
-  const { selectedClient } = useClientContext();
+  const { selectedClient, isPersonal } = useClientContext();
   const [profile, setProfile] = useState<{ province: string; gst_hst_registered: boolean }>({ province: "ON", gst_hst_registered: false });
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [items, setItems] = useState<Map<string, DeductibleLineItem[]>>(new Map());
@@ -204,11 +204,19 @@ export default function NetIncomeReportPage() {
         <ClientFilterDropdown />
 
         {!selectedClient ? (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-300">
-              ⚠️ Select a client above to view their net income summary.
-            </p>
-          </div>
+          isPersonal ? (
+            // Personal accounts auto-select their lone client via
+            // ClientContext, but there's a brief mount window before
+            // it resolves. Show a quiet loader instead of the firm
+            // "pick a client" warning, which is meaningless here.
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+          ) : (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                ⚠️ Select a client above to view their net income summary.
+              </p>
+            </div>
+          )
         ) : loading ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
         ) : (

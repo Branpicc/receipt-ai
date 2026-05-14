@@ -52,15 +52,19 @@ export type GoalContribution = {
   contributed_at: string;
 };
 
-// Each row of a paycheck splitter. `kind='%'` means value is a percent
-// of the paycheck (0–100); `kind='$'` means value is a fixed dollar
-// amount in cents. goal_id is optional — splits can route money to a
-// labeled bucket (e.g. "Chequing") that doesn't have a goal record.
+// Each row of a paycheck splitter.
+//   kind='%'        — value is a percent of the paycheck (0–100)
+//   kind='$'        — value is a fixed dollar amount in (decimal) dollars
+//   kind='remainder'— absorbs whatever's left after every %/$ row.
+//                      Only one remainder row is allowed per split. The
+//                      UI enforces "the remainder must be the last row".
+// goal_id is optional — splits can route money to a labeled bucket
+// (e.g. "Chequing") that doesn't have a goal record.
 export type SplitItem = {
   id: string;
   label: string;
-  kind: "%" | "$";
-  value: number; // percent (0-100) OR cents
+  kind: "%" | "$" | "remainder";
+  value: number; // percent (0-100) OR dollars; ignored when kind='remainder'
   goal_id: string | null;
 };
 

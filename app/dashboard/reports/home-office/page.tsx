@@ -42,7 +42,7 @@ const HOME_OFFICE_CATEGORIES = new Set([
 ]);
 
 export default function HomeOfficeReportPage() {
-  const { selectedClient } = useClientContext();
+  const { selectedClient, isPersonal } = useClientContext();
   const [pct, setPct] = useState<number>(0);
   const [rows, setRows] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,11 +103,18 @@ export default function HomeOfficeReportPage() {
         <ClientFilterDropdown />
 
         {!selectedClient ? (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-300">
-              ⚠️ Select a client above to view their home office calculation.
-            </p>
-          </div>
+          isPersonal ? (
+            // Personal accounts auto-resolve their lone client — show a
+            // loader during the brief async window instead of the
+            // "pick a client" firm warning.
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+          ) : (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                ⚠️ Select a client above to view their home office calculation.
+              </p>
+            </div>
+          )
         ) : loading ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
         ) : pct === 0 ? (
