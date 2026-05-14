@@ -424,7 +424,11 @@ function exportSummary() {
           </div>
         )}
 
-        {!selectedClientId && (
+        {/* "No client selected" warning — only for firm/accountant
+            accounts. Personal users have their client auto-selected by
+            ClientContext, so this warning briefly flashing during the
+            async load was confusing firm chrome. */}
+        {!selectedClientId && accountType !== "personal" && (
           <div className="mb-6 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <p className="text-sm text-yellow-800 dark:text-yellow-300">
               ⚠️ No client selected — select a client from the dashboard to see their applicable tax forms. Showing T2125 by default.

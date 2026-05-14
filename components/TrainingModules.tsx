@@ -1168,7 +1168,11 @@ setCompletedModules(prev => {
   const hasInteractive = !!currentStep?.interactive;
   const canProceed = !hasInteractive || interactiveDone;
 
-  if (!isPlanEnterprise) {
+  // Training is gated to Enterprise for firm tiers (an upsell) but
+  // personal-account users get it unlocked as part of the $6.99/mo
+  // plan — without this exemption, brand-new personal users hit the
+  // "Upgrade to Enterprise" wall on their own training tab.
+  if (!isPlanEnterprise && userRole !== "personal") {
     return (
       <div className="text-center py-12">
         <div className="text-5xl mb-4">🎓</div>

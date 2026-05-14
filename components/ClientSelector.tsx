@@ -65,8 +65,13 @@ function ClientCard({
 }
 
 export default function ClientSelector({ accountantFilter }: { accountantFilter?: string | null }) {
-  const { selectedClient, setSelectedClient, clients, loadingClients, isFiltered } = useClientContext();
+  const { selectedClient, setSelectedClient, clients, loadingClients, isFiltered, isPersonal } = useClientContext();
 const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Personal accounts auto-select their single client in
+  // ClientContext — surfacing a grid of "clients" to pick from is
+  // misleading firm chrome for a firm-of-one.
+  if (isPersonal) return null;
 
   // Filter clients by selected accountant if provided
   const filteredClients = accountantFilter

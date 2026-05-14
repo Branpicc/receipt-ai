@@ -61,22 +61,27 @@ export default function SidebarTour() {
         .maybeSingle();
       if (!fu) return;
 
-      // Personal accounts (firm_admin role on a firm-of-one) must not
-      // run the firm-admin sidebar tour. The tour's steps live on routes
-      // like /dashboard, /dashboard/clients, /dashboard/team — but
-      // /dashboard redirects personal users back to /dashboard/client,
-      // which creates an infinite navigation loop. Bail out before
-      // touching state if this is a personal firm.
+      // Personal accounts run the dedicated PERSONAL_CHAPTERS set
+      // instead of the firm-admin one. The personal chapters live
+      // entirely under /dashboard/client + subroutes the personal user
+      // is allowed to visit — pointing any step at /dashboard would
+      // bounce the user via the dashboard's personal redirect and
+      // produce a navigation loop, so the chapter file is responsible
+      // for keeping that invariant.
       const { data: firm } = await supabase
         .from("firms")
         .select("account_type")
         .eq("id", fu.firm_id)
         .maybeSingle();
-      if (firm?.account_type === "personal") return;
+      const isPersonal = firm?.account_type === "personal";
 
       setAuthUserId(user.id);
-      const role = fu.role;
-      const eligibleRole = role === "firm_admin" || role === "accountant";
+      const role = isPersonal ? "personal" : fu.role;
+      // Eligibility: firm_admin/accountant for firm accounts, and
+      // personal-account users get the tour too. Clients aren't
+      // eligible — they get the client-style dashboard but not the
+      // immersive sidebar tour.
+      const eligibleRole = role === "firm_admin" || role === "accountant" || role === "personal";
       const verified = !!fu.email_verified_at;
       const onboardingDone = !!fu.onboarding_completed || !!fu.onboarding_skipped;
       const alreadyDone = !!fu.tour_completed_at || !!fu.tour_skipped_at;

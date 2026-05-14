@@ -11,8 +11,12 @@ import { useClientContext } from "@/lib/ClientContext";
  * can only see/filter their own.
  */
 export default function ClientFilterDropdown() {
-  const { selectedClient, setSelectedClient, clients } = useClientContext();
+  const { selectedClient, setSelectedClient, clients, isPersonal } = useClientContext();
 
+  // Personal accounts have exactly one client (themselves) which is
+  // auto-selected in ClientContext — showing a "pick a client" dropdown
+  // would be pointless and looks like firm chrome.
+  if (isPersonal) return null;
   if (clients.length === 0) return null;
 
   return (

@@ -23,6 +23,12 @@ type ClientContextType = {
   loadingClients: boolean;
   refreshClients: () => Promise<void>;
   isFiltered: boolean;
+  // Personal accounts have exactly one client (themselves) which we
+  // auto-select. Components that show a client picker (filter dropdown,
+  // selector grid) check this flag to render null instead of relying
+  // on clients.length === 0 — we still load the lone client into
+  // `clients` so downstream scoping works, but we hide the chooser UI.
+  isPersonal: boolean;
 };
 
 const ClientContext = createContext<ClientContextType>({
@@ -32,12 +38,14 @@ const ClientContext = createContext<ClientContextType>({
   loadingClients: false,
   refreshClients: async () => {},
   isFiltered: false,
+  isPersonal: false,
 });
 
 export function ClientProvider({ children, userRole }: { children: ReactNode; userRole: string | null }) {
   const [selectedClient, setSelectedClientState] = useState<ClientOption | null>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
+  const [isPersonal, setIsPersonal] = useState<boolean>(false);
 
   const isAccountantOrAdmin = userRole === "accountant" || userRole === "firm_admin" || userRole === "owner";
 
@@ -67,19 +75,39 @@ const { data: firmUser } = await supabase
   .single();
 
 // Personal accounts are firm-of-one — there's exactly one client
-// (themselves) and no need to switch between them. Bail out so every
-// client-selector component (ClientFilterDropdown, ClientSelector,
-// the receipts page filter) renders null via its existing
-// clients.length === 0 guard. Without this gate, personal users saw
-// firm-admin "All Clients" pickers across reports, receipts, flags,
-// email inbox, and the category dashboard.
+// (themselves). We load it into `clients` so downstream scoping
+// (queries filtered by selectedClient.id) works, but we also flip
+// `isPersonal` so the dropdown/selector components hide themselves
+// regardless of clients.length. selectedClient gets auto-set below,
+// which eliminates the "No client selected" warnings on tax-codes,
+// net-income, etc.
 const { data: firmRow } = await supabase
   .from("firms")
   .select("account_type")
   .eq("id", firmId)
   .single();
 if (firmRow?.account_type === "personal") {
-  setClients([]);
+  setIsPersonal(true);
+  const { data: personalClient } = await supabase
+    .from("clients")
+    .select("id, name, email_alias, assigned_accountant_id")
+    .eq("firm_id", firmId)
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+  if (personalClient) {
+    const personal: ClientOption = {
+      ...personalClient,
+      total_receipts: 0,
+      uncategorized: 0,
+      flagged: 0,
+      pending_review: 0,
+    };
+    setClients([personal]);
+    setSelectedClientState(personal);
+  } else {
+    setClients([]);
+  }
   setLoadingClients(false);
   return;
 }
@@ -181,7 +209,12 @@ const { data: clientsData, error } = await clientQuery;
         clients,
         loadingClients,
         refreshClients: loadClients,
-        isFiltered: selectedClient !== null,
+        // Personal accounts always have selectedClient pre-populated,
+        // but isFiltered keeps its firm semantic ("the user has narrowed
+        // to one client") so firm-side filtering banners don't appear
+        // on the personal experience.
+        isFiltered: selectedClient !== null && !isPersonal,
+        isPersonal,
       }}
     >
       {children}

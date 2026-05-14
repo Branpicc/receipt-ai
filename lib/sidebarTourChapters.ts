@@ -326,7 +326,101 @@ const ACCOUNTANT_CHAPTERS: TourChapter[] = [
   },
 ];
 
+// Personal-account chapters live entirely under /dashboard/client and
+// subroutes the personal user is allowed to visit. This is critical:
+// if a step pointed at /dashboard the SidebarTour's route-sync effect
+// would push the personal user back there, and the dashboard's
+// router.replace to /dashboard/client would fire again — infinite
+// loop. Keep every `route` here off of /dashboard root.
+const PERSONAL_CHAPTERS: TourChapter[] = [
+  {
+    id: "welcome",
+    title: "Welcome",
+    steps: [
+      {
+        id: "p-welcome",
+        route: "/dashboard/client",
+        selector: null,
+        title: "Welcome to Receipture",
+        body:
+          "Your account is set up. We'll do a quick spin through the sections you'll actually use — skip any chapter you don't want to see.",
+        position: "center",
+      },
+    ],
+  },
+  {
+    id: "dashboard",
+    title: "Your dashboard",
+    steps: [
+      {
+        id: "p-dashboard",
+        route: "/dashboard/client",
+        selector: null,
+        title: "Your dashboard",
+        body:
+          "This is your home screen. Upload receipts from the hero button, check budgets, see recent activity, and (if you're self-employed) your monthly net income — revenue minus deductibles, charted by month.",
+        position: "center",
+      },
+    ],
+  },
+  {
+    id: "receipts",
+    title: "Receipts",
+    steps: [
+      {
+        id: "p-receipts",
+        route: "/dashboard/receipts",
+        selector: null,
+        title: "Your receipts",
+        body:
+          "Every receipt you've uploaded lives here. Click any row to see the full extracted detail. Three ways to add a new one: tap Upload at the top, forward your order email to your Receipture inbox address, or text a photo to your Receipture number.",
+        position: "center",
+      },
+    ],
+  },
+  {
+    id: "reports",
+    title: "Reports & exports",
+    steps: [
+      {
+        id: "p-reports",
+        route: "/dashboard/reports",
+        selector: null,
+        title: "Reports & exports",
+        body:
+          "This is where you get tax-ready data out. The big green Master Excel button at the top produces a single .xlsx with a Summary, every receipt, a tab per CRA line, plus Personal and Capital Assets sheets — hand it to a tax preparer or use it yourself.",
+        position: "center",
+      },
+      {
+        id: "p-tax-codes",
+        route: "/dashboard/tax-codes",
+        selector: null,
+        title: "CRA Tax Codes",
+        body:
+          "If you marked yourself self-employed during sign-up, this page shows your expenses grouped by CRA line (T2125, T776, T2200). Each line has its own 📥 Excel button for a focused per-line export.",
+        position: "center",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    steps: [
+      {
+        id: "p-settings",
+        route: "/dashboard/settings",
+        selector: null,
+        title: "Settings — cards, email, SMS",
+        body:
+          "Profile tab is where you register your card last-4 digits (so we can flag receipts paid on an unrecognised card) and toggle SMS reminders. Email Forwarding has your Receipture inbox address. Training has these walkthroughs as searchable modules.",
+        position: "center",
+      },
+    ],
+  },
+];
+
 export function getChaptersForRole(role: string): TourChapter[] {
+  if (role === "personal") return PERSONAL_CHAPTERS;
   if (role === "firm_admin") return FIRM_ADMIN_CHAPTERS;
   if (role === "accountant") return ACCOUNTANT_CHAPTERS;
   return [];
