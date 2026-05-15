@@ -12,7 +12,19 @@
 import { supabase } from "./supabaseClient";
 import type { Plan } from "./featureGates";
 
+const CACHE_KEY = "receipture-cache:v1:firmPlan";
+
+// Cached per-tab so the sidebar + billing page + multiple feature-gate
+// checks don't each re-fetch this row on every page change. Cleared
+// on sign-out by clearWhoAmICache.
 export async function getMyFirmPlan(): Promise<Plan> {
+  if (typeof window !== "undefined") {
+    try {
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) return cached as Plan;
+    } catch { /* ignore */ }
+  }
+
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
@@ -34,6 +46,7 @@ export async function getMyFirmPlan(): Promise<Plan> {
     const plan = firm?.subscription_plan || firm?.subscription_tier || null;
     if (!plan) return null;
 
+    let resolved: Plan;
     if (
       plan === "starter" ||
       plan === "professional" ||
@@ -41,11 +54,16 @@ export async function getMyFirmPlan(): Promise<Plan> {
       plan === "free" ||
       plan === "personal"
     ) {
-      return plan;
+      resolved = plan;
+    } else {
+      // Anything else (e.g. legacy "trial" left in subscription_tier) → fall
+      // back to "starter" as the most-restrictive interpretation.
+      resolved = "starter";
     }
-    // Anything else (e.g. legacy "trial" left in subscription_tier) → fall
-    // back to "starter" as the most-restrictive interpretation.
-    return "starter";
+    if (typeof window !== "undefined" && resolved) {
+      try { sessionStorage.setItem(CACHE_KEY, resolved); } catch { /* ignore */ }
+    }
+    return resolved;
   } catch (error) {
     console.error("Error getting firm plan:", error);
     return null;

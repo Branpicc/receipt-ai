@@ -21,6 +21,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { sendVerifyEmail } from "@/lib/email";
+import { isDisposableEmail } from "@/lib/disposableEmailDomains";
+
+const TRIAL_DAYS = 7;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,12 +51,54 @@ export async function POST(request: NextRequest) {
     const fullName: string = (body.fullName || "").trim();
     const email: string = (body.email || "").trim().toLowerCase();
     const password: string = body.password || "";
+    // verificationToken is the id of the phone_verifications row that
+    // the /verify-code endpoint marked verified. We re-validate it
+    // here so a client can't bypass the SMS gate.
+    const verificationToken: string = (body.verificationToken || "").trim();
 
     if (!fullName) return badRequest("Your full name is required.");
     if (fullName.length > 200) return badRequest("Name is too long.");
     if (!email || !EMAIL_RE.test(email)) return badRequest("Enter a valid email address.");
+    if (isDisposableEmail(email)) {
+      return badRequest("Disposable email addresses are not allowed for signup.");
+    }
     const pwErr = passwordError(password);
     if (pwErr) return badRequest(pwErr);
+    if (!verificationToken) {
+      return badRequest("Phone verification is required before creating an account.");
+    }
+
+    // Validate the verification token: must exist, be verified, not expired,
+    // and not already consumed by another signup attempt.
+    const { data: vRow } = await supabaseAdmin
+      .from("phone_verifications")
+      .select("id, phone, verified_at, expires_at, consumed_at")
+      .eq("id", verificationToken)
+      .maybeSingle();
+    if (!vRow) return badRequest("Invalid verification token. Restart the signup.");
+    if (!vRow.verified_at) return badRequest("Phone verification not completed. Re-enter the code.");
+    if (vRow.consumed_at) return badRequest("This verification has already been used. Restart the signup.");
+    // Tokens are good for 30 minutes after verification — gives the
+    // user time to fill in the rest of the form.
+    const verifiedAt = new Date(vRow.verified_at).getTime();
+    if (Date.now() - verifiedAt > 30 * 60 * 1000) {
+      return badRequest("Verification expired. Restart the signup.");
+    }
+    const signupPhone: string = vRow.phone;
+
+    // Enforce uniqueness in this code path too (defense in depth — the
+    // DB unique index is the final word).
+    const { data: phoneDupe } = await supabaseAdmin
+      .from("firms")
+      .select("id")
+      .eq("signup_phone", signupPhone)
+      .maybeSingle();
+    if (phoneDupe) {
+      return NextResponse.json(
+        { error: "This phone number is already linked to an account. Sign in instead." },
+        { status: 409 }
+      );
+    }
 
     // Reject duplicate auth users.
     let page = 1;
@@ -87,8 +132,12 @@ export async function POST(request: NextRequest) {
     const authUserId = created.user.id;
 
     // 2. Create the firm-of-one. account_type='personal' is the marker
-    //    every downstream gate keys on.
+    //    every downstream gate keys on. signup_phone is the unique
+    //    key we use to detect trial re-stacking (same phone twice =
+    //    409 in the send-code endpoint). trial_ends_at is the hard
+    //    deadline after which the dashboard paywall kicks in.
     const firmName = `${fullName} (personal)`;
+    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data: firm, error: firmErr } = await supabaseAdmin
       .from("firms")
       .insert([{
@@ -97,6 +146,8 @@ export async function POST(request: NextRequest) {
         account_type: "personal",
         subscription_plan: "personal",
         subscription_tier: "trial",
+        signup_phone: signupPhone,
+        trial_ends_at: trialEndsAt,
       }])
       .select("id")
       .single();
@@ -151,6 +202,19 @@ export async function POST(request: NextRequest) {
         { error: fuErr.message || "Failed to set up account." },
         { status: 500 }
       );
+    }
+
+    // Mark the SMS verification token as consumed so it can't be
+    // replayed for a second account.
+    try {
+      await supabaseAdmin
+        .from("phone_verifications")
+        .update({ consumed_at: new Date().toISOString() })
+        .eq("id", verificationToken);
+    } catch (e) {
+      // Non-blocking — the firm row's unique signup_phone is the
+      // strongest guard.
+      console.warn("[signup/personal] Failed to mark phone token consumed:", e);
     }
 
     // 5. Verification token + branded email.

@@ -158,7 +158,10 @@ export default function ClientCardManager() {
               receipts no matter how you tap or type.
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          {/* Grids collapse to single column on mobile so the
+              long-tip text under "Nickname" no longer wraps under the
+              Card Type buttons next to it. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Card Brand</label>
               <select
@@ -184,7 +187,7 @@ export default function ClientCardManager() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Card Type</label>
               <div className="flex gap-2">
@@ -216,12 +219,9 @@ export default function ClientCardManager() {
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="e.g. Company Visa — Apple Pay"
+                placeholder="e.g. Apple Pay variant"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
               />
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                Tip: include the variant (Apple Pay / Physical / Online) so you can tell them apart.
-              </p>
             </div>
           </div>
 

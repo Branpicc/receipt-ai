@@ -66,12 +66,19 @@ async function loadEmailAddress() {
 
       // Pick which client's address the banner should show.
       //   - client role: their own client
-      //   - accountant / firm_admin: whichever client is selected via the
-      //     ClientFilterDropdown (selectedClient from context). When none
-      //     is selected we hide the banner since the inbox spans many
+      //   - personal account: their own client (firm_admin role on a
+      //     firm-of-one, but firm_users.client_id IS set during personal
+      //     signup, so we pin to it without needing the user to pick
+      //     anything from the filter dropdown).
+      //   - accountant / firm_admin (real firm): whichever client is
+      //     selected via the ClientFilterDropdown. When none is
+      //     selected we hide the banner since the inbox spans many
       //     clients and there's no single forwarding address to show.
       let targetClientId: string | null = null;
-      if (firmUser?.role === "client" && firmUser?.client_id) {
+      if (firmUser?.client_id) {
+        // Covers both 'client' role and personal-account firm_admin
+        // (both have client_id pinned). For a real firm_admin without
+        // client_id this falls through to the filter-dropdown branch.
         targetClientId = firmUser.client_id;
       } else if (isFiltered && selectedClient) {
         targetClientId = selectedClient.id;

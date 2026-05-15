@@ -26,12 +26,27 @@ type Props = {
   tier: CelebrationTier;
   show: boolean;
   onDone: () => void;
+  // Optional — names of the goals that just completed. The banner
+  // displays them so the user knows exactly which goal(s) crossed the
+  // line. Especially important on the paycheck splitter where a single
+  // commit can finish multiple goals at once.
+  goalNames?: string[];
 };
 
 const CONFETTI_COLORS = ["#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#8b5cf6", "#ef4444"];
 const FIREWORK_BURSTS = ["🎆", "🎇", "✨", "🎉", "🌟"];
 
-export default function GoalCelebration({ tier, show, onDone }: Props) {
+export default function GoalCelebration({ tier, show, onDone, goalNames }: Props) {
+  // Build the banner headline once. If we have one name, show it
+  // directly; for multiple, list the first and "+ N more"; if none
+  // were passed (e.g. from manual contribute on a single goal where the
+  // parent already knows the name) fall back to a generic message.
+  const bannerLine = (() => {
+    if (!goalNames || goalNames.length === 0) return null;
+    if (goalNames.length === 1) return `${goalNames[0]} complete!`;
+    const [first, ...rest] = goalNames;
+    return `${first} + ${rest.length} more complete!`;
+  })();
   const [active, setActive] = useState(false);
 
   useEffect(() => {
@@ -75,12 +90,12 @@ export default function GoalCelebration({ tier, show, onDone }: Props) {
             );
           })}
           <div
-            className="absolute inset-0 flex items-center justify-center"
+            className="absolute inset-0 flex items-center justify-center px-6"
             style={{ animation: "gc-banner 3s ease-out" }}
           >
-            <div className="bg-white/95 dark:bg-dark-surface/95 backdrop-blur rounded-2xl px-8 py-6 shadow-2xl border-2 border-amber-300 dark:border-amber-700">
-              <div className="text-3xl font-bold text-amber-700 dark:text-amber-300 text-center">
-                🎉 Goal complete!
+            <div className="bg-white/95 dark:bg-dark-surface/95 backdrop-blur rounded-2xl px-8 py-6 shadow-2xl border-2 border-amber-300 dark:border-amber-700 max-w-md">
+              <div className="text-2xl md:text-3xl font-bold text-amber-700 dark:text-amber-300 text-center">
+                🎉 {bannerLine || "Goal complete!"}
               </div>
             </div>
           </div>
@@ -128,12 +143,12 @@ export default function GoalCelebration({ tier, show, onDone }: Props) {
         );
       })}
       <div
-        className="absolute inset-0 flex items-center justify-center"
+        className="absolute inset-0 flex items-center justify-center px-6"
         style={{ animation: "gc-mini-banner 2s ease-out" }}
       >
-        <div className="bg-white/95 dark:bg-dark-surface/95 backdrop-blur rounded-xl px-6 py-3 shadow-lg border border-green-300 dark:border-green-700">
-          <div className="text-lg font-semibold text-green-700 dark:text-green-400 text-center">
-            ✓ Goal complete
+        <div className="bg-white/95 dark:bg-dark-surface/95 backdrop-blur rounded-xl px-6 py-3 shadow-lg border border-green-300 dark:border-green-700 max-w-sm">
+          <div className="text-base md:text-lg font-semibold text-green-700 dark:text-green-400 text-center">
+            ✓ {bannerLine || "Goal complete"}
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingWrapper from "@/components/OnboardingWrapper";
+import TrialExpiredPaywall from "@/components/TrialExpiredPaywall";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
 import SidebarTour from "@/components/SidebarTour";
 import DailyCheckinRunner from "@/components/DailyCheckinRunner";
@@ -1028,6 +1029,10 @@ href="/dashboard/reports/clients"
 
           <SidebarTour />
           <DailyCheckinRunner />
+          {/* Personal-account paywall — self-gates on account_type and
+              trial_ends_at. Renders nothing for firm users or paying
+              personal users. */}
+          <TrialExpiredPaywall />
         </main>
       </div>
     </OnboardingWrapper>

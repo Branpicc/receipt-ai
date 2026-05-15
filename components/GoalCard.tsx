@@ -8,7 +8,7 @@
 // "this cycle" progress; open-ended goals show lifetime totals.
 
 import { useState } from "react";
-import { Pencil, Archive, Star, CalendarDays, Repeat } from "lucide-react";
+import { Pencil, Archive, Star, CalendarDays, Repeat, Trash2 } from "lucide-react";
 import { getLucideIcon } from "@/lib/goalIcons";
 import type { GoalWithProgress, ResetFrequency } from "@/lib/goalTypes";
 
@@ -17,6 +17,7 @@ type Props = {
   onContribute: () => void;
   onEdit: () => void;
   onArchive: () => void;
+  onDelete: () => void;
   onOpenHistory: () => void;
 };
 
@@ -28,7 +29,7 @@ const RESET_LABEL: Record<NonNullable<ResetFrequency>, string> = {
   per_paycheck: "Per paycheck",
 };
 
-export default function GoalCard({ goal, onContribute, onEdit, onArchive, onOpenHistory }: Props) {
+export default function GoalCard({ goal, onContribute, onEdit, onArchive, onDelete, onOpenHistory }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Cycle-based goals (bills, monthly investing) use current_cycle_cents
@@ -93,7 +94,7 @@ export default function GoalCard({ goal, onContribute, onEdit, onArchive, onOpen
           {menuOpen && (
             <>
               <button className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden tabIndex={-1} />
-              <div className="absolute right-0 top-full mt-1 z-20 w-32 bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-lg shadow-lg overflow-hidden">
+              <div className="absolute right-0 top-full mt-1 z-20 w-36 bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-lg shadow-lg overflow-hidden">
                 <button
                   onClick={() => { setMenuOpen(false); onEdit(); }}
                   className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover flex items-center gap-2"
@@ -102,9 +103,17 @@ export default function GoalCard({ goal, onContribute, onEdit, onArchive, onOpen
                 </button>
                 <button
                   onClick={() => { setMenuOpen(false); onArchive(); }}
-                  className="w-full px-3 py-2 text-left text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-hover flex items-center gap-2"
+                  title="Hide from the active list but keep history"
                 >
                   <Archive className="w-3.5 h-3.5" /> Archive
+                </button>
+                <button
+                  onClick={() => { setMenuOpen(false); onDelete(); }}
+                  className="w-full px-3 py-2 text-left text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                  title="Permanently remove this goal and all its contributions"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
                 </button>
               </div>
             </>

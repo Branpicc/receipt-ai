@@ -19,8 +19,10 @@ import {
   FileText,
   TrendingUp,
   Target,
+  PencilLine,
 } from "lucide-react";
 import { getMyAccountType } from "@/lib/getMyAccountType";
+import ManualReceiptModal from "@/components/ManualReceiptModal";
 
 type RecentReceipt = {
   id: string;
@@ -77,6 +79,10 @@ export default function ClientDashboardPage() {
   // and personal users (firm-of-one). The Goals card only shows for
   // personal users; clients have no goals feature.
   const [isPersonal, setIsPersonal] = useState(false);
+  // Manual receipt entry — for transactions captured from a bank
+  // statement when there's no actual receipt to upload. Open from the
+  // "Add manually" quick action below.
+  const [showManualModal, setShowManualModal] = useState(false);
 
   useEffect(() => {
     loadClientInfo();
@@ -476,6 +482,19 @@ function getCategoryColor(category: string) {
             </div>
           </Link>
         )}
+        {/* Add receipt manually — for transactions you only know about
+            from a bank statement. Visible to clients and personal users
+            alike; the modal handles client_id resolution. */}
+        <button
+          onClick={() => setShowManualModal(true)}
+          className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform text-left"
+        >
+          <PencilLine className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+          <div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">Add manually</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Bank-statement entry</div>
+          </div>
+        </button>
 <Link href="/dashboard/settings" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
           <SettingsIcon className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
           <div>
@@ -628,6 +647,23 @@ function getCategoryColor(category: string) {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No receipts yet</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">Tap the upload button above to add your first receipt.</p>
         </div>
+      )}
+
+      {/* Manual receipt entry modal — opens from the "Add manually"
+          quick action above. After save we refresh stats so the new
+          receipt shows up immediately. */}
+      {showManualModal && (
+        <ManualReceiptModal
+          clientId={clientId || undefined}
+          onClose={() => setShowManualModal(false)}
+          onSaved={() => {
+            setShowManualModal(false);
+            // Trigger the same refresh that file upload uses so the
+            // dashboard reflects the new receipt without a hard reload.
+            setUsageRefreshKey(k => k + 1);
+            loadClientInfo();
+          }}
+        />
       )}
     </div>
   );

@@ -13,7 +13,30 @@ import { supabase } from "./supabaseClient";
 
 export type AccountType = "firm" | "personal";
 
+const CACHE_KEY = "receipture-cache:v1:accountType";
+
+function readCache(): AccountType | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = sessionStorage.getItem(CACHE_KEY);
+    if (v === "firm" || v === "personal") return v;
+    return null;
+  } catch { return null; }
+}
+
+function writeCache(v: AccountType) {
+  if (typeof window === "undefined") return;
+  try { sessionStorage.setItem(CACHE_KEY, v); } catch { /* ignore */ }
+}
+
+// Cached per-tab session. Repeat calls (which happen on every page
+// navigation because layout + several pages each ask for accountType)
+// return instantly from sessionStorage. Cleared via clearWhoAmICache
+// from getFirmId.ts on sign-out.
 export async function getMyAccountType(): Promise<AccountType> {
+  const cached = readCache();
+  if (cached) return cached;
+
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return "firm";
@@ -31,7 +54,9 @@ export async function getMyAccountType(): Promise<AccountType> {
       .eq("id", firmUser.firm_id)
       .single();
 
-    return firm?.account_type === "personal" ? "personal" : "firm";
+    const t: AccountType = firm?.account_type === "personal" ? "personal" : "firm";
+    writeCache(t);
+    return t;
   } catch (err) {
     console.error("[getMyAccountType] failed:", err);
     return "firm";

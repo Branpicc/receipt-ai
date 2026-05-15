@@ -24,7 +24,7 @@ import GoalCard from "@/components/GoalCard";
 import { GoalEditorModal, GoalContributeModal } from "@/components/GoalModals";
 import GoalCelebration, { celebrationTier, type CelebrationTier } from "@/components/GoalCelebration";
 import PaycheckSplitter from "@/components/PaycheckSplitter";
-import { fetchGoalsWithProgress, archiveGoal, isGoalCompleted } from "@/lib/goalsApi";
+import { fetchGoalsWithProgress, archiveGoal, deleteGoal, isGoalCompleted } from "@/lib/goalsApi";
 import type { Goal, GoalWithProgress } from "@/lib/goalTypes";
 
 type Tab = "goals" | "splitter";
@@ -39,7 +39,7 @@ export default function GoalsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | undefined>();
   const [contributing, setContributing] = useState<GoalWithProgress | null>(null);
-  const [celebration, setCelebration] = useState<{ tier: CelebrationTier; key: number } | null>(null);
+  const [celebration, setCelebration] = useState<{ tier: CelebrationTier; key: number; goalNames: string[] } | null>(null);
 
   useEffect(() => {
     init();
@@ -83,7 +83,7 @@ export default function GoalsPage() {
     if (tier === "none") return;
     // `key` bumps so the overlay re-mounts even if the same tier fires
     // twice in a row.
-    setCelebration({ tier, key: Date.now() });
+    setCelebration({ tier, key: Date.now(), goalNames: [g.name] });
   }
 
   if (loading) {
@@ -145,8 +145,16 @@ export default function GoalsPage() {
             onContribute={(g) => setContributing(g)}
             onEdit={(g) => { setEditing(g); setEditorOpen(true); }}
             onArchive={async (g) => {
-              if (!confirm(`Archive "${g.name}"? You can recreate it any time — history is preserved.`)) return;
+              if (!confirm(`Archive "${g.name}"? It'll move out of the active list but history is kept.`)) return;
               await archiveGoal(g.id);
+              await loadGoals(clientId!);
+            }}
+            onDelete={async (g) => {
+              if (!confirm(
+                `Permanently delete "${g.name}"?\n\nThis removes the goal AND every contribution recorded against it. ` +
+                `This can't be undone — use Archive instead if you want to keep the history.`
+              )) return;
+              await deleteGoal(g.id);
               await loadGoals(clientId!);
             }}
           />
@@ -157,15 +165,27 @@ export default function GoalsPage() {
             goals={goals}
             onCommitted={async (completedGoalIds) => {
               await loadGoals(clientId);
-              // Trigger a celebration for each completed goal. If multiple
-              // completed at once we play the highest tier present.
+              // Trigger a celebration for each completed goal. If
+              // multiple completed at once we play the highest tier
+              // present and list every completed goal name in the
+              // banner — the splitter doesn't show per-goal feedback
+              // anywhere else, so without names the user wouldn't know
+              // which goal just crossed the line.
               if (completedGoalIds.length > 0) {
-                const tiers = completedGoalIds.map(id => {
-                  const g = goals.find(x => x.id === id);
-                  return g ? celebrationTier(g.category, g.is_important) : "none";
-                });
+                const completedGoals = completedGoalIds
+                  .map(id => goals.find(x => x.id === id))
+                  .filter((g): g is GoalWithProgress => !!g);
+                const tiers = completedGoals.map(g => celebrationTier(g.category, g.is_important));
                 const best = tiers.includes("fireworks") ? "fireworks" : tiers.includes("confetti") ? "confetti" : "none";
-                if (best !== "none") setCelebration({ tier: best, key: Date.now() });
+                if (best !== "none") {
+                  // Drop "bills" goals from the name list since they
+                  // don't visually celebrate — but we still keep the
+                  // banner if a non-bill goal also completed.
+                  const namedGoals = completedGoals
+                    .filter(g => celebrationTier(g.category, g.is_important) !== "none")
+                    .map(g => g.name);
+                  setCelebration({ tier: best, key: Date.now(), goalNames: namedGoals });
+                }
               }
             }}
           />
@@ -205,6 +225,7 @@ export default function GoalsPage() {
           key={celebration.key}
           tier={celebration.tier}
           show={true}
+          goalNames={celebration.goalNames}
           onDone={() => setCelebration(null)}
         />
       )}
@@ -223,12 +244,14 @@ function GoalsTab({
   onContribute,
   onEdit,
   onArchive,
+  onDelete,
 }: {
   goals: GoalWithProgress[];
   onCreateNew: () => void;
   onContribute: (g: GoalWithProgress) => void;
   onEdit: (g: GoalWithProgress) => void;
   onArchive: (g: GoalWithProgress) => void;
+  onDelete: (g: GoalWithProgress) => void;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
   const active = goals.filter(g => !isGoalCompleted(g));
@@ -281,6 +304,7 @@ function GoalsTab({
                   onEdit={() => onEdit(g)}
                   onOpenHistory={() => onEdit(g)}
                   onArchive={() => onArchive(g)}
+                  onDelete={() => onDelete(g)}
                 />
               ))}
             </div>
@@ -313,6 +337,7 @@ function GoalsTab({
                       onEdit={() => onEdit(g)}
                       onOpenHistory={() => onEdit(g)}
                       onArchive={() => onArchive(g)}
+                      onDelete={() => onDelete(g)}
                     />
                   ))}
                 </div>

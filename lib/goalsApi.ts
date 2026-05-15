@@ -140,24 +140,35 @@ export async function createGoal(input: {
   resetFrequency: ResetFrequency;
   notes: string | null;
 }): Promise<Goal> {
+  // Defensive: coerce numbers so a NaN never reaches Supabase (which
+  // would fail with an opaque "invalid input syntax" message).
+  const targetCentsSafe = Number.isFinite(input.targetCents) ? Math.max(0, Math.round(input.targetCents)) : 0;
+  const payload = {
+    client_id: input.clientId,
+    firm_id: input.firmId,
+    name: input.name,
+    icon: input.icon,
+    emoji: input.emoji,
+    category: input.category,
+    is_important: input.isImportant,
+    target_cents: targetCentsSafe,
+    target_date: input.targetDate,
+    reset_frequency: input.resetFrequency,
+    notes: input.notes,
+  };
   const { data, error } = await supabase
     .from("personal_goals")
-    .insert({
-      client_id: input.clientId,
-      firm_id: input.firmId,
-      name: input.name,
-      icon: input.icon,
-      emoji: input.emoji,
-      category: input.category,
-      is_important: input.isImportant,
-      target_cents: input.targetCents,
-      target_date: input.targetDate,
-      reset_frequency: input.resetFrequency,
-      notes: input.notes,
-    })
+    .insert(payload)
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    // Log the raw error to the console so users (and we) can see the
+    // actual Supabase complaint — "value too long", "violates not-null",
+    // "duplicate key value", etc. The Goal modal surfaces error.message
+    // to the UI, which previously hid the detail field.
+    console.error("[createGoal] Supabase error:", error, "payload was:", payload);
+    throw new Error(error.message + (error.details ? ` — ${error.details}` : ""));
+  }
   return data as Goal;
 }
 
@@ -173,6 +184,19 @@ export async function archiveGoal(goalId: string): Promise<void> {
   const { error } = await supabase
     .from("personal_goals")
     .update({ archived_at: new Date().toISOString() })
+    .eq("id", goalId);
+  if (error) throw error;
+}
+
+// Hard-delete a goal AND all its contributions. The cascade on the
+// FK definition (`goal_contributions.goal_id ... on delete cascade`)
+// drops the history rows automatically. Use this when the user wants
+// to truly remove a goal — archive is the soft alternative that keeps
+// the row around for analytics.
+export async function deleteGoal(goalId: string): Promise<void> {
+  const { error } = await supabase
+    .from("personal_goals")
+    .delete()
     .eq("id", goalId);
   if (error) throw error;
 }

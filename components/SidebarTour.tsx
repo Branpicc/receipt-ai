@@ -48,6 +48,13 @@ export default function SidebarTour() {
   const [showChapters, setShowChapters] = useState(false);
   const [targetRect, setTargetRect] = useState<ElementRect | null>(null);
   const seedingStartedRef = useRef(false);
+  // Personal accounts skip the demo-data seed because their tour
+  // doesn't reference clients/accountants/team. Setting this flag lets
+  // startTour bail straight to "running" without the multi-second
+  // /api/seed-demo-data call, which on mobile data could leave the
+  // "Setting up your demo" loader on screen long enough that users
+  // assumed the tour was broken.
+  const skipSeedRef = useRef(false);
 
   // ── Eligibility + replay listeners ─────────────────────────────────
   const checkEligibility = useCallback(async () => {
@@ -76,6 +83,7 @@ export default function SidebarTour() {
       const isPersonal = firm?.account_type === "personal";
 
       setAuthUserId(user.id);
+      skipSeedRef.current = isPersonal;
       const role = isPersonal ? "personal" : fu.role;
       // Eligibility: firm_admin/accountant for firm accounts, and
       // personal-account users get the tour too. Clients aren't
@@ -115,8 +123,19 @@ export default function SidebarTour() {
   async function startTour() {
     if (seedingStartedRef.current) return; // dedupe accidental double-fire
     seedingStartedRef.current = true;
-    setState({ kind: "seeding" });
 
+    // Personal accounts: skip the demo-seed entirely. Their tour
+    // references their own dashboard / receipts / reports / settings,
+    // not seeded clients/accountants. Going straight to "running"
+    // means no "Setting up your demo" loader and no wasted network
+    // round-trip on slow mobile connections.
+    if (skipSeedRef.current) {
+      seedingStartedRef.current = false;
+      setState({ kind: "running", chapterIdx: 0, stepIdx: 0 });
+      return;
+    }
+
+    setState({ kind: "seeding" });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
@@ -292,13 +311,16 @@ export default function SidebarTour() {
         <div className="fixed inset-0 bg-black/60 z-[55] pointer-events-auto" />
       )}
 
-      {/* Popover */}
+      {/* Popover — fixed-positioned card. The inner div caps width to
+          POPOVER_MAX_WIDTH (380px) and height to viewport minus 32px so
+          mobile users always see the action row at the bottom without
+          having to scroll the body of the page. */}
       <div
-        className="fixed z-[60] pointer-events-auto"
+        className="fixed z-[60] pointer-events-auto px-3"
         style={popoverStyle(step.position, targetRect)}
       >
         <div
-          className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl border border-gray-200 dark:border-dark-border w-full overflow-y-auto"
+          className="bg-white dark:bg-dark-surface rounded-2xl shadow-2xl border border-gray-200 dark:border-dark-border w-full overflow-y-auto mx-auto"
           style={{ maxWidth: POPOVER_MAX_WIDTH, maxHeight: "calc(100vh - 32px)" }}
         >
           <div className="p-5">
