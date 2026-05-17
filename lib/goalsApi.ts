@@ -96,16 +96,21 @@ export async function fetchGoalsWithProgress(clientId: string): Promise<GoalWith
 // Determines whether a goal should live in the "Completed" section.
 // A goal is considered completed when:
 //   • it has a positive target AND the lifetime contributions have
-//     hit/exceeded that target, AND it does NOT recur (recurring
-//     goals like bills always reset and shouldn't move to completed), OR
-//   • its target_date is in the past (regardless of progress) — e.g.
-//     a vacation goal whose trip date has come and gone, whether or
-//     not the user hit their savings target.
+//     hit/exceeded that target, AND it does NOT recur, OR
+//   • its target_date is in the past AND it does NOT recur.
+//
+// Recurring goals (bills with monthly reset, biweekly investments,
+// etc.) never auto-complete — they cycle by design, so a past
+// target_date on a recurring goal just means "the next cycle starts".
+// Previously the date-based branch fired for any goal regardless of
+// reset_frequency, which pushed monthly bills into the Completed
+// section as soon as the user's target_date drifted into the past.
 //
 // Used by the goals page to split the grid into Active and Completed.
 export function isGoalCompleted(g: GoalWithProgress): boolean {
   const recurring = !!g.reset_frequency && g.reset_frequency !== "never";
-  if (g.target_cents > 0 && !recurring && g.contributed_total_cents >= g.target_cents) {
+  if (recurring) return false;
+  if (g.target_cents > 0 && g.contributed_total_cents >= g.target_cents) {
     return true;
   }
   if (g.target_date) {

@@ -228,13 +228,19 @@ export default function LandingPage() {
             </span>
           </div>
           <div className="hidden md:flex items-center gap-8">
-{["Features", "How It Works", "Pricing", "Contact"].map(item => (
+{[
+  { label: "Features", href: "#features" },
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "For Individuals", href: "#individuals" },
+  { label: "Contact", href: "#contact" },
+].map(item => (
               <a
-                key={item}
-                href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
+                key={item.label}
+                href={item.href}
                                 className={`text-sm font-medium transition-colors hover:text-blue-500 ${scrolled ? "text-gray-600" : "text-white/80"}`}
               >
-                {item}
+                {item.label}
               </a>
             ))}
           </div>
@@ -264,12 +270,18 @@ export default function LandingPage() {
         </div>
         {menuOpen && (
           <div className="md:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-3">
-            {["Features", "How It Works", "Pricing", "Contact"].map(item => (
-              <a key={item} href={`#${item.toLowerCase().replace(" ", "-")}`} className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>
-                {item}
+            {[
+              { label: "Features", href: "#features" },
+              { label: "How It Works", href: "#how-it-works" },
+              { label: "Pricing", href: "#pricing" },
+              { label: "For Individuals", href: "#individuals" },
+              { label: "Contact", href: "#contact" },
+            ].map(item => (
+              <a key={item.label} href={item.href} className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>
+                {item.label}
               </a>
             ))}
-            <Link href="/personal" className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>For individuals</Link>
+            <Link href="/personal" className="block text-blue-600 font-medium" onClick={() => setMenuOpen(false)}>Personal plan page →</Link>
             <Link href="/login" className="block text-gray-700 font-medium" onClick={() => setMenuOpen(false)}>Sign In</Link>
             <Link
               href="/signup"
@@ -327,6 +339,19 @@ export default function LandingPage() {
                 Or request a demo
               </a>
             </div>
+
+            {/* Personal-account callout — the firm pitch above is for
+                accounting firms, but Receipture also has a $6.99/mo
+                personal plan for individuals. The nav link alone was
+                too quiet — most visitors never noticed it. This sits
+                directly under the firm CTA so anyone who isn't a firm
+                has a clear next step. */}
+            <p className="mt-6 text-sm text-white/60 fade-up-delay-2">
+              Not running a firm?{" "}
+              <Link href="/personal" className="text-blue-300 hover:text-blue-200 underline underline-offset-4 font-medium">
+                See Receipture for Individuals →
+              </Link>
+            </p>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 mt-20 max-w-2xl mx-auto">
@@ -907,6 +932,108 @@ export default function LandingPage() {
           <p className="text-center text-sm text-gray-400 mt-8">
             All plans include a 7-day free trial. No credit card required.
           </p>
+        </div>
+      </section>
+
+      {/* PERSONAL VERSION — a dedicated section between Pricing (firm
+          tiers) and Demo Request (firm). Surfaces the personal
+          experience so visitors who aren't running a firm have a
+          clear, prominent path to /personal instead of hunting for
+          the small nav link. */}
+      <section id="individuals" className="py-24 bg-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold uppercase tracking-widest mb-4">
+              <UserIcon className="w-3 h-3" />
+              For Individuals
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Not running a firm? <span className="text-blue-600">We've got you too.</span>
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Receipture for Individuals is built for solo earners, freelancers,
+              and self-employed Canadians — all the AI-powered receipt capture
+              and CRA tax-prep, just for you.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+              <div className="flex items-start gap-3 mb-3">
+                <Camera className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Snap, email, or text it in</h3>
+                  <p className="text-sm text-gray-600">
+                    Photograph a receipt, forward an order email, or text a photo —
+                    our AI extracts vendor, date, total, tax, and category.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+              <div className="flex items-start gap-3 mb-3">
+                <Bot className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">AI categorization — no accountant required</h3>
+                  <p className="text-sm text-gray-600">
+                    Receipts categorize themselves. You review anything that looks
+                    off. No middleman, no chasing approvals.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+              <div className="flex items-start gap-3 mb-3">
+                <Download className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">CRA tax-prep, in one .xlsx</h3>
+                  <p className="text-sm text-gray-600">
+                    Self-employed? Get T2125, capital cost allowance, home office,
+                    and quarterly HST all rolled into a styled Excel workbook —
+                    hand it to your tax preparer.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+              <div className="flex items-start gap-3 mb-3">
+                <BarChart3 className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Goals + paycheck splitter</h3>
+                  <p className="text-sm text-gray-600">
+                    Save for a vacation, pay down a card, budget monthly bills.
+                    Auto-divide every paycheck across your goals with one click.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-3xl p-8 md:p-12 text-center text-white">
+            <div className="flex items-baseline justify-center gap-2 mb-2">
+              <span className="text-5xl font-bold">$6.99</span>
+              <span className="text-blue-200">/month</span>
+            </div>
+            <p className="text-blue-100 text-sm mb-1">or $54.99/year — save ~34%</p>
+            <p className="text-blue-100 text-sm mb-6">7-day free trial · No credit card required</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/signup/personal"
+                className="px-8 py-3 bg-white text-blue-700 font-semibold rounded-xl hover:bg-blue-50 transition-colors"
+              >
+                Start free trial →
+              </Link>
+              <Link
+                href="/personal"
+                className="px-8 py-3 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 transition-colors"
+              >
+                See all features
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 

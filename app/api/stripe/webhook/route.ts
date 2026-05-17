@@ -11,7 +11,10 @@ const supabase = createClient(
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
-// Map Stripe price ID to plan tier
+// Map Stripe price ID to plan tier. Personal is its own tier
+// (firm-of-one, $6.99/mo or $54.99/yr) — without this branch the
+// webhook would fall back to 'starter' for personal subscribers,
+// silently mis-classifying them as firm clients.
 function getPlanFromPriceId(priceId: string): string {
   const starterIds = [
     STRIPE_PRICES.STARTER,
@@ -28,6 +31,12 @@ function getPlanFromPriceId(priceId: string): string {
     process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL,
   ].filter(Boolean);
 
+  const personalIds = [
+    STRIPE_PRICES.PERSONAL,
+    STRIPE_PRICES.PERSONAL_ANNUAL,
+  ].filter(Boolean);
+
+  if (personalIds.includes(priceId)) return 'personal';
   if (starterIds.includes(priceId)) return 'starter';
   if (professionalIds.includes(priceId)) return 'professional';
   if (enterpriseIds.includes(priceId)) return 'enterprise';
@@ -36,12 +45,14 @@ function getPlanFromPriceId(priceId: string): string {
   return 'starter';
 }
 
-// Map plan tier to client/user limits
+// Map plan tier to client/user limits.
 function getLimitsForPlan(plan: string) {
   const limits: Record<string, { client_limit: number; user_limit: number }> = {
     starter: { client_limit: 5, user_limit: 1 },
     professional: { client_limit: 20, user_limit: 3 },
     enterprise: { client_limit: 999999, user_limit: 999999 },
+    // Personal: firm-of-one (the user themselves), no team.
+    personal: { client_limit: 1, user_limit: 1 },
   };
   return limits[plan] || limits.starter;
 }

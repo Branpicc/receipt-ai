@@ -730,7 +730,13 @@ const currentFolderName = folders.find(f => f.id === receipt.folder_id)?.name;
               ) : activePreviewType === 'image' && fileUrl ? (
                 <div>
                   <div className="overflow-auto max-h-[780px]">
-                    <img src={fileUrl} alt="Receipt" className="w-full object-contain rounded-lg" />
+                    <img
+                      src={fileUrl}
+                      alt="Receipt"
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full object-contain rounded-lg"
+                    />
                   </div>
                   <div className="mt-3">
                     <a className="text-sm underline text-blue-600 hover:text-blue-800" href={fileUrl} target="_blank" rel="noreferrer">Open image in new tab</a>

@@ -3,6 +3,22 @@
 import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
+import {
+  Rocket,
+  Camera,
+  Smartphone,
+  Wallet,
+  MessageSquare,
+  BarChart3,
+  CreditCard,
+  Users,
+  ClipboardList,
+  Flag,
+  Mail,
+  Building2,
+  Settings as SettingsIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 type InteractiveType =
@@ -20,11 +36,14 @@ type Step = {
   interactive?: InteractiveType;
 };
 
+// Module icons used to be string emojis rendered as text. Switched to
+// lucide components so the training tab matches the rest of the app's
+// iconography.
 type Module = {
   id: string;
   title: string;
   description: string;
-  icon: string;
+  icon: LucideIcon;
   duration: string;
   steps: Step[];
 };
@@ -35,7 +54,7 @@ const clientModules: Module[] = [
     id: "client-getting-started",
     title: "Welcome to ReceiptAI",
     description: "Everything you need to know to get started",
-    icon: "🚀",
+    icon: Rocket,
     duration: "3 min",
     steps: [
       {
@@ -59,7 +78,7 @@ const clientModules: Module[] = [
     id: "client-uploading",
     title: "Uploading Receipts",
     description: "Try uploading a real receipt right now",
-    icon: "📸",
+    icon: Camera,
     duration: "5 min",
     steps: [
       {
@@ -100,7 +119,7 @@ const clientModules: Module[] = [
     id: "client-sms",
     title: "SMS Notifications",
     description: "How to reply to receipt purpose requests",
-    icon: "📱",
+    icon: Smartphone,
     duration: "3 min",
     steps: [
       {
@@ -129,7 +148,7 @@ const clientModules: Module[] = [
     id: "client-budget",
     title: "Budget Tracking",
     description: "Set a real budget limit right now",
-    icon: "💰",
+    icon: Wallet,
     duration: "4 min",
     steps: [
       {
@@ -154,7 +173,7 @@ const clientModules: Module[] = [
     id: "client-messages",
     title: "Messaging Your Accountant",
     description: "Ask questions and get help without leaving the app",
-    icon: "💬",
+    icon: MessageSquare,
     duration: "2 min",
     steps: [
       {
@@ -188,7 +207,7 @@ const personalModules: Module[] = [
     id: "personal-getting-started",
     title: "Welcome to Receipture",
     description: "Everything you need to know to get started",
-    icon: "🚀",
+    icon: Rocket,
     duration: "3 min",
     steps: [
       {
@@ -212,7 +231,7 @@ const personalModules: Module[] = [
     id: "personal-uploading",
     title: "Uploading Receipts",
     description: "Three ways in: photo, email, or text",
-    icon: "📸",
+    icon: Camera,
     duration: "5 min",
     steps: [
       {
@@ -247,7 +266,7 @@ const personalModules: Module[] = [
     id: "personal-sms",
     title: "SMS Notifications",
     description: "Reply to purpose prompts without opening the app",
-    icon: "📱",
+    icon: Smartphone,
     duration: "3 min",
     steps: [
       {
@@ -276,7 +295,7 @@ const personalModules: Module[] = [
     id: "personal-budget-reports",
     title: "Budgets &amp; Reports",
     description: "Stay on top of spending and tax-prep",
-    icon: "📊",
+    icon: BarChart3,
     duration: "5 min",
     steps: [
       {
@@ -306,7 +325,7 @@ const personalModules: Module[] = [
     id: "personal-cards",
     title: "Registering Your Cards",
     description: "Catch personal-card usage on business receipts",
-    icon: "💳",
+    icon: CreditCard,
     duration: "2 min",
     steps: [
       {
@@ -334,7 +353,7 @@ const accountantModules: Module[] = [
     id: "accountant-getting-started",
     title: "Getting Started as an Accountant",
     description: "Your role, access, and daily workflow",
-    icon: "🚀",
+    icon: Rocket,
     duration: "4 min",
     steps: [
       {
@@ -358,7 +377,7 @@ const accountantModules: Module[] = [
     id: "accountant-clients",
     title: "Adding & Managing Clients",
     description: "Add a real client and invite them right now",
-    icon: "👥",
+    icon: Users,
     duration: "5 min",
     steps: [
       {
@@ -389,7 +408,7 @@ const accountantModules: Module[] = [
     id: "accountant-receipts",
     title: "Processing Receipts",
     description: "Categorizing, reviewing, and approving receipts",
-    icon: "📋",
+    icon: ClipboardList,
     duration: "6 min",
     steps: [
       {
@@ -423,7 +442,7 @@ const accountantModules: Module[] = [
     id: "accountant-flags",
     title: "Handling Flags",
     description: "Reviewing and resolving flagged receipts",
-    icon: "🚩",
+    icon: Flag,
     duration: "4 min",
     steps: [
       {
@@ -452,7 +471,7 @@ const accountantModules: Module[] = [
     id: "accountant-email",
     title: "Email Inbox",
     description: "Processing receipts forwarded by email",
-    icon: "📧",
+    icon: Mail,
     duration: "3 min",
     steps: [
       {
@@ -476,7 +495,7 @@ const accountantModules: Module[] = [
     id: "accountant-reports",
     title: "Reports & Tax Codes",
     description: "Generating reports and understanding tax codes",
-    icon: "📊",
+    icon: BarChart3,
     duration: "4 min",
     steps: [
 {
@@ -505,7 +524,7 @@ const accountantModules: Module[] = [
     id: "accountant-sms",
     title: "SMS Setup for Clients",
     description: "Setting up and managing client SMS notifications",
-    icon: "📱",
+    icon: Smartphone,
     duration: "3 min",
     steps: [
       {
@@ -533,7 +552,7 @@ const firmAdminModules: Module[] = [
     id: "admin-getting-started",
     title: "Your Role as Firm Admin",
     description: "What you oversee and how to use your dashboard",
-    icon: "🏢",
+    icon: Building2,
     duration: "4 min",
     steps: [
       {
@@ -557,7 +576,7 @@ const firmAdminModules: Module[] = [
     id: "admin-setup",
     title: "Setting Up Your Firm",
     description: "Add your first client and invite your first accountant",
-    icon: "⚙️",
+    icon: SettingsIcon,
     duration: "6 min",
     steps: [
       {
@@ -594,7 +613,7 @@ const firmAdminModules: Module[] = [
     id: "admin-monitoring",
     title: "Monitoring Your Firm",
     description: "Keeping track of performance and catching issues",
-    icon: "📊",
+    icon: BarChart3,
     duration: "4 min",
     steps: [
       {
@@ -623,7 +642,7 @@ const firmAdminModules: Module[] = [
     id: "admin-billing",
     title: "Billing & Plan Management",
     description: "Understanding your subscription and managing costs",
-    icon: "💳",
+    icon: CreditCard,
     duration: "3 min",
     steps: [
       {
@@ -647,7 +666,7 @@ const firmAdminModules: Module[] = [
     id: "admin-messages",
     title: "Messaging & Communication",
     description: "Staying connected with your team and clients",
-    icon: "💬",
+    icon: MessageSquare,
     duration: "3 min",
     steps: [
       {
@@ -1203,8 +1222,8 @@ setCompletedModules(prev => {
             ← Back to modules
           </button>
           <span className="text-gray-400">•</span>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {activeModule.icon} {activeModule.title}
+          <span className="text-sm text-gray-500 dark:text-gray-400 inline-flex items-center gap-1.5">
+            <activeModule.icon className="w-3.5 h-3.5" /> {activeModule.title}
           </span>
         </div>
 
@@ -1335,7 +1354,7 @@ const allDone = completedModules.length === modules.length && modules.length > 0
                 onClick={() => openModule(module)}
                 className="text-left p-3 rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10 flex items-center gap-3 hover:bg-green-100 dark:hover:bg-green-900/20 transition-colors"
               >
-                <span className="text-xl">{module.icon}</span>
+                <module.icon className="w-5 h-5 text-green-700 dark:text-green-400 flex-shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-900 dark:text-white">{module.title}</span>
@@ -1354,7 +1373,7 @@ const allDone = completedModules.length === modules.length && modules.length > 0
               className="text-left p-5 rounded-xl border-2 border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:border-accent-300 dark:hover:border-accent-600 hover:shadow-md transition-all"
             >
               <div className="flex items-start justify-between mb-2">
-                <span className="text-3xl">{module.icon}</span>
+                <module.icon className="w-7 h-7 text-gray-600 dark:text-gray-400" />
                 {hasInteractiveSteps && (
                   <span className="text-xs px-2 py-0.5 bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 rounded-full">
                     ✋ Hands-on

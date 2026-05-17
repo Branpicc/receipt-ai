@@ -27,6 +27,34 @@ type Plan = {
   subscription_tier: string | null;
 };
 
+// Cache the active-subscription answer for 60 seconds. The dashboard
+// layout remounts this component on every page navigation; without the
+// cache, that fires a fresh Supabase round-trip each time even though
+// a user's subscription status almost never changes mid-session. 60s
+// is short enough that a webhook-triggered upgrade is reflected
+// quickly, long enough to absorb routine navigation.
+const CACHE_KEY = "receipture-cache:v1:paywallState";
+const CACHE_TTL_MS = 60 * 1000;
+type CachedState = {
+  shouldBlock: boolean;
+  trialEndsAt: string | null; // ISO
+  fetchedAt: number;
+};
+function readCache(): CachedState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as CachedState;
+    if (Date.now() - v.fetchedAt > CACHE_TTL_MS) return null;
+    return v;
+  } catch { return null; }
+}
+function writeCache(v: CachedState) {
+  if (typeof window === "undefined") return;
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+}
+
 export default function TrialExpiredPaywall() {
   const [shouldBlock, setShouldBlock] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -34,12 +62,30 @@ export default function TrialExpiredPaywall() {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Hydrate from cache immediately so the paywall doesn't briefly
+    // disappear-then-reappear on quick navigations.
+    const cached = readCache();
+    if (cached) {
+      if (cancelled) return;
+      setShouldBlock(cached.shouldBlock);
+      if (cached.trialEndsAt) setTrialEndsAt(new Date(cached.trialEndsAt));
+      // Still refresh in the background so a paywall lift triggered by
+      // a webhook (e.g. user just subscribed in another tab) is picked
+      // up within the next minute.
+    }
+
     (async () => {
       try {
         // Personal-only: firm accounts have their own seat-count gating
         // and don't use this paywall.
         const at = await getMyAccountType();
-        if (at !== "personal") return;
+        if (at !== "personal") {
+          // Cache the "no block" decision so we don't re-run the check
+          // on every page nav for firm accounts either.
+          writeCache({ shouldBlock: false, trialEndsAt: null, fetchedAt: Date.now() });
+          return;
+        }
         const firmId = await getMyFirmId();
         const { data } = await supabase
           .from("firms")
@@ -48,18 +94,26 @@ export default function TrialExpiredPaywall() {
           .single<Plan>();
         if (cancelled || !data) return;
 
-        // Active paying customer? Never block.
-        if (data.subscription_status === "active") return;
+        let nextBlock = false;
+        let nextTrialEndsAt: string | null = null;
 
-        // Trial deadline check. If trial_ends_at is null we have no
-        // hard deadline (legacy account created before the column
-        // existed) — be permissive.
-        if (!data.trial_ends_at) return;
-        const ends = new Date(data.trial_ends_at);
-        setTrialEndsAt(ends);
-        if (Date.now() >= ends.getTime()) {
-          setShouldBlock(true);
+        // Active paying customer? Never block.
+        if (data.subscription_status !== "active") {
+          // Trial deadline check. If trial_ends_at is null we have no
+          // hard deadline (legacy account created before the column
+          // existed) — be permissive.
+          if (data.trial_ends_at) {
+            const ends = new Date(data.trial_ends_at);
+            nextTrialEndsAt = ends.toISOString();
+            if (Date.now() >= ends.getTime()) nextBlock = true;
+          }
         }
+
+        if (!cancelled) {
+          setShouldBlock(nextBlock);
+          setTrialEndsAt(nextTrialEndsAt ? new Date(nextTrialEndsAt) : null);
+        }
+        writeCache({ shouldBlock: nextBlock, trialEndsAt: nextTrialEndsAt, fetchedAt: Date.now() });
       } catch (err) {
         console.warn("[TrialExpiredPaywall] check failed:", err);
       }
