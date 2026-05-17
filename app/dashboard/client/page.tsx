@@ -475,7 +475,7 @@ function getCategoryColor(category: string) {
             directly under Categories ("My Spending") in the grid. */}
         {isPersonal && (
           <Link href="/dashboard/goals" className="bg-white dark:bg-dark-surface rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-100 dark:border-dark-border active:scale-95 transition-transform">
-            <Target className="w-6 h-6 text-accent-500 flex-shrink-0" />
+            <Target className="w-6 h-6 text-gray-500 dark:text-gray-400 flex-shrink-0" />
             <div>
               <div className="text-sm font-semibold text-gray-900 dark:text-white">Goals</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Save & track progress</div>

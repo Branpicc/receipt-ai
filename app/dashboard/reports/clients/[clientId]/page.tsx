@@ -11,6 +11,13 @@ import {
 } from "recharts";
 import { useFeatureGate } from "@/lib/useFeatureGate";
 import UpgradeRequired from "@/components/UpgradeRequired";
+import {
+  Calendar,
+  BarChart3,
+  FileText,
+  Lightbulb,
+  AlertTriangle,
+} from "lucide-react";
 
 type ClientReport = {
   id: string;
@@ -342,10 +349,11 @@ async function generateCurrentMonthReport() {
                 <button
                   onClick={generateFiscalYearReport}
                   disabled={generating}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
                   title={`Aggregates the 12 months ending in month ${fiscalYearEndMonth}. Configure on the client.`}
                 >
-                  {generating ? "Generating..." : "📅 Generate Fiscal Year"}
+                  <Calendar className="w-4 h-4" />
+                  {generating ? "Generating..." : "Generate Fiscal Year"}
                 </button>
               </>
             )}
@@ -360,7 +368,7 @@ async function generateCurrentMonthReport() {
 
         {reports.length === 0 ? (
           <div className="text-center py-16 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border">
-            <div className="text-5xl mb-4">📊</div>
+            <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
             <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">No reports yet</p>
             <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
               Reports are auto-generated at the end of each month
@@ -448,7 +456,7 @@ async function generateCurrentMonthReport() {
                     onClick={() => window.print()}
                     className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
                   >
-                    <span>📄</span> Download PDF
+                    <FileText className="w-4 h-4" /> Download PDF
                   </button>
                 </div>
                 {/* AI Summary */}
@@ -515,7 +523,7 @@ async function generateCurrentMonthReport() {
                 {/* Tax savings callout */}
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">💡</span>
+                    <Lightbulb className="w-6 h-6 text-green-700 dark:text-green-400" />
                     <div>
                       <p className="font-semibold text-green-900 dark:text-green-100">
                         Potential Tax Advantage
@@ -594,8 +602,8 @@ async function generateCurrentMonthReport() {
                                 {bc.category}
                               </span>
                               {bc.is_over_budget && (
-                                <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded">
-                                  ⚠️ Over
+                                <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" /> Over
                                 </span>
                               )}
                             </div>
@@ -636,7 +644,9 @@ async function generateCurrentMonthReport() {
 
 {/* Report Totals Summary */}
                 <div className="bg-gray-50 dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📊 Report Summary</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" /> Report Summary
+                  </h2>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                     <div>
                       <div className="text-gray-500 dark:text-gray-400">Total Receipts</div>

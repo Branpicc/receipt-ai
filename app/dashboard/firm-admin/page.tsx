@@ -5,6 +5,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { useRouter } from "next/navigation";
+import {
+  Receipt as ReceiptIcon,
+  CheckCircle2,
+  Eye,
+  AlertTriangle,
+  Mail,
+  Users,
+  BarChart3,
+} from "lucide-react";
 
 type AccountantStats = {
   accountant_id: string;
@@ -315,7 +324,7 @@ if (range === "week") {
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-gray-500 dark:text-gray-400">Total Receipts</div>
-              <div className="text-2xl">📄</div>
+              <ReceiptIcon className="w-6 h-6 text-gray-400 dark:text-gray-500" />
             </div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
               {firmOverview?.total_receipts || 0}
@@ -325,7 +334,7 @@ if (range === "week") {
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-gray-500 dark:text-gray-400">Categorized</div>
-              <div className="text-2xl">✅</div>
+              <CheckCircle2 className="w-6 h-6 text-green-500" />
             </div>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
               {firmOverview?.total_categorized || 0}
@@ -338,7 +347,7 @@ if (range === "week") {
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-gray-500 dark:text-gray-400">Needs Review</div>
-              <div className="text-2xl">👀</div>
+              <Eye className="w-6 h-6 text-orange-500" />
             </div>
             <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
               {firmOverview?.total_needs_review || 0}
@@ -348,7 +357,7 @@ if (range === "week") {
           <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-gray-500 dark:text-gray-400">Flagged Issues</div>
-              <div className="text-2xl">⚠️</div>
+              <AlertTriangle className="w-6 h-6 text-red-500" />
             </div>
             <div className="text-3xl font-bold text-red-600 dark:text-red-400">
               {firmOverview?.total_flagged || 0}
@@ -358,8 +367,8 @@ if (range === "week") {
 
         {/* Email Stats */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 mb-8 border border-transparent dark:border-dark-border">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            📧 Email Processing
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Mail className="w-5 h-5" /> Email Processing
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
@@ -385,13 +394,13 @@ if (range === "week") {
 
         {/* Accountant Performance (Coming Soon) */}
         <div className="bg-white dark:bg-dark-surface rounded-lg shadow-sm p-6 border border-transparent dark:border-dark-border">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            👥 Accountant Performance
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5" /> Accountant Performance
           </h2>
-          
+
           {accountantStats.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-5xl mb-4">📊</div>
+              <BarChart3 className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
 <p className="text-gray-500 dark:text-gray-400 mb-2">
                 No accountants found
               </p>

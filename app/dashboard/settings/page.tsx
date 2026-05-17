@@ -7,6 +7,21 @@ import { restartOnboarding } from "@/lib/useOnboarding";
 import ClientCardManager from "@/components/ClientCardManager";
 import TrainingModules from "@/components/TrainingModules";
 import { useToast } from "@/components/Toast";
+import {
+  User,
+  Bell,
+  CreditCard,
+  Mail,
+  Lock,
+  Compass,
+  Settings as SettingsIcon,
+  GraduationCap,
+  Target,
+  Eraser,
+  Smartphone,
+  Download,
+  type LucideIcon,
+} from "lucide-react";
 
 const SMS_TIMING_OPTIONS = [
   { value: "instant", label: "Instantly" },
@@ -705,17 +720,22 @@ try {
   const isClient = user.role === "client";
   const isAccountant = user.role === "accountant" || user.role === "firm_admin" || user.role === "owner";
 
-  const tabs = [
-    { id: "profile" as Tab, label: "Profile", icon: "👤" },
-    { id: "notifications" as Tab, label: "Notifications", icon: "🔔" },
-    ...(user.role === "firm_admin" || user.role === "owner" ? [{ id: "billing" as Tab, label: "Billing & Plan", icon: "💳" }] : []),
+  // Tabs use lucide icon components to match the rest of the app's
+  // icon system. `icon` is the component reference; rendered inline
+  // below as <tab.icon className="..." />.
+  const tabs: { id: Tab; label: string; icon: LucideIcon }[] = [
+    { id: "profile" as Tab, label: "Profile", icon: User },
+    { id: "notifications" as Tab, label: "Notifications", icon: Bell },
+    ...(user.role === "firm_admin" || user.role === "owner"
+      ? [{ id: "billing" as Tab, label: "Billing & Plan", icon: CreditCard }]
+      : []),
     // Email forwarding belongs to anyone who actually uses a personal
     // receipt inbox — clients and personal-account users both do.
-    ...(isClient || isPersonal ? [{ id: "email" as Tab, label: "Email Forwarding", icon: "📧" }] : []),
-    { id: "security" as Tab, label: "Security", icon: "🔒" },
-    { id: "walkthroughs" as Tab, label: "Walk-throughs", icon: "🧭" },
-    { id: "advanced" as Tab, label: "Advanced", icon: "⚙️" },
-    { id: "training" as Tab, label: "Training", icon: "🎓" },
+    ...(isClient || isPersonal ? [{ id: "email" as Tab, label: "Email Forwarding", icon: Mail }] : []),
+    { id: "security" as Tab, label: "Security", icon: Lock },
+    { id: "walkthroughs" as Tab, label: "Walk-throughs", icon: Compass },
+    { id: "advanced" as Tab, label: "Advanced", icon: SettingsIcon },
+    { id: "training" as Tab, label: "Training", icon: GraduationCap },
   ];
 
   const planNames: Record<string, string> = {
@@ -749,7 +769,7 @@ onClick={() => {
                     : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                <span>{tab.icon}</span>
+                <tab.icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -772,8 +792,8 @@ onClick={() => {
                     <div className="border border-gray-200 dark:border-dark-border rounded-lg p-4 bg-gray-50 dark:bg-dark-bg/40">
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div>
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                            📱 Receipt Text Messages
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" /> Receipt Text Messages
                           </h3>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             Get a text asking the purpose when you submit a receipt. Reply once and we save it automatically.
@@ -1370,7 +1390,7 @@ if (eligibility.eligible) {
               
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <div className="flex gap-3">
-                  <span className="text-2xl">📧</span>
+                  <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                   <div>
                     <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-1">
                       How Email Forwarding Works
@@ -1512,7 +1532,7 @@ if (eligibility.eligible) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
-              <div className="text-2xl mb-2">🎯</div>
+              <Target className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                 Onboarding walkthrough
               </h3>
@@ -1532,7 +1552,7 @@ if (eligibility.eligible) {
                 accounts (each has its own chapter set in
                 sidebarTourChapters.ts). */}
             <div className="rounded-xl border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-surface">
-              <div className="text-2xl mb-2">🧭</div>
+              <Compass className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                 Sidebar tour
               </h3>
@@ -1553,7 +1573,7 @@ if (eligibility.eligible) {
               for them. */}
           {!isPersonal && (user?.role === "firm_admin" || user?.role === "owner") && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800 p-4 bg-amber-50 dark:bg-amber-900/10">
-              <div className="text-2xl mb-2">🧹</div>
+              <Eraser className="w-6 h-6 mb-2 text-amber-700 dark:text-amber-400" />
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                 Clear demo data
               </h3>
@@ -1584,9 +1604,9 @@ if (eligibility.eligible) {
             </p>
             <button
               onClick={exportData}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 inline-flex items-center gap-2"
             >
-              📊 Export Receipts (CSV)
+              <Download className="w-4 h-4" /> Export Receipts (CSV)
             </button>
           </div>
 

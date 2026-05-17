@@ -556,7 +556,7 @@ href="/dashboard/reports/clients"
                 with CSV + .xlsx export. */}
             {isPersonal && (
               <a href="/dashboard/reports/goals" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-                <Target className="w-6 h-6 mb-2 text-accent-500" />
+                <Target className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
                 <div className="font-medium text-gray-900 dark:text-white">Goal Contributions</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">What you contributed to each goal</div>
               </a>

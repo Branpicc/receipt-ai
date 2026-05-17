@@ -11,6 +11,23 @@ import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import { shouldExcludeDemoFromExport } from "@/lib/demoExport";
 import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
+import {
+  ClipboardList,
+  AlertTriangle,
+  CheckCircle2,
+  HelpCircle,
+  Flag,
+  Briefcase,
+  Home,
+  Search,
+  Folder,
+  Upload,
+  Download,
+  BarChart3,
+  Pencil,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 
 type Receipt = {
   id: string;
@@ -518,12 +535,15 @@ XLSX.writeFile(wb, `Receipts-${new Date().toISOString().split('T')[0]}.xlsx`);
     }
   }
 
-  const statusButtons: { label: string; value: StatusFilter; icon: string }[] = [
-    { label: "All", value: "all", icon: "📋" },
-    { label: "Needs Review", value: "needs_review", icon: "⚠️" },
-    { label: "Categorized", value: "categorized", icon: "✅" },
-    { label: "Uncategorized", value: "uncategorized", icon: "❓" },
-    { label: "Flagged", value: "flagged", icon: "🚩" },
+  // Status filter pills — icon is a lucide component reference; the
+  // render site below uses <btn.icon className="..." /> so the chip
+  // matches the rest of the app's iconography.
+  const statusButtons: { label: string; value: StatusFilter; icon: LucideIcon }[] = [
+    { label: "All", value: "all", icon: ClipboardList },
+    { label: "Needs Review", value: "needs_review", icon: AlertTriangle },
+    { label: "Categorized", value: "categorized", icon: CheckCircle2 },
+    { label: "Uncategorized", value: "uncategorized", icon: HelpCircle },
+    { label: "Flagged", value: "flagged", icon: Flag },
   ];
 
   const dateButtons: { label: string; value: DateFilter }[] = [
@@ -637,18 +657,19 @@ const filtersBarJSX = (
           <button
             key={btn.value}
             onClick={() => setStatusFilter(btn.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
               statusFilter === btn.value
                 ? "bg-accent-500 text-white"
                 : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
             }`}
           >
-            {btn.icon} {btn.label}
+            <btn.icon className="w-3.5 h-3.5" /> {btn.label}
           </button>
         ))}
 </div>
 
-      {/* Mobile: Status dropdown */}
+      {/* Mobile: Status dropdown — <option> elements can't contain
+          arbitrary JSX, so we drop the icon and use the label alone. */}
       <div className="md:hidden flex items-center gap-2">
         <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Status:</label>
         <select
@@ -657,7 +678,7 @@ const filtersBarJSX = (
           className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
         >
           {statusButtons.map((btn) => (
-            <option key={btn.value} value={btn.value}>{btn.icon} {btn.label}</option>
+            <option key={btn.value} value={btn.value}>{btn.label}</option>
           ))}
         </select>
       </div>
@@ -669,20 +690,20 @@ const filtersBarJSX = (
           <div className="hidden md:flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">Type:</span>
             {([
-              { label: "All", value: "all", icon: "📋" },
-              { label: "Business", value: "business", icon: "💼" },
-              { label: "Personal", value: "personal", icon: "🏠" },
-            ] as { label: string; value: ExpenseTypeFilter; icon: string }[]).map((btn) => (
+              { label: "All", value: "all", icon: ClipboardList },
+              { label: "Business", value: "business", icon: Briefcase },
+              { label: "Personal", value: "personal", icon: Home },
+            ] as { label: string; value: ExpenseTypeFilter; icon: LucideIcon }[]).map((btn) => (
               <button
                 key={btn.value}
                 onClick={() => setExpenseTypeFilter(btn.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
                   expenseTypeFilter === btn.value
                     ? "bg-accent-500 text-white"
                     : "bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-hover border border-transparent dark:border-dark-border"
                 }`}
               >
-                {btn.icon} {btn.label}
+                <btn.icon className="w-3.5 h-3.5" /> {btn.label}
               </button>
             ))}
           </div>
@@ -693,22 +714,25 @@ const filtersBarJSX = (
               onChange={(e) => setExpenseTypeFilter(e.target.value as ExpenseTypeFilter)}
               className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-gray-900 dark:text-white"
             >
-              <option value="all">📋 All</option>
-              <option value="business">💼 Business</option>
-              <option value="personal">🏠 Personal</option>
+              <option value="all">All</option>
+              <option value="business">Business</option>
+              <option value="personal">Personal</option>
             </select>
           </div>
         </>
       )}
       {/* Vendor search and category filter */}
       <div className="flex flex-wrap gap-3 mt-3">
-        <input
-          type="text"
-          placeholder="🔍 Search vendor..."
-          value={vendorSearch}
-          onChange={(e) => setVendorSearch(e.target.value)}
-          className="flex-1 min-w-[200px] text-sm border border-gray-300 dark:border-dark-border rounded-lg px-3 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
-        />
+        <div className="flex-1 min-w-[200px] relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search vendor..."
+            value={vendorSearch}
+            onChange={(e) => setVendorSearch(e.target.value)}
+            className="w-full text-sm border border-gray-300 dark:border-dark-border rounded-lg pl-8 pr-3 py-1.5 bg-white dark:bg-dark-surface text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+          />
+        </div>
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
@@ -839,11 +863,10 @@ const filtersBarJSX = (
               {receipt.has_flags && (
                 <span
                   className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md"
-                  style={{ transform: "rotate(15deg)" }}
                   title="This receipt has open flags"
                   aria-label="Flagged"
                 >
-                  🚩
+                  <Flag className="w-4 h-4 fill-current" />
                 </span>
               )}
               <div className="flex items-start justify-between mb-3">
@@ -858,7 +881,7 @@ const filtersBarJSX = (
                     const folder = folders.find(f => f.id === receipt.folder_id);
                     return folder ? (
                       <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300 text-xs rounded-full border border-accent-200 dark:border-accent-700">
-                        📁 {folder.name}
+                        <Folder className="w-3 h-3" /> {folder.name}
                       </span>
                     ) : null;
                   })()}
@@ -917,7 +940,7 @@ const filtersBarJSX = (
                 onClick={() => setShowUploadOnBehalf(true)}
                 className="px-3 py-1.5 bg-accent-600 hover:bg-accent-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
               >
-                <span>⬆</span> Upload for client
+                <Upload className="w-3.5 h-3.5" /> Upload for client
               </button>
             )}
             {/* Single Download dropdown — formerly two side-by-side
@@ -928,7 +951,7 @@ const filtersBarJSX = (
                 disabled={receipts.length === 0}
                 className="px-3 py-1.5 bg-accent-600 hover:bg-accent-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
               >
-                <span>📥</span> Download
+                <Download className="w-3.5 h-3.5" /> Download
                 <svg className="w-3 h-3 opacity-80" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M3 5l3 3 3-3" />
                 </svg>
@@ -952,7 +975,7 @@ const filtersBarJSX = (
                     onClick={() => { setShowDownloadMenu(false); exportExcel(); }}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-dark-hover text-gray-700 dark:text-gray-200 flex items-center gap-2 border-t border-gray-200 dark:border-dark-border"
                   >
-                    <span>📊</span>
+                    <BarChart3 className="w-3.5 h-3.5" />
                     <div>
                       <div className="font-medium">Excel</div>
                       <div className="text-[10px] text-gray-500 dark:text-gray-400">Full spreadsheet with details</div>
@@ -984,7 +1007,7 @@ const filtersBarJSX = (
                   : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               }`}
             >
-              📋 All Receipts
+              <span className="inline-flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> All Receipts</span>
             </button>
             <button
               onClick={() => { setMainView("folders"); loadFolders(); }}
@@ -994,7 +1017,7 @@ const filtersBarJSX = (
                   : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               }`}
             >
-              📁 Folders
+              <span className="inline-flex items-center gap-1.5"><Folder className="w-4 h-4" /> Folders</span>
             </button>
           </div>
         )}
@@ -1024,7 +1047,7 @@ const filtersBarJSX = (
 
             {folders.length === 0 ? (
               <div className="text-center py-16 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-dashed border-gray-300 dark:border-dark-border">
-                <div className="text-5xl mb-4">📁</div>
+                <Folder className="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
                 <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">No folders yet</p>
                 <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
                   Create a folder to organize receipts by project or category
@@ -1045,7 +1068,7 @@ const filtersBarJSX = (
                   >
                     <div className="cursor-pointer" onClick={() => openFolder(folder)}>
                       <div className="flex items-start justify-between mb-3">
-                        <div className="text-3xl">📁</div>
+                        <Folder className="w-8 h-8 text-accent-500" />
                         <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-dark-hover px-2 py-1 rounded-full">
                           {folder.receipt_count} receipt{folder.receipt_count !== 1 ? "s" : ""}
                         </span>
@@ -1062,16 +1085,16 @@ const filtersBarJSX = (
                     <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-dark-border">
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditingFolder({ ...folder }); }}
-                        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors inline-flex items-center gap-1"
                       >
-                        ✏️ Rename
+                        <Pencil className="w-3 h-3" /> Rename
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }}
                         disabled={deletingFolderId === folder.id}
-                        className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors ml-auto"
+                        className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors ml-auto inline-flex items-center gap-1"
                       >
-                        {deletingFolderId === folder.id ? "Deleting..." : "🗑️ Delete"}
+                        {deletingFolderId === folder.id ? "Deleting..." : <><Trash2 className="w-3 h-3" /> Delete</>}
                       </button>
                     </div>
                   </div>
@@ -1088,9 +1111,9 @@ const filtersBarJSX = (
             <div className="flex items-center gap-2 mb-5 text-sm">
               <button
                 onClick={exitFolder}
-                className="text-accent-600 dark:text-accent-400 hover:underline font-medium"
+                className="text-accent-600 dark:text-accent-400 hover:underline font-medium inline-flex items-center gap-1"
               >
-                📁 Folders
+                <Folder className="w-4 h-4" /> Folders
               </button>
               <span className="text-gray-400 dark:text-gray-500">/</span>
               <span className="text-gray-700 dark:text-gray-300 font-medium">{activeFolderName}</span>

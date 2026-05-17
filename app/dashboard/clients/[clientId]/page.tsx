@@ -7,6 +7,15 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useFeatureGate } from "@/lib/useFeatureGate";
 import UpgradeRequired from "@/components/UpgradeRequired";
+import {
+  BarChart3,
+  Flag,
+  CreditCard,
+  Pencil,
+  Smartphone,
+  ClipboardList,
+  type LucideIcon,
+} from "lucide-react";
 
 type Client = {
   id: string;
@@ -254,7 +263,9 @@ async function requestIncomeTypeUpdate() {
                 </span>
                 <span className="text-sm text-gray-500 dark:text-gray-400">{client.province} • {client.timezone}</span>
                 {client.sms_enabled && client.phone_number && (
-                  <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full">📱 SMS On</span>
+                  <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full inline-flex items-center gap-1">
+                    <Smartphone className="w-3 h-3" /> SMS On
+                  </span>
                 )}
               </div>
             </div>
@@ -291,27 +302,29 @@ async function requestIncomeTypeUpdate() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — icon is a lucide component reference, rendered as
+            <tab.icon ... /> below so we stay consistent with the rest
+            of the app's iconography. */}
         <div className="bg-white dark:bg-dark-surface rounded-t-xl border border-gray-200 dark:border-dark-border border-b-0">
           <div className="flex overflow-x-auto">
-            {([
-              { id: "overview", label: "Overview", icon: "📊" },
+            {(([
+              { id: "overview", label: "Overview", icon: BarChart3 },
               ...(richProfile ? [
-                { id: "flags" as const, label: `Flags (${stats.totalFlags})`, icon: "🚩" },
-                { id: "cards" as const, label: `Cards (${cards.length})`, icon: "💳" },
-                { id: "edits" as const, label: `Edit History (${stats.totalEdits})`, icon: "✏️" },
+                { id: "flags" as const, label: `Flags (${stats.totalFlags})`, icon: Flag },
+                { id: "cards" as const, label: `Cards (${cards.length})`, icon: CreditCard },
+                { id: "edits" as const, label: `Edit History (${stats.totalEdits})`, icon: Pencil },
               ] : []),
-            ] as const).map((tab) => (
+            ]) as { id: string; label: string; icon: LucideIcon }[]).map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors whitespace-nowrap border-b-2 ${
                   activeTab === tab.id
                     ? "border-accent-500 text-accent-600 dark:text-accent-400"
                     : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                <span>{tab.icon}</span>
+                <tab.icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -342,9 +355,9 @@ async function requestIncomeTypeUpdate() {
                       <span className="text-gray-900 dark:text-white capitalize">{client.income_type?.replace(/_/g, " ") || "Not set"}</span>
                       <button
                         onClick={requestIncomeTypeUpdate}
-                        className="text-xs px-2 py-1 bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-400 border border-accent-200 dark:border-accent-700 rounded-lg hover:bg-accent-100 dark:hover:bg-accent-900/30 transition-colors"
+                        className="text-xs px-2 py-1 bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-400 border border-accent-200 dark:border-accent-700 rounded-lg hover:bg-accent-100 dark:hover:bg-accent-900/30 transition-colors inline-flex items-center gap-1"
                       >
-                        📋 Request Update
+                        <ClipboardList className="w-3 h-3" /> Request Update
                       </button>
                     </div>
                   </div>
@@ -466,13 +479,13 @@ async function requestIncomeTypeUpdate() {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">💳</span>
+                        <CreditCard className={`w-6 h-6 ${card.card_type === "business" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`} />
                         <div>
                           <div className="font-medium text-gray-900 dark:text-white">
                             {card.nickname || card.card_brand} ••••{card.last_four}
                           </div>
                           <div className={`text-xs font-medium ${card.card_type === "business" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                            {card.card_type === "business" ? "✅ Business card" : "🚫 Personal card"}
+                            {card.card_type === "business" ? "Business card" : "Personal card"}
                           </div>
                         </div>
                       </div>

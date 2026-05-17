@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId } from "@/lib/getFirmId";
+import { DollarSign } from "lucide-react";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -117,7 +118,7 @@ export default function ClientMonthlyRevenueCard({ clientId }: { clientId: strin
         : "bg-white dark:bg-dark-surface border-gray-200 dark:border-dark-border"
     }`}>
       <div className="flex items-start gap-3">
-        <span className="text-2xl">💰</span>
+        <DollarSign className="w-6 h-6 text-accent-600 dark:text-accent-400 flex-shrink-0" />
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
             {isPromptWindow ? `How much did you earn in ${monthLabel}?` : `Revenue for ${monthLabel}`}

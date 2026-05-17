@@ -6,6 +6,7 @@ import { getMyFirmId } from "@/lib/getFirmId";
 import { getUserRole } from "@/lib/getUserRole";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import Link from "next/link";
+import { Pencil, AlertTriangle } from "lucide-react";
 
 type ClientRow = {
   id: string;
@@ -496,9 +497,9 @@ const { error } = await supabase.from("clients").insert([
                                 setEditingAlias(c.id);
                                 setAliasValue(c.email_alias || "");
                               }}
-                              className="text-sm text-accent-600 dark:text-accent-400 hover:underline"
+                              className="text-sm text-accent-600 dark:text-accent-400 hover:underline inline-flex items-center gap-1"
                             >
-                              ✏️ Edit
+                              <Pencil className="w-3.5 h-3.5" /> Edit
                             </button>
                             {c.email_alias && (
                               <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
@@ -574,7 +575,7 @@ const { error } = await supabase.from("clients").insert([
         {isFirmAdmin && accountants.length === 0 && clients.length > 0 && (
           <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <div className="text-2xl">⚠️</div>
+              <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
               <div>
                 <div className="font-semibold text-yellow-900 dark:text-yellow-200 mb-1">
                   No Accountants Available

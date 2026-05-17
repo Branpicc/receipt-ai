@@ -8,7 +8,7 @@
 // "this cycle" progress; open-ended goals show lifetime totals.
 
 import { useState } from "react";
-import { Pencil, Archive, Star, CalendarDays, Repeat, Trash2 } from "lucide-react";
+import { Pencil, Archive, Star, CalendarDays, Repeat, Trash2, Target } from "lucide-react";
 import { getLucideIcon } from "@/lib/goalIcons";
 import type { GoalWithProgress, ResetFrequency } from "@/lib/goalTypes";
 
@@ -69,9 +69,12 @@ export default function GoalCard({ goal, onContribute, onEdit, onArchive, onDele
           {Icon ? (
             <Icon className="w-6 h-6 text-gray-700 dark:text-gray-300" />
           ) : goal.emoji ? (
+            // User explicitly chose an emoji in the icon picker — keep
+            // their choice as-is. Lucide-icon fallback only kicks in
+            // when neither icon nor emoji is set.
             <span className="text-2xl">{goal.emoji}</span>
           ) : (
-            <span className="text-2xl">🎯</span>
+            <Target className="w-6 h-6 text-gray-700 dark:text-gray-300" />
           )}
         </div>
         <div className="flex-1 min-w-0">
