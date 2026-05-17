@@ -379,6 +379,30 @@ const PERSONAL_CHAPTERS: TourChapter[] = [
     ],
   },
   {
+    id: "goals",
+    title: "Goals & paycheck splitter",
+    steps: [
+      {
+        id: "p-goals",
+        route: "/dashboard/goals",
+        selector: null,
+        title: "Goals",
+        body:
+          "Save for a vacation, pay down a card, build an emergency fund, or budget for monthly bills. Each goal tracks progress against a target with an optional deadline. Mark a goal as Important for a fireworks animation when you finish it.",
+        position: "center",
+      },
+      {
+        id: "p-splitter",
+        route: "/dashboard/goals",
+        selector: null,
+        title: "Paycheck splitter",
+        body:
+          "Switch to the Paycheck Splitter tab to set up how each paycheck is divided — by % or fixed $ — and route the slices to your goals. When payday hits, enter the amount and click Commit, every linked goal gets a contribution row in one shot.",
+        position: "center",
+      },
+    ],
+  },
+  {
     id: "reports",
     title: "Reports & exports",
     steps: [
@@ -388,7 +412,7 @@ const PERSONAL_CHAPTERS: TourChapter[] = [
         selector: null,
         title: "Reports & exports",
         body:
-          "This is where you get tax-ready data out. The big green Master Excel button at the top produces a single .xlsx with a Summary, every receipt, a tab per CRA line, plus Personal and Capital Assets sheets — hand it to a tax preparer or use it yourself.",
+          "This is where you get tax-ready data out. The big green Master Excel button at the top produces a single .xlsx with a Summary, every receipt, a tab per CRA line, plus Personal and Capital Assets sheets — hand it to a tax preparer or use it yourself. There's also a Goal Contributions report for tracking what you put away.",
         position: "center",
       },
       {

@@ -9,7 +9,7 @@
 // which creates the receipt row + uploads the image to the same
 // storage bucket as OCR-extracted receipts.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Upload, Receipt as ReceiptIcon, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyFirmId, getMyClientId } from "@/lib/getFirmId";
@@ -44,20 +44,47 @@ export default function ManualReceiptModal({ clientId, onClose, onSaved }: Props
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
+  // Three money fields. We auto-compute total from subtotal + tax
+  // unless the user has explicitly edited the total field (tracked
+  // via totalManuallyEdited). That way the common case ("I have a
+  // receipt that shows $42.00 subtotal + $5.46 tax") fills total
+  // automatically, but the user can still override (e.g. when they
+  // only know the total off the bank statement).
+  const [subtotalDollars, setSubtotalDollars] = useState("");
+  const [taxDollars, setTaxDollars] = useState("");
   const [totalDollars, setTotalDollars] = useState("");
+  const [totalManuallyEdited, setTotalManuallyEdited] = useState(false);
   const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Auto-fill total when both subtotal and tax are set and the user
+  // hasn't typed in the total field themselves.
+  useEffect(() => {
+    if (totalManuallyEdited) return;
+    const sub = parseFloat(subtotalDollars);
+    const tax = parseFloat(taxDollars) || 0;
+    if (Number.isFinite(sub) && sub > 0) {
+      setTotalDollars((sub + tax).toFixed(2));
+    } else if (!subtotalDollars && !taxDollars) {
+      // Both cleared — clear total too so we don't strand a stale value.
+      setTotalDollars("");
+    }
+  }, [subtotalDollars, taxDollars, totalManuallyEdited]);
+
   async function handleSave(ev: React.FormEvent) {
     ev.preventDefault();
     setError("");
     if (!vendor.trim()) { setError("Vendor is required."); return; }
     if (!receiptDate) { setError("Date is required."); return; }
-    const amt = parseFloat(totalDollars);
-    if (!amt || isNaN(amt) || amt <= 0) { setError("Amount must be a positive number."); return; }
+    const sub = parseFloat(subtotalDollars);
+    const tax = parseFloat(taxDollars);
+    const total = parseFloat(totalDollars);
+    if (!total || isNaN(total) || total <= 0) { setError("Total must be a positive number."); return; }
+    if (subtotalDollars && (isNaN(sub) || sub <= 0)) { setError("Subtotal must be a positive number or left blank."); return; }
+    if (taxDollars && (isNaN(tax) || tax < 0)) { setError("Tax must be 0 or higher."); return; }
 
     setSaving(true);
     try {
@@ -75,7 +102,9 @@ export default function ManualReceiptModal({ clientId, onClose, onSaved }: Props
       formData.append("clientId", resolvedClientId);
       formData.append("vendor", vendor.trim());
       formData.append("receiptDate", receiptDate);
-      formData.append("totalDollars", String(amt));
+      formData.append("totalDollars", String(total));
+      if (Number.isFinite(sub) && sub > 0) formData.append("subtotalDollars", String(sub));
+      if (Number.isFinite(tax) && tax > 0) formData.append("taxDollars", String(tax));
       if (category) formData.append("category", category);
       if (note.trim()) formData.append("note", note.trim());
       if (file) formData.append("file", file);
@@ -145,25 +174,73 @@ export default function ManualReceiptModal({ clientId, onClose, onSaved }: Props
                 className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
               />
             </div>
+          </div>
+
+          {/* Money block: subtotal + tax auto-compute total. The user
+              can override the total directly (e.g. when they only
+              know the charged amount off their bank statement) — once
+              they touch it, the auto-fill backs off. */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Subtotal ($)
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={subtotalDollars}
+                  onChange={(e) => setSubtotalDollars(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full pl-6 pr-2 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Tax ($)
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={taxDollars}
+                  onChange={(e) => setTaxDollars(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full pl-6 pr-2 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Total ($) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm">$</span>
                 <input
                   type="number"
                   inputMode="decimal"
                   min="0"
                   step="0.01"
                   value={totalDollars}
-                  onChange={(e) => setTotalDollars(e.target.value)}
+                  onChange={(e) => { setTotalDollars(e.target.value); setTotalManuallyEdited(true); }}
                   placeholder="0.00"
-                  className="w-full pl-7 pr-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white"
+                  className="w-full pl-6 pr-2 py-2 border border-gray-300 dark:border-dark-border rounded-lg text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-white font-semibold"
                 />
               </div>
             </div>
           </div>
+          {!totalManuallyEdited && subtotalDollars && (
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 -mt-2">
+              Total auto-fills from subtotal + tax. Edit it to override.
+            </p>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
