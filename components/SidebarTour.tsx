@@ -90,7 +90,13 @@ export default function SidebarTour() {
       // eligible — they get the client-style dashboard but not the
       // immersive sidebar tour.
       const eligibleRole = role === "firm_admin" || role === "accountant" || role === "personal";
-      const verified = !!fu.email_verified_at;
+      // Email-verified gate applies to firm accounts only. Personal
+      // users already completed phone verification at signup, so we
+      // don't make them click the email verification link before the
+      // tour fires — otherwise the tour silently never appears for
+      // new personal accounts (the most common case where users want
+      // hand-holding).
+      const verified = isPersonal ? true : !!fu.email_verified_at;
       const onboardingDone = !!fu.onboarding_completed || !!fu.onboarding_skipped;
       const alreadyDone = !!fu.tour_completed_at || !!fu.tour_skipped_at;
 

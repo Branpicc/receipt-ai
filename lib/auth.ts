@@ -27,14 +27,31 @@ export async function signIn(email: string, password: string) {
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      // Map Supabase / fetch errors to friendlier messages so users don't
+      // see "Load failed" or "Failed to fetch" and assume the app is
+      // broken. Most of these are transient — a retry usually works.
+      const msg = String(error.message || "").toLowerCase();
+      if (msg.includes("load failed") || msg.includes("failed to fetch") || msg.includes("network")) {
+        throw new Error("Network hiccup — please try again. If it keeps happening, check your connection.");
+      }
+      throw error;
+    }
 
-    // Update last_login
+    // Update last_login as a fire-and-forget side-effect. This used to
+    // block the sign-in: if the update failed (transient network issue
+    // or a brief RLS lag right after a fresh signup), the whole
+    // signIn() threw and the user saw "Load failed" even though auth
+    // had succeeded. last_login is analytics — never worth breaking
+    // sign-in over.
     if (data.user) {
-      await supabase
+      supabase
         .from("firm_users")
         .update({ last_login: new Date().toISOString() })
-        .eq("auth_user_id", data.user.id);
+        .eq("auth_user_id", data.user.id)
+        .then(({ error: updErr }) => {
+          if (updErr) console.warn("last_login update failed (non-blocking):", updErr);
+        });
     }
 
     return data;

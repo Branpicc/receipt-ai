@@ -613,7 +613,7 @@ export default function LandingPage() {
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Client View</p>
               <div className="flex gap-2">
                 {[
-                  { name: "J. Test", flags: 4, color: "border-orange-300 bg-orange-50" },
+                  { name: "Jacob T.", flags: 4, color: "border-orange-300 bg-orange-50" },
                   { name: "Malina P.", flags: 2, color: "border-blue-200 bg-blue-50" },
                   { name: "Bran T.", flags: 0, color: "border-gray-200 bg-white" },
                 ].map(c => (
@@ -1196,7 +1196,7 @@ export default function LandingPage() {
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><a href="#demo" className="hover:text-white transition-colors">Request Demo</a></li>
                 <li><a href="#contact" className="hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="mailto:branpicc2@gmail.com" className="hover:text-white transition-colors">branpicc2@gmail.com</a></li>
+                <li><a href="mailto:brandanpicc@receipture.ca" className="hover:text-white transition-colors">brandanpicc@receipture.ca</a></li>
               </ul>
             </div>
           </div>
