@@ -11,8 +11,11 @@
 
 import { supabase } from "./supabaseClient";
 
+// `tax_codes` is intentionally NOT exposed in v1 — the CRA line-code
+// mapping feature is deferred until accountants have validated it.
+// Anyone whose stored prefs still contain the value is filtered out by
+// the ALL_REPORT_KEYS guard in loadSidebarReportsPrefs below.
 export const ALL_REPORT_KEYS = [
-  "tax_codes",
   "capital_assets",
   "home_office",
   "quarterly_hst",
@@ -23,7 +26,6 @@ export const ALL_REPORT_KEYS = [
 export type SidebarReportKey = (typeof ALL_REPORT_KEYS)[number];
 
 export const REPORT_META: Record<SidebarReportKey, { label: string; icon: string; href: string; desc: string }> = {
-  tax_codes:     { label: "CRA Tax Codes",   icon: "🧾", href: "/dashboard/tax-codes",                 desc: "T2125 line-by-line deductibles" },
   capital_assets:{ label: "Capital Assets",  icon: "🏗️", href: "/dashboard/reports/capital-assets",   desc: "Items for CCA depreciation" },
   home_office:   { label: "Home Office",     icon: "🏠", href: "/dashboard/reports/home-office",       desc: "Line 9945 calculation" },
   quarterly_hst: { label: "Quarterly HST",   icon: "📅", href: "/dashboard/reports/quarterly-hst",    desc: "ITCs by calendar quarter" },
@@ -35,7 +37,7 @@ export const REPORT_META: Record<SidebarReportKey, { label: string; icon: string
 // Sensible default — pinned by default for new users until they
 // customize. Heavy reports like Capital Assets / Quarterly HST hidden
 // by default to keep the sidebar uncluttered.
-export const DEFAULT_PINNED: SidebarReportKey[] = ["tax_codes", "net_income"];
+export const DEFAULT_PINNED: SidebarReportKey[] = ["net_income"];
 
 export async function loadSidebarReportsPrefs(): Promise<SidebarReportKey[] | null> {
   try {

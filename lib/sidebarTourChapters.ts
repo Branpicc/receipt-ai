@@ -412,18 +412,12 @@ const PERSONAL_CHAPTERS: TourChapter[] = [
         selector: null,
         title: "Reports & exports",
         body:
-          "This is where you get tax-ready data out. The big green Master Excel button at the top produces a single .xlsx with a Summary, every receipt, a tab per CRA line, plus Personal and Capital Assets sheets — hand it to a tax preparer or use it yourself. There's also a Goal Contributions report for tracking what you put away.",
+          "This is where you get tax-ready data out. The big green Master Excel button at the top produces a single .xlsx with a Summary, every receipt grouped by category, plus Personal and Capital Assets sheets — hand it to a tax preparer or import into QuickBooks. There's also a Goal Contributions report for tracking what you put away.",
         position: "center",
       },
-      {
-        id: "p-tax-codes",
-        route: "/dashboard/tax-codes",
-        selector: null,
-        title: "CRA Tax Codes",
-        body:
-          "If you marked yourself self-employed during sign-up, this page shows your expenses grouped by CRA line (T2125, T776, T2200). Each line has its own 📥 Excel button for a focused per-line export.",
-        position: "center",
-      },
+      // Tax Codes chapter removed for v1 — CRA line-code mapping is
+      // deferred to v2. The tour skips it cleanly because chapters are
+      // optional/skippable in the immersive tour.
     ],
   },
   {

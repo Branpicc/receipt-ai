@@ -11,6 +11,7 @@ import ClientFilterDropdown from "@/components/ClientFilterDropdown";
 import { getAssignedClientIds } from "@/lib/getAssignedClients";
 import { shouldExcludeDemoFromExport } from "@/lib/demoExport";
 import UploadOnBehalfModal from "@/components/UploadOnBehalfModal";
+import BulkDownloadModal from "@/components/BulkDownloadModal";
 import {
   ClipboardList,
   AlertTriangle,
@@ -139,6 +140,27 @@ const [allReceipts, setAllReceipts] = useState<Receipt[]>([]);
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [showDownloadMenu]);
+
+  // Bulk-image-download modal state. Two entry points:
+  //   - "Download images" entry in the dropdown above → opens with no
+  //     selection, so the modal shows date presets.
+  //   - "Download N selected" floating bar below → opens with a
+  //     Set<string> of receipt IDs, so the modal skips date pickers.
+  const [bulkDownloadOpen, setBulkDownloadOpen] = useState(false);
+  const [useSelectionForBulk, setUseSelectionForBulk] = useState(false);
+
+  // Per-row checkbox selection — receipt IDs the user has explicitly
+  // ticked. Used both by the floating "Download N selected" bar and by
+  // any future bulk actions (delete-many, reassign-to-folder, etc.).
+  const [selectedReceiptIds, setSelectedReceiptIds] = useState<Set<string>>(new Set());
+  function toggleReceiptSelected(id: string) {
+    setSelectedReceiptIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedReceiptIds(new Set()); }
 
   // Folder management
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -851,12 +873,39 @@ const filtersBarJSX = (
                                   <Link
               key={receipt.id}
               href={`/dashboard/receipts/${receipt.id}`}
-              className={`relative block p-4 rounded-xl border-2 hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500 ${
-                receipt.has_flags
+              className={`group relative block p-4 rounded-xl border-2 hover:shadow-md dark:hover:shadow-xl transition-all bg-white dark:bg-dark-surface hover:border-accent-500 dark:hover:border-accent-500 ${
+                selectedReceiptIds.has(receipt.id)
+                  ? "border-accent-500 dark:border-accent-400 ring-2 ring-accent-300 dark:ring-accent-700"
+                  : receipt.has_flags
                   ? "border-red-400 dark:border-red-600 ring-1 ring-red-300 dark:ring-red-700/50"
                   : "border-gray-200 dark:border-dark-border"
               }`}
             >
+              {/* Select checkbox — stops propagation so the click only
+                  toggles selection without navigating into the receipt
+                  detail page. Selected cards get a colored ring for
+                  feedback. The floating "Download N selected" bar at
+                  the bottom of the page uses this set. */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleReceiptSelected(receipt.id);
+                }}
+                aria-label={selectedReceiptIds.has(receipt.id) ? "Deselect receipt" : "Select receipt"}
+                className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${
+                  selectedReceiptIds.has(receipt.id)
+                    ? "bg-accent-500 border-accent-500 text-white"
+                    : "bg-white dark:bg-dark-surface border-gray-300 dark:border-dark-border opacity-0 group-hover:opacity-100 hover:border-accent-400"
+                } group`}
+              >
+                {selectedReceiptIds.has(receipt.id) && (
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5">
+                    <path d="M3 8l3 3 7-7" />
+                  </svg>
+                )}
+              </button>
               {/* Tilted flag corner indicator — visible to clients on
                   their own flagged receipts so they can spot issues at a
                   glance without opening every card. */}
@@ -979,6 +1028,21 @@ const filtersBarJSX = (
                     <div>
                       <div className="font-medium">Excel</div>
                       <div className="text-[10px] text-gray-500 dark:text-gray-400">Full spreadsheet with details</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDownloadMenu(false);
+                      setUseSelectionForBulk(false);
+                      setBulkDownloadOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-dark-hover text-gray-700 dark:text-gray-200 flex items-center gap-2 border-t border-gray-200 dark:border-dark-border"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <div>
+                      <div className="font-medium">Receipt images (.zip)</div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">Pick a date range or selected receipts</div>
                     </div>
                   </button>
                 </div>
@@ -1235,6 +1299,39 @@ const filtersBarJSX = (
             if (firmId) loadReceipts();
           }}
         />
+      )}
+
+      {bulkDownloadOpen && (
+        <BulkDownloadModal
+          onClose={() => setBulkDownloadOpen(false)}
+          clientId={selectedClient?.id || null}
+          selectedReceiptIds={
+            useSelectionForBulk ? Array.from(selectedReceiptIds) : undefined
+          }
+        />
+      )}
+
+      {/* Floating selection bar — appears at the bottom-center when one
+          or more receipts are checked. Stays out of the way on mobile
+          by sitting above any fixed bottom nav. */}
+      {selectedReceiptIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-gray-900 dark:bg-dark-surface text-white border border-gray-700 dark:border-dark-border rounded-full shadow-2xl px-4 py-2 flex items-center gap-3">
+          <span className="text-sm">
+            <strong>{selectedReceiptIds.size}</strong> selected
+          </span>
+          <button
+            onClick={() => { setUseSelectionForBulk(true); setBulkDownloadOpen(true); }}
+            className="px-3 py-1.5 bg-accent-500 hover:bg-accent-600 text-white text-xs font-medium rounded-full inline-flex items-center gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5" /> Download .zip
+          </button>
+          <button
+            onClick={clearSelection}
+            className="text-xs text-gray-300 hover:text-white px-2"
+          >
+            Clear
+          </button>
+        </div>
       )}
     </main>
   );

@@ -433,7 +433,10 @@ const allReportTypes = [
     // icon is now a lucide component; rendered inline below so the
     // sweep reaches both the CSV builder cards and the top-level nav.
     { value: "receipts", label: "Receipt Summary", icon: FileText, desc: "All receipts with details" },
-    { value: "tax_codes", label: "Tax Code Report", icon: ReceiptIcon, desc: "Grouped by T2125 codes" },
+    // Tax Code Report deferred to v2 — see /dashboard/tax-codes for
+    // the coming-soon page. The data still exists (every receipt has a
+    // category); we just don't surface a CSV export grouped by CRA
+    // line until accountants have validated the line assignments.
     { value: "clients", label: "Client Report", icon: Users, desc: "Per-client breakdown" },
     { value: "categories", label: "Category Report", icon: BarChart3, desc: "Expenses by category" },
     { value: "monthly", label: "Monthly Summary", icon: Calendar, desc: "Month-over-month" },
@@ -526,11 +529,9 @@ href="/dashboard/reports/clients"
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <a href="/dashboard/tax-codes" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
-              <ReceiptIcon className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
-              <div className="font-medium text-gray-900 dark:text-white">CRA Tax Codes</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">T2125 line-by-line breakdown of deductibles</div>
-            </a>
+            {/* CRA Tax Codes card removed for v1 — deferred to v2.
+                /dashboard/tax-codes still resolves and shows a
+                coming-soon page if someone navigates there directly. */}
             <a href="/dashboard/reports/capital-assets" className="p-4 rounded-lg border-2 border-gray-200 dark:border-dark-border hover:border-accent-500 transition-colors block">
               <Building2 className="w-6 h-6 mb-2 text-gray-500 dark:text-gray-400" />
               <div className="font-medium text-gray-900 dark:text-white">Capital Assets (CCA)</div>

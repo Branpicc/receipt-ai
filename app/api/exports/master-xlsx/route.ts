@@ -218,19 +218,29 @@ export async function POST(request: NextRequest) {
   }
   r += 1;
 
-  // Per-form totals
-  const formTotals = new Map<string, { business: number; tax: number; deductible: number; lines: number }>();
+  // Per-category totals (replaces the old per-CRA-form totals while
+  // line-code mapping is deferred). A tax preparer importing this into
+  // QuickBooks/Sage applies their own line codes, so what they
+  // actually want is "how much did the client spend in Meals vs.
+  // Office Supplies vs. Vehicle" — same shape as before, just keyed
+  // off receipts.approved_category instead of the CRA line.
+  const categoryTotals = new Map<string, { business: number; tax: number; deductible: number; count: number }>();
   for (const b of lineBuckets.values()) {
-    const f = formTotals.get(b.form) || { business: 0, tax: 0, deductible: 0, lines: 0 };
-    f.business += b.total_cents;
-    f.tax += b.tax_cents;
-    f.deductible += b.deductible_cents;
-    f.lines += 1;
-    formTotals.set(b.form, f);
+    // lineBuckets was keyed by CRA line code, but each bucket carries
+    // its receipts. We re-aggregate by the receipt's category here.
+    for (const item of b.rows) {
+      const cat = item.receipt.approved_category || item.receipt.suggested_category || "Uncategorized";
+      const c = categoryTotals.get(cat) || { business: 0, tax: 0, deductible: 0, count: 0 };
+      c.business += item.business_cents;
+      c.tax += item.tax_cents;
+      c.deductible += item.deductible_cents;
+      c.count += 1;
+      categoryTotals.set(cat, c);
+    }
   }
 
   const sumHeader = summary.getRow(r);
-  ["Form", "CRA lines used", "Business spend", "Recoverable tax", "Deductible"].forEach((h, i) => {
+  ["Category", "Receipts", "Business spend", "Recoverable tax", "Deductible"].forEach((h, i) => {
     const c = sumHeader.getCell(i + 1);
     c.value = h;
     c.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -238,10 +248,12 @@ export async function POST(request: NextRequest) {
   });
   r += 1;
   let grandBusiness = 0, grandTax = 0, grandDeductible = 0;
-  for (const [form, totals] of formTotals.entries()) {
+  const sortedCategories = Array.from(categoryTotals.entries())
+    .sort((a, b) => b[1].deductible - a[1].deductible);
+  for (const [cat, totals] of sortedCategories) {
     const row = summary.getRow(r);
-    row.getCell(1).value = `${form} — ${getFormLabel(form as any)}`;
-    row.getCell(2).value = totals.lines;
+    row.getCell(1).value = cat;
+    row.getCell(2).value = totals.count;
     row.getCell(3).value = totals.business / 100; row.getCell(3).numFmt = money;
     row.getCell(4).value = totals.tax / 100; row.getCell(4).numFmt = money;
     row.getCell(5).value = totals.deductible / 100; row.getCell(5).numFmt = money;
@@ -308,8 +320,15 @@ export async function POST(request: NextRequest) {
     col.width = [12, 28, 20, 22, 12, 14, 10, 14, 14, 18, 36, 12][i] || 14;
   });
 
-  // ── One sheet per CRA line that has data ────────────────────────────
-  // Order: by form (T2125, T776, T2200, T1), then by deductible desc.
+  // Per-CRA-line sheets removed for v1 — CRA line mapping is deferred
+  // to v2 (see /dashboard/tax-codes coming-soon page). The All Receipts
+  // sheet above still has every receipt with its category and
+  // deductible amount, and the Summary sheet below totals by category,
+  // which is what a tax preparer or QuickBooks import actually needs.
+  //
+  // The disabled block — kept as a commented marker so the next time we
+  // re-enable CRA line mapping the structure is here to fall back into:
+  /*
   const sortedBuckets = Array.from(lineBuckets.values()).sort((a, b) => {
     if (a.form !== b.form) return a.form.localeCompare(b.form);
     return b.deductible_cents - a.deductible_cents;
@@ -367,6 +386,7 @@ export async function POST(request: NextRequest) {
       col.width = [12, 30, 20, 12, 12, 18, 18, 16][i] || 14;
     });
   }
+  */
 
   // ── Sheet: Personal ─────────────────────────────────────────────────
   if (personal.length > 0) {

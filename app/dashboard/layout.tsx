@@ -40,7 +40,6 @@ import {
   ClipboardList,
   User,
   TrendingUp,
-  Receipt,
   Edit3,
   ChevronLeft,
   ChevronRight,
@@ -643,21 +642,10 @@ return (
                   </Link>
                 </li>
               )}
-              {pinnedReports.includes("tax_codes") && (
-              <li className="ml-4">
-                <Link
-                  href="/dashboard/tax-codes"
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                    pathname === '/dashboard/tax-codes'
-                      ? 'bg-accent-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-hover'
-                    }`}
-                >
-                  <Receipt className="w-4 h-4" />
-                  <span className="text-sm">Tax Codes</span>
-                </Link>
-              </li>
-              )}
+              {/* Tax Codes link removed for v1 — feature deferred.
+                  Legacy `tax_codes` entries in user_preferences are
+                  filtered out by ALL_REPORT_KEYS in sidebarReportsPrefs,
+                  so this conditional would never fire anyway. */}
               {pinnedReports.includes("capital_assets") && (
               <li className="ml-4">
                 <Link
