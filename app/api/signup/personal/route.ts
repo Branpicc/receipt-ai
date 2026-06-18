@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { sendVerifyEmail } from "@/lib/email";
+import { sendVerifyEmail, sendSignupNotification } from "@/lib/email";
 import { isDisposableEmail } from "@/lib/disposableEmailDomains";
 
 const TRIAL_DAYS = 7;
@@ -86,8 +86,34 @@ export async function POST(request: NextRequest) {
     }
     const signupPhone: string = vRow.phone;
 
-    // Enforce uniqueness in this code path too (defense in depth — the
-    // DB unique index is the final word).
+    // Two-tier phone check, in this order:
+    //
+    //   1. signup_phone_history — persistent log. Survives account
+    //      deletion so trial abusers can't churn through by deleting
+    //      and re-signing with the same number. Rows whose notes
+    //      contain "whitelist" are allowed to re-signup (QA / testing).
+    //
+    //   2. firms.signup_phone — the live unique index on the active
+    //      firm row. Catches the case where the history table somehow
+    //      has a stale gap but a real account is still pointing at
+    //      this phone.
+    //
+    // Defence in depth: both checks should agree, but if one fails
+    // the other catches it.
+    const { data: phoneHistory } = await supabaseAdmin
+      .from("signup_phone_history")
+      .select("phone, notes")
+      .eq("phone", signupPhone)
+      .maybeSingle();
+    if (phoneHistory && !(phoneHistory.notes ?? "").toLowerCase().includes("whitelist")) {
+      return NextResponse.json(
+        {
+          error:
+            "This phone number has already been used to create a Receipture account. Each phone number is limited to one signup. If you previously had an account, sign in instead or contact support.",
+        },
+        { status: 409 }
+      );
+    }
     const { data: phoneDupe } = await supabaseAdmin
       .from("firms")
       .select("id")
@@ -158,6 +184,23 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Record the phone in the persistent history table. Upsert so a
+    // whitelisted row keeps its `notes` marker but still updates the
+    // last_used_at for telemetry. Best-effort — if this insert fails
+    // the firm is still created; the next signup attempt with the
+    // same phone will be blocked by the firms.signup_phone unique
+    // index even if history insert was a no-op.
+    await supabaseAdmin
+      .from("signup_phone_history")
+      .upsert(
+        {
+          phone: signupPhone,
+          last_used_at: new Date().toISOString(),
+        },
+        { onConflict: "phone", ignoreDuplicates: false }
+      );
+
 
     // 3. Auto-create the single client representing the user. Default
     //    to ON / not registered — they tune this in onboarding.
@@ -235,6 +278,25 @@ export async function POST(request: NextRequest) {
     } catch (emailErr) {
       const msg = (emailErr as { message?: string })?.message || String(emailErr);
       console.error("[signup/personal] Failed to send verification email:", msg);
+    }
+
+    // Owner notification — fire-and-forget. Never let a missing
+    // SendGrid key or transient failure block the signup response.
+    // The IP comes off x-forwarded-for (Vercel sets it) and is best-
+    // effort; if proxied we read the first hop.
+    try {
+      const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+      await sendSignupNotification({
+        accountType: "personal",
+        fullName,
+        email,
+        phone: signupPhone,
+        trialEndsAt,
+        ip,
+      });
+    } catch (notifyErr) {
+      const msg = (notifyErr as { message?: string })?.message || String(notifyErr);
+      console.warn("[signup/personal] Owner notification failed (non-blocking):", msg);
     }
 
     return NextResponse.json({ success: true, email });

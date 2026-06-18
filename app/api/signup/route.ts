@@ -26,7 +26,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { sendVerifyEmail } from "@/lib/email";
+import { sendVerifyEmail, sendSignupNotification } from "@/lib/email";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -153,6 +153,24 @@ export async function POST(request: NextRequest) {
       console.error("[signup] Failed to send verification email:", msg);
       // Account is created; user can resend from the banner. Don't fail
       // the request.
+    }
+
+    // Owner notification — same pattern as the personal route. Fire-
+    // and-forget so a SendGrid hiccup never blocks the signup
+    // response. Firm signups don't have a phone yet (no SMS gate on
+    // this flow), so phone/trialEndsAt are omitted.
+    try {
+      const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+      await sendSignupNotification({
+        accountType: "firm",
+        fullName,
+        email,
+        firmName,
+        ip,
+      });
+    } catch (notifyErr) {
+      const msg = (notifyErr as { message?: string })?.message || String(notifyErr);
+      console.warn("[signup] Owner notification failed (non-blocking):", msg);
     }
 
     return NextResponse.json({ success: true, email });

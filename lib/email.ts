@@ -111,6 +111,103 @@ export async function sendWelcomeEmail(toEmail: string, fullName: string, firmNa
   });
 }
 
+// ── Owner notification on signup ────────────────────────────────────────────
+//
+// Sends a heads-up to the Receipture owner inbox every time a new
+// firm or personal account is created. Includes the contact info
+// needed to reach out personally — name, email, phone (personal
+// only), and key metadata (trial end, plan).
+//
+// Recipient is the OWNER_NOTIFY_EMAIL env var, with a fallback to
+// brandanpicc@receipture.ca so it works even if env isn't set yet.
+// Best-effort: callers should never let a send failure here block
+// account creation. Wrap the call in try/catch on the signup route.
+
+const OWNER_NOTIFY_EMAIL =
+  process.env.OWNER_NOTIFY_EMAIL || "brandanpicc@receipture.ca";
+
+type SignupNotificationArgs = {
+  accountType: "firm" | "personal";
+  fullName: string;
+  email: string;
+  // For firm signups — the firm name they entered.
+  firmName?: string | null;
+  // For personal signups — E.164 phone the user verified.
+  phone?: string | null;
+  // For personal signups — trial deadline (ISO timestamp). When the
+  // paywall kicks in.
+  trialEndsAt?: string | null;
+  // Optional IP address from the request, useful for spotting
+  // suspicious clusters (multiple signups from the same IP within
+  // minutes). Pulled from x-forwarded-for at the caller site.
+  ip?: string | null;
+};
+
+export async function sendSignupNotification(args: SignupNotificationArgs) {
+  const {
+    accountType,
+    fullName,
+    email,
+    firmName,
+    phone,
+    trialEndsAt,
+    ip,
+  } = args;
+
+  const isPersonal = accountType === "personal";
+  const typeLabel = isPersonal ? "Personal" : "Firm";
+  const headline = isPersonal
+    ? `New personal signup: ${fullName}`
+    : `New firm signup: ${firmName || fullName}`;
+
+  const rows: { label: string; value: string }[] = [
+    { label: "Account type", value: typeLabel },
+    { label: "Name", value: fullName },
+    { label: "Email", value: email },
+  ];
+  if (firmName) rows.push({ label: "Firm name", value: firmName });
+  if (phone) rows.push({ label: "Phone", value: phone });
+  rows.push({ label: "Signed up at", value: new Date().toLocaleString("en-CA", { timeZone: "America/Toronto" }) + " ET" });
+  if (trialEndsAt) {
+    rows.push({
+      label: "Trial ends",
+      value: new Date(trialEndsAt).toLocaleString("en-CA", { timeZone: "America/Toronto" }) + " ET",
+    });
+  }
+  if (ip) rows.push({ label: "IP", value: ip });
+
+  const tableRows = rows.map(r => `
+    <tr>
+      <td style="padding: 8px 12px; color: #64748b; font-size: 13px; vertical-align: top; white-space: nowrap;">${escapeHtml(r.label)}</td>
+      <td style="padding: 8px 12px; color: #0f172a; font-size: 14px; vertical-align: top;">${escapeHtml(r.value)}</td>
+    </tr>
+  `).join("");
+
+  await send({
+    to: OWNER_NOTIFY_EMAIL,
+    subject: headline,
+    html: shell(`
+      <p style="font-size: 16px; margin: 0 0 8px;"><strong>${escapeHtml(headline)}</strong></p>
+      <p style="font-size: 14px; color: #475569; margin: 0 0 24px;">
+        Reach out within a day or two if you want to onboard them personally — replying directly to their email below works.
+      </p>
+      <table style="border-collapse: collapse; width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+      <p style="margin: 24px 0 0;">
+        <a href="mailto:${escapeHtml(email)}" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          Email ${escapeHtml(fullName.split(" ")[0] || "them")} →
+        </a>
+      </p>
+      <p style="font-size: 12px; color: #94a3b8; margin: 24px 0 0;">
+        Automated notification from Receipture. To stop receiving these, change OWNER_NOTIFY_EMAIL in your Vercel env or comment out the call in the signup routes.
+      </p>
+    `),
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
